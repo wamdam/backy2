@@ -31,12 +31,16 @@ class Commands(object):
         pass
 
 
-    def backup(self, tags):
-        logger.info('Backup.')
+    def backup(self, source, backupname):
+        logger.info('Backup {} -> {}.'.format(source, backupname))
 
 
-    def restore(self, revision, target):
-        logger.info('Restore.')
+    def restore(self, level, backupname, target):
+        logger.info('Restore {} ({}) -> {}.'.format(level, backupname, target))
+
+
+    def scrub(self, level, backupname):
+        logger.info('scrub {} ({}).'.format(level, backupname))
 
 
 def main():
