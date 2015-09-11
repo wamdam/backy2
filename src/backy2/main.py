@@ -94,6 +94,7 @@ class Level():
         assert len(data) <= CHUNK_SIZE
         checksum = hashlib.md5(data).hexdigest()
         if chunk_id in self.index:
+            # TODO: CHECK SIZE!!!
             self.seek(chunk_id)
         else:
             self.seek(-1)  # end of file
