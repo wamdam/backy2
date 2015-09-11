@@ -113,3 +113,7 @@ def main():
         logger.exception(e)
         logger.info('Backup failed.\n')
         sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
