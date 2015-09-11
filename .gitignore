@@ -24,6 +24,5 @@ tmp
 env
 htmlcov
 report.xml
-*.roll
-*.data
-*.index
+*..data*
+*..index*
