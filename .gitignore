@@ -26,3 +26,4 @@ htmlcov
 report.xml
 *..data*
 *..index*
+.coverage

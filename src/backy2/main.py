@@ -35,11 +35,16 @@ class BackyException(Exception):
 
 
 class Level():
-    """ Writes and reads a single level, i.e. a data-file and an index """
+    """ Writes and reads a single level, i.e. a data-file and an index.
+    This is completely unaware of any chunk sizes. You may write any
+    chunk size you want.
+    So this is effectively a key value store.
+    """
 
-    def __init__(self, data_filename, index_filename):
+    def __init__(self, data_filename, index_filename, remove=False):
         self.data_filename = data_filename
         self.index_filename = index_filename
+        self.remove = remove
 
 
     def __enter__(self):
@@ -56,6 +61,9 @@ class Level():
     def __exit__(self, type, value, traceback):
         self.data.close()
         self._write_index()
+        if self.remove:
+            os.unlink(self.data_filename)
+            os.unlink(self.index_filename)
 
 
     def _read_index(self):

@@ -36,6 +36,7 @@ Topic :: System :: Archiving :: Backup
     install_requires=[
         'pytest',
         'pytest-cov',
+        'pytest-capturelog',
         'pytest-timeout',
         'PrettyTable==0.7.2',
         ],
