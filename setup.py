@@ -21,6 +21,9 @@ setup(name='backy2',
     include_package_data=True,
     zip_safe=False,
     install_requires=[
+        'pytest',
+        'pytest-cov',
+        'pytest-timeout',
         'PrettyTable==0.7.2',
         ],
     entry_points="""
