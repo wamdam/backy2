@@ -3,6 +3,7 @@
 #from prettytable import PrettyTable
 import argparse
 import glob
+import hashlib
 import logging
 import os
 import sys
@@ -33,8 +34,8 @@ class BackyException(Exception):
     pass
 
 
-class LevelWriter():
-    """ Writes a level, i.e. a data-file and an index """
+class Level():
+    """ Writes and reads a single level, i.e. a data-file and an index """
 
     def __init__(self, data_filename, index_filename):
         self.data_filename = data_filename
@@ -48,13 +49,56 @@ class LevelWriter():
             open(self.index_filename, 'wb').close()
 
         self.data = open(self.data_filename, 'r+b')
-        self.index = open(self.index_filename, 'r+t')
+        self._read_index()
         return self
 
 
     def __exit__(self, type, value, traceback):
         self.data.close()
-        self.index.close()
+        self._write_index()
+
+
+    def _read_index(self):
+        self.index = {}
+        for line in open(self.index_filename):
+            _chunk_id, checksum, _offset, _length = line.strip().split('|')
+            chunk_id = int(_chunk_id)
+            offset = int(_offset)
+            length = int(_length)
+            self.index[chunk_id] = {'checksum': checksum, 'offset': offset, 'length': length}
+
+
+    def _write_index(self):
+        with open(self.index_filename, 'w') as f:
+            for k in sorted(self.index.keys()):
+                v = self.index[k]
+                line = '|'.join([str(k), v['checksum'], str(v['offset']), str(v['length'])])
+                f.write(line + '\n')
+
+
+    def seek(self, chunk_id):
+        here = self.data.tell()
+        if chunk_id == -1:
+            self.data.seek(0, 2)
+        else:
+            there = self.index[chunk_id]
+            if here != there:
+                self.data.seek(there)
+
+
+    def tell(self):
+        return self.data.tell()
+
+
+    def write(self, chunk_id, data):
+        assert len(data) <= CHUNK_SIZE
+        checksum = hashlib.md5(data).hexdigest()
+        if chunk_id in self.index:
+            self.seek(chunk_id)
+        else:
+            self.seek(-1)  # end of file
+        self.index[chunk_id] = {'checksum': checksum, 'offset': self.tell(), 'length': len(data)}
+        self.data.write(data)
 
 
 class Backy():
@@ -76,10 +120,9 @@ class Backy():
         logger.debug('Levels:          {}'.format(self.get_levels()))
         logger.debug('Next level:      {}'.format(self.next_level()))
 
-        with LevelWriter('test1', 'test2') as lw:
-            pass
+        with Level('test1', 'test2') as lw:
+            import pdb; pdb.set_trace()
 
-        import pdb; pdb.set_trace()
 
 
     def get_levels(self, files=[]):
