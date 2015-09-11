@@ -47,7 +47,7 @@ class Level():
         self.remove = remove
 
 
-    def __enter__(self):
+    def open(self):
         if not os.path.exists(self.data_filename):
             # touch them
             open(self.data_filename, 'wb').close()
@@ -58,12 +58,20 @@ class Level():
         return self
 
 
-    def __exit__(self, type, value, traceback):
+    def close(self):
         self.data.close()
         self._write_index()
         if self.remove:
             os.unlink(self.data_filename)
             os.unlink(self.index_filename)
+
+
+    def __enter__(self):
+        return self.open()
+
+
+    def __exit__(self, type, value, traceback):
+        self.close()
 
 
     def _read_index(self):
@@ -134,22 +142,31 @@ class Backy():
         #self.path = path
         self.backupname = backupname
         self.base = os.path.join(path, self.BASE.format(backupname=backupname))
-        self.base_datafile_path = os.path.join(path, self.base + 'data')
-        self.base_indexfile_path = os.path.join(path, self.base + 'index')
 
-        logger.debug('Base data file:  {}'.format(self.base_datafile_path))
-        logger.debug('Base index file: {}'.format(self.base_indexfile_path))
+
+    def __enter__(self):
+        base_datafile_path = self.base + 'data'
+        base_indexfile_path = self.base + 'index'
+
+        next_datafile_path = self.base + 'data' + '.' + str(self.next_level())
+        next_indexfile_path = self.base + 'index' + '.' + str(self.next_level())
+
+        logger.debug('Base data file:  {}'.format(base_datafile_path))
+        logger.debug('Base index file: {}'.format(base_indexfile_path))
         logger.debug('Levels:          {}'.format(self.get_levels()))
         logger.debug('Next level:      {}'.format(self.next_level()))
+        logger.debug('Next data file:  {}'.format(next_datafile_path))
+        logger.debug('Next index file: {}'.format(next_indexfile_path))
 
-        with Level('test1', 'test2') as lw:
-            #lw.write(10, b'asdasdasd')
-            #lw.write(1, b'asd')
-            #lw.write(20, b'asdasdasd')
-            #lw.write(22, b'2222222222222222')
-            #lw.write(22, b'3333333333333333')
-            #lw.write(1, b'444')
-            print(lw.read(22))
+        self.base_level = Level(base_datafile_path, base_indexfile_path).open()
+        self.next_level = Level(next_datafile_path, next_indexfile_path).open()
+
+        return self
+
+
+    def __exit__(self, type, value, traceback):
+        self.base_level.close()
+        self.next_level.close()
 
 
     def get_levels(self, files=[]):
@@ -168,7 +185,8 @@ class Backy():
 
 
     def backup(self, source, hints=[]):
-        pass
+        self.base_level.write(3, b'base'*100)
+        self.next_level.write(3, b'next'*100)
 
 
     def restore(self, level, target):
@@ -189,20 +207,20 @@ class Commands():
 
     def backup(self, source, backupname):
         hints = []  # TODO
-        backy = Backy(self.path, backupname)
-        backy.backup(source, hints)
+        with Backy(self.path, backupname) as backy:
+            backy.backup(source, hints)
         #logger.info('Backup {} -> {}.'.format(source, backupname))
 
 
     def restore(self, backupname, target, level):
-        backy = Backy(self.path, backupname)
-        backy.restore(level, target)
+        with Backy(self.path, backupname) as backy:
+            backy.restore(level, target)
         #logger.info('Restore {} ({}) -> {}.'.format(level, backupname, target))
 
 
     def scrub(self, backupname, level):
-        backy = Backy(self.path, backupname)
-        backy.scrub(level)
+        with Backy(self.path, backupname) as backy:
+            backy.scrub(level)
         #logger.info('scrub {} ({}).'.format(level, backupname))
 
 
