@@ -81,7 +81,7 @@ class Level():
         if chunk_id == -1:
             self.data.seek(0, 2)
         else:
-            there = self.index[chunk_id]
+            there = self.index[chunk_id]['offset']
             if here != there:
                 self.data.seek(there)
 
@@ -94,12 +94,25 @@ class Level():
         assert len(data) <= CHUNK_SIZE
         checksum = hashlib.md5(data).hexdigest()
         if chunk_id in self.index:
-            # TODO: CHECK SIZE!!!
+            # size must match except that it's the last chunk.
+            if self.index[chunk_id]['length'] != len(data) and chunk_id != max(self.index.keys()):
+                raise BackyException('Unable to write chunk, size does not match.')
             self.seek(chunk_id)
         else:
             self.seek(-1)  # end of file
         self.index[chunk_id] = {'checksum': checksum, 'offset': self.tell(), 'length': len(data)}
         self.data.write(data)
+
+
+    def read(self, chunk_id):
+        self.seek(chunk_id)
+        chunk = self.index[chunk_id]
+        length = chunk['length']
+        checksum = chunk['checksum']
+        data = self.data.read(length)
+        if not hashlib.md5(data).hexdigest() == checksum:
+            logger.critical('Checksum for chunk {} does not match.'.format(chunk_id))
+        return data
 
 
 class Backy():
@@ -122,8 +135,13 @@ class Backy():
         logger.debug('Next level:      {}'.format(self.next_level()))
 
         with Level('test1', 'test2') as lw:
-            import pdb; pdb.set_trace()
-
+            #lw.write(10, b'asdasdasd')
+            #lw.write(1, b'asd')
+            #lw.write(20, b'asdasdasd')
+            #lw.write(22, b'2222222222222222')
+            #lw.write(22, b'3333333333333333')
+            #lw.write(1, b'444')
+            print(lw.read(22))
 
 
     def get_levels(self, files=[]):
