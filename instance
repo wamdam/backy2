@@ -22,6 +22,9 @@ case "$1" in
         fi
         env/bin/python3 setup.py develop
         ;;
+    test)
+        py.test -vv
+        ;;
     *)
         cat >&2 << EOF
 usage: $0 <command>

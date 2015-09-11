@@ -8,12 +8,25 @@ setup(name='backy2',
     description="A block / disk based backup and restore solution",
     long_description="""\
             """,
-    classifiers=[], # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
-    keywords='',
-    author='Daniel Kraft',
+    classifiers="""
+Development Status :: 4 - Beta
+Environment :: Console
+Intended Audience :: System Administrators
+License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Operating System :: POSIX
+Programming Language :: Python
+Programming Language :: Python :: 3
+Programming Language :: Python :: 3.2
+Programming Language :: Python :: 3.3
+Programming Language :: Python :: 3.4
+Topic :: System :: Archiving :: Backup
+"""[:-1].split('\n'),
+    keywords='backup',
+    author=('Daniel Kraft <daniel.kraft@d9t.de>'
+            'Christian Theune <ct@flyingcircus.io>'),
     author_email='daniel.kraft@d9t.de',
     url='https://d9t.de/',
-    license='',
+    license='GPL-3',
     packages=find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
     package_dir={
         '': 'src',
@@ -27,5 +40,7 @@ setup(name='backy2',
         'PrettyTable==0.7.2',
         ],
     entry_points="""
+        [console_scripts]
+            backy = backy2.main:main
     """,
     )
