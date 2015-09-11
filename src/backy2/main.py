@@ -2,6 +2,7 @@
 
 #from prettytable import PrettyTable
 import argparse
+import glob
 import logging
 import os
 import sys
@@ -9,38 +10,98 @@ import sys
 
 logger = logging.getLogger(__name__)
 
+CHUNK_SIZE = 1024*4096  # 4MB
 
 def init_logging(backupdir, console_level):  # pragma: no cover
-    logging.basicConfig(
-        filename=os.path.join(backupdir, 'backy.log'),
-        format='%(asctime)s [%(process)d] %(message)s',
-        level=logging.INFO)
 
     console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s')),
     console.setLevel(console_level)
-    logging.getLogger('').addHandler(console)
+    #logger.addHandler(console)
+
+    logfile = logging.FileHandler(os.path.join(backupdir, 'backy.log'))
+    logfile.setLevel(logging.INFO)
+    logfile.setFormatter(logging.Formatter('%(asctime)s [%(process)d] %(message)s')),
+    #logger.addHandler(logfile)
+
+    logging.basicConfig(handlers = [console, logfile], level=logging.DEBUG)
 
     logger.info('$ ' + ' '.join(sys.argv))
 
 
-class Commands(object):
+class BackyException(Exception):
+    pass
+
+
+class BackyWriter():
+    """TODO"""
+
+    BASE = '{backupname}..'
+    BASE_DATA = '{backupname}..data'
+    BASE_ROLL = '{backupname}..roll'
+    LEVEL_ROLL = '{backupname}..{level}.roll'
+    LEVEL_INDEX = '{backupname}..{level}.index'
+    LEVEL_DATA = '{backupname}..{level}.data'
+
+    def __init__(self, path, backupname):
+        if '.roll.' in backupname or \
+               '.diff.' in backupname or \
+               '.index.' in backupname or\
+               '.data.' in backupname:
+           raise BackyException('Reserved name found in backupname.')
+        #self.path = path
+        self.backupname = backupname
+        self.base_datafile_path = os.path.join(path, self.BASE_DATA.format(backupname=backupname))
+        self.base_rollfile_path = os.path.join(path, self.BASE_ROLL.format(backupname=backupname))
+        _base = os.path.join(path, self.BASE.format(backupname=backupname))
+        self.levels = [x[len(_base):] for x in glob.glob(_base + '*')]
+
+        logger.debug('test')
+        #import pdb; pdb.set_trace()
+
+
+class Backy():
+    """Backup, restore and scrub logic wrapper"""
+
+    def __init__(self, path):
+        self.path = path
+
+
+    def backup(self, source, backupname, hints=[]):
+        writer = BackyWriter(self.path, backupname)
+
+
+    def restore(self, backupname, target, level):
+        pass
+
+
+    def scrub(self, backupname, level):
+        pass
+
+
+
+class Commands():
     """Proxy between CLI calls and actual backup code."""
 
     def __init__(self, path):
-        #self.backup = backy.backup.Backup(path)
+        self.backy = Backy(path)
         pass
 
 
     def backup(self, source, backupname):
-        logger.info('Backup {} -> {}.'.format(source, backupname))
+        hints = []  # TODO
+        self.backy.backup(source, backupname, hints)
+        #logger.info('Backup {} -> {}.'.format(source, backupname))
 
 
-    def restore(self, level, backupname, target):
-        logger.info('Restore {} ({}) -> {}.'.format(level, backupname, target))
+    def restore(self, backupname, target, level):
+        self.backy.restore(backupname, target, level)
+        #logger.info('Restore {} ({}) -> {}.'.format(level, backupname, target))
 
 
-    def scrub(self, level, backupname):
-        logger.info('scrub {} ({}).'.format(level, backupname))
+    def scrub(self, backupname, level):
+        self.backy.scrub(backupname, level)
+        #logger.info('scrub {} ({}).'.format(level, backupname))
 
 
 def main():
@@ -110,12 +171,12 @@ def main():
     try:
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
         func(**func_args)
-        logger.info('Backup complete.\n')
+        logger.info('Backy complete.\n')
         sys.exit(0)
     except Exception as e:
         logger.error('Unexpected exception')
         logger.exception(e)
-        logger.info('Backup failed.\n')
+        logger.info('Backy failed.\n')
         sys.exit(1)
 
 
