@@ -33,49 +33,79 @@ class BackyException(Exception):
     pass
 
 
-class BackyWriter():
-    """TODO"""
+class LevelWriter():
+    """ Writes a level, i.e. a data-file and an index """
 
-    BASE = '{backupname}..'
-    BASE_DATA = '{backupname}..data'
-    BASE_ROLL = '{backupname}..roll'
-    LEVEL_ROLL = '{backupname}..{level}.roll'
-    LEVEL_INDEX = '{backupname}..{level}.index'
-    LEVEL_DATA = '{backupname}..{level}.data'
+    def __init__(self, data_filename, index_filename):
+        self.data_filename = data_filename
+        self.index_filename = index_filename
 
-    def __init__(self, path, backupname):
-        if '.roll.' in backupname or \
-               '.diff.' in backupname or \
-               '.index.' in backupname or\
-               '.data.' in backupname:
-           raise BackyException('Reserved name found in backupname.')
-        #self.path = path
-        self.backupname = backupname
-        self.base_datafile_path = os.path.join(path, self.BASE_DATA.format(backupname=backupname))
-        self.base_rollfile_path = os.path.join(path, self.BASE_ROLL.format(backupname=backupname))
-        _base = os.path.join(path, self.BASE.format(backupname=backupname))
-        self.levels = [x[len(_base):] for x in glob.glob(_base + '*')]
 
-        logger.debug('test')
-        #import pdb; pdb.set_trace()
+    def __enter__(self):
+        if not os.path.exists(self.data_filename):
+            # touch them
+            open(self.data_filename, 'wb').close()
+            open(self.index_filename, 'wb').close()
+
+        self.data = open(self.data_filename, 'r+b')
+        self.index = open(self.index_filename, 'r+t')
+        return self
+
+
+    def __exit__(self, type, value, traceback):
+        self.data.close()
+        self.index.close()
 
 
 class Backy():
-    """Backup, restore and scrub logic wrapper"""
+    """TODO"""
 
-    def __init__(self, path):
-        self.path = path
+    BASE = '{backupname}..'
+
+    def __init__(self, path, backupname):
+        if '.data.' in backupname or '.index.' in backupname:
+           raise BackyException('Reserved name found in backupname.')
+        #self.path = path
+        self.backupname = backupname
+        self.base = os.path.join(path, self.BASE.format(backupname=backupname))
+        self.base_datafile_path = os.path.join(path, self.base + 'data')
+        self.base_indexfile_path = os.path.join(path, self.base + 'index')
+
+        logger.debug('Base data file:  {}'.format(self.base_datafile_path))
+        logger.debug('Base index file: {}'.format(self.base_indexfile_path))
+        logger.debug('Levels:          {}'.format(self.get_levels()))
+        logger.debug('Next level:      {}'.format(self.next_level()))
+
+        with LevelWriter('test1', 'test2') as lw:
+            pass
+
+        import pdb; pdb.set_trace()
 
 
-    def backup(self, source, backupname, hints=[]):
-        writer = BackyWriter(self.path, backupname)
+    def get_levels(self, files=[]):
+        """ Guess levels from the filenames """
+        if not files:
+            files = glob.glob(self.base + '*.*')
+        levels = set([int(x.split('.')[-1]) for x in files])
+        return sorted(levels)
 
 
-    def restore(self, backupname, target, level):
+    def next_level(self, files=[]):
+        levels = self.get_levels(files)
+        if not levels:
+            return 0
+        return levels[-1] + 1
+
+
+    def backup(self, source, hints=[]):
         pass
 
 
-    def scrub(self, backupname, level):
+    def restore(self, level, target):
+        pass
+
+
+    def scrub(self, level):
         pass
 
 
@@ -84,23 +114,25 @@ class Commands():
     """Proxy between CLI calls and actual backup code."""
 
     def __init__(self, path):
-        self.backy = Backy(path)
-        pass
+        self.path = path
 
 
     def backup(self, source, backupname):
         hints = []  # TODO
-        self.backy.backup(source, backupname, hints)
+        backy = Backy(self.path, backupname)
+        backy.backup(source, hints)
         #logger.info('Backup {} -> {}.'.format(source, backupname))
 
 
     def restore(self, backupname, target, level):
-        self.backy.restore(backupname, target, level)
+        backy = Backy(self.path, backupname)
+        backy.restore(level, target)
         #logger.info('Restore {} ({}) -> {}.'.format(level, backupname, target))
 
 
     def scrub(self, backupname, level):
-        self.backy.scrub(backupname, level)
+        backy = Backy(self.path, backupname)
+        backy.scrub(level)
         #logger.info('scrub {} ({}).'.format(level, backupname))
 
 
