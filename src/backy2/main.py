@@ -11,7 +11,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 1024*4096  # 4MB
+SEGMENT_SIZE = 1024*4096  # 4MB
 
 def init_logging(backupdir, console_level):  # pragma: no cover
 
@@ -107,7 +107,6 @@ class Level():
 
 
     def write(self, chunk_id, data):
-        assert len(data) <= CHUNK_SIZE
         checksum = hashlib.md5(data).hexdigest()
         if chunk_id in self.index:
             # size must match except that it's the last chunk.
