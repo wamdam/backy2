@@ -2,7 +2,8 @@
 HERE="$( dirname "$( readlink -f "$0" )" )"
 APPNAME=con
 PIDFILE="$HERE/$APPNAME.pid"
-PYTHON=/usr/bin/python3
+PYTHON=$HERE/env/bin/python3
+PYTEST=$HERE/env/bin/py.test
 LOG=$HERE/log
 
 NUMLOGS=10
@@ -13,17 +14,17 @@ case "$1" in
     env)
         rm -r env
         virtualenv -p python3 env
-        env/bin/python3 setup.py develop
+        $PYTHON setup.py develop
         ;;
     fastenv)
         if [ ! -f env/bin/python3 ]; then
             >&2 echo "No existing environment found. Use $0 env instead."
             exit 1
         fi
-        env/bin/python3 setup.py develop
+        $PYTHON setup.py develop
         ;;
     test)
-        py.test -vv
+        $PYTEST -vv
         ;;
     *)
         cat >&2 << EOF
