@@ -37,6 +37,10 @@ class BackyException(Exception):
     pass
 
 
+class ChunkChecksumWrong(BackyException):
+    pass
+
+
 class ChunkNotFound(BackyException):
     pass
 
@@ -127,7 +131,10 @@ class Level():
 
     def max_chunk(self):
         """ Returns the max. known chunk in this level """
-        return max(self.index.keys())
+        if self.index.keys():
+            return max(self.index.keys())
+        else:
+            return -1
 
 
     def write(self, chunk_id, data):
@@ -153,12 +160,17 @@ class Level():
         self.data.write(data)
 
 
+    @property
+    def empty(self):
+        return self.max_chunk() == 0
+
+
     def wipe(self, chunk_id):
         """ Mark data as wiped for chunk_id """
         self.write(chunk_id, b'')
 
 
-    def read(self, chunk_id):
+    def read(self, chunk_id, raise_on_error=False):
         """ Read a given chunk ID's data from the level and validate """
         if not chunk_id in self.index:
             raise ChunkNotFound()
@@ -171,7 +183,10 @@ class Level():
         checksum = chunk.checksum
         data = self.data.read(length)
         if not hashlib.md5(data).hexdigest() == checksum:
-            logger.critical('Checksum for chunk {} does not match.'.format(chunk_id))
+            if raise_on_error:
+                raise ChunkChecksumWrong('Checksum for chunk {} does not match'.format(chunk_id))
+            else:
+                logger.critical('Checksum for chunk {} does not match.'.format(chunk_id))
         return data
 
 
@@ -203,6 +218,11 @@ class Level():
         # truncate data to index
         last_chunk = self.index[chunk_id]
         self.data.truncate(last_chunk.offset + last_chunk.length)
+
+
+    def invalidate_chunk(self, chunk_id):
+        chunk = self.index[chunk_id]
+        chunk.checksum = ''
 
 
 
@@ -333,7 +353,8 @@ class Backy():
         levels.append(Level(self.data_filename(), self.index_filename(), self.chunk_size).open())
 
         # create a read list
-        max_chunk = max([l.max_chunk() for l in levels])
+        max_chunk = max([l.max_chunk() for l in levels if not l.empty])
+        # TODO: Check if max_chunk is -1. No idea how this could happen.
         num_chunks = max_chunk + 1
         read_list = []
 
@@ -378,8 +399,18 @@ class Backy():
             level.close()
 
 
-    def scrub(self, level):
-        pass
+    def scrub(self, level=None):
+        all_levels = self.get_levels()
+        if level is not None and level not in all_levels:
+            raise BackyException('Level {} not found.'.format(level))
+
+        with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level:
+            for chunk_id in level.index:
+                try:
+                    level.read(chunk_id, raise_on_error=True)
+                except ChunkChecksumWrong:
+                    logger.critical('SCRUB: Checksum for chunk {} does not match.'.format(chunk_id))
+                    level.invalidate_chunk(chunk_id)
 
 
 
@@ -406,6 +437,10 @@ class Commands():
 
 
     def scrub(self, backupname, level):
+        if level == '':
+            level = None  # restore latest
+        else:
+            level = int(level)
         backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.scrub(level)
 
@@ -447,7 +482,7 @@ def main():
     p = subparsers.add_parser(
         'scrub',
         help="Scrub a given backup and check for consistency.")
-    p.add_argument('-l', '--level', default='0')
+    p.add_argument('-l', '--level', default='')
     p.add_argument('backupname')
     p.set_defaults(func='scrub')
 

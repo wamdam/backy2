@@ -5,6 +5,7 @@ import backy2.main
 import shutil
 
 CHUNK_SIZE = 1024*4096
+CHUNK_SIZE_MIN = 1024
 
 @pytest.yield_fixture
 def argv():
@@ -40,18 +41,17 @@ usage: py.test [-h] [-v] [-b BACKUPDIR] {backup,restore,scrub} ...
 # Test Level
 
 def test_level_consistency(test_path):
-    CHUNK_SIZE = 1024*4096
-    s1 = os.urandom(CHUNK_SIZE)
-    s2 = os.urandom(CHUNK_SIZE)
-    s3 = os.urandom(CHUNK_SIZE)
+    s1 = os.urandom(CHUNK_SIZE_MIN)
+    s2 = os.urandom(CHUNK_SIZE_MIN)
+    s3 = os.urandom(CHUNK_SIZE_MIN)
     data_file = os.path.join(test_path, '_test.data')
     index_file = os.path.join(test_path, '_test.index')
-    with backy2.main.Level(data_file, index_file, CHUNK_SIZE) as lw:
+    with backy2.main.Level(data_file, index_file, CHUNK_SIZE_MIN) as lw:
         lw.write(10, s1)
         lw.write(8, s2)
         lw.write(12, s3)
 
-    with backy2.main.Level(data_file, index_file, CHUNK_SIZE) as lw:
+    with backy2.main.Level(data_file, index_file, CHUNK_SIZE_MIN) as lw:
         assert lw.read(8) == s2
         assert lw.read(10) == s1
         assert lw.read(12) == s3
@@ -104,14 +104,14 @@ def test_level_wrong_checksum(caplog, test_path):
 # Test Backup
 
 def test_backup(test_path):
-    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE)
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
 
-    data_1 = os.urandom(4*CHUNK_SIZE)   # 4 complete chunks
+    data_1 = os.urandom(4*CHUNK_SIZE_MIN)   # 4 complete chunks
     data_2 = data_1 + os.urandom(10)    # append 10 bytes
-    data_3 = data_2[:3*CHUNK_SIZE]      # truncate to 3 chunks
+    data_3 = data_2[:3*CHUNK_SIZE_MIN]      # truncate to 3 chunks
     data_4 = data_3 + os.urandom(10)    # append 10 bytes
     data_5 = data_3                     # remove those 10 bytes again
-    data_6 = os.urandom(CHUNK_SIZE) + data_5[CHUNK_SIZE:]  # Change 1st chunk
+    data_6 = os.urandom(CHUNK_SIZE_MIN) + data_5[CHUNK_SIZE_MIN:]  # Change 1st chunk
 
     src_1 = os.path.join(test_path, 'data_1')
     src_2 = os.path.join(test_path, 'data_2')
@@ -212,4 +212,60 @@ def test_backup(test_path):
     assert open(restore, 'rb').read() == data_1
     backy.restore(restore, 0)
     assert open(restore, 'rb').read() == b''
+
+
+def test_restore_wrong_checksum(test_path, caplog):
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    data = os.urandom(4*CHUNK_SIZE_MIN)   # 4 complete chunks
+    src = os.path.join(test_path, 'data')
+    with open(src, 'wb') as f:
+        f.write(data)
+
+    backy.backup(src)
+
+    # test if all is good
+    backy.restore(os.path.join(test_path, 'restore'))
+    assert 'CRITICAL Checksum for chunk 0 does not match' not in caplog.text()
+
+    # change something (i.e. sun flare changes some bits)
+    backup_data = open(backy.data_filename(), 'rb').read()
+    _ = list(backup_data)
+    _[0] = (_[0] + 1) % 256
+    backup_data = bytes(_)
+    with open(backy.data_filename(), 'wb') as f:
+        f.write(backup_data)
+
+    # test if all is good
+    backy.restore(os.path.join(test_path, 'restore'))
+    assert 'CRITICAL Checksum for chunk 0 does not match' in caplog.text()
+
+
+def test_scrub_wrong_checksum(test_path, caplog):
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    data = os.urandom(4*CHUNK_SIZE_MIN)   # 4 complete chunks
+    src = os.path.join(test_path, 'data')
+    with open(src, 'wb') as f:
+        f.write(data)
+
+    backy.backup(src)
+
+    # test if all is good
+    backy.scrub()
+    assert 'SCRUB: Checksum for chunk 0 does not match.' not in caplog.text()
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum != ''
+
+    # change something (i.e. sun flare changes some bits)
+    backup_data = open(backy.data_filename(), 'rb').read()
+    _ = list(backup_data)
+    _[0] = (_[0] + 1) % 256
+    backup_data = bytes(_)
+    with open(backy.data_filename(), 'wb') as f:
+        f.write(backup_data)
+
+    # test if all is good
+    backy.scrub()
+    assert 'SCRUB: Checksum for chunk 0 does not match.' in caplog.text()
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum == ''
 
