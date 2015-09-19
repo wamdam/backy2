@@ -201,9 +201,12 @@ class Level():
         return chunk
 
 
-    def truncate(self, chunk_id):
+    def truncate(self, chunk_id=None):
         """ Truncate the level after the given chunk_id.
+        If no chunk_id is given, truncate the last one according to the index.
         """
+        if not chunk_id:
+            chunk_id = self.max_chunk()
         if chunk_id not in self.index:
             raise BackyException('Cannot truncate to unknown chunk_id {}'.format(chunk_id))
 
@@ -217,6 +220,7 @@ class Level():
 
         # truncate data to index
         last_chunk = self.index[chunk_id]
+        logger.debug('Truncating base to {}'.format(last_chunk.offset + last_chunk.length))
         self.data.truncate(last_chunk.offset + last_chunk.length)
 
 
@@ -225,9 +229,20 @@ class Level():
         chunk.checksum = ''
 
 
+def chunks_from_hints(hints, chunk_size):
+    """ Helper method """
+    chunks = set()
+    for offset, length in hints:
+        start_chunk = offset // chunk_size  # integer division
+        end_chunk = start_chunk + (length-1) // chunk_size
+        for i in range(start_chunk, end_chunk+1):
+            chunks.add(i)
+    return chunks
+
+
 
 class Backy():
-    """TODO"""
+    """ Handle several levels of backup with restore and scrubbing """
 
     BASE = '{backupname}..'
 
@@ -269,7 +284,13 @@ class Backy():
             return self.base + 'index'
 
 
-    def backup(self, source, hints=[]):
+    def backup(self, source, hints=None):
+        """ Create a backup from source.
+        If hints are given, they must be tuples of (offset, length). Then, only
+        data within hints will be backed up.
+        Otherwise, the backup reads source and looks if checksums match with
+        the target.
+        """
         next_level_number = self.get_next_level()
 
         logger.debug('Base data file:  {}'.format(self.data_filename()))
@@ -288,35 +309,6 @@ class Backy():
             source_size = source_file.tell()
             source_file.seek(0)
             num_chunks_src = math.ceil(source_size / self.chunk_size)
-            for chunk_id in range(num_chunks_src):
-                data = source_file.read(self.chunk_size)
-                if not data:
-                    break  # EOF
-
-                data_checksum = hashlib.md5(data).hexdigest()
-                try:
-                    base_checksum = base_level.read_meta(chunk_id).checksum
-                except (ChunkWiped, ChunkNotFound):
-                    pass
-                else:
-                    if data_checksum == base_checksum:
-                        continue  # base already matches
-
-                # read from base
-                try:
-                    old_data = base_level.read(chunk_id)
-                    # TODO: Throw away buffers
-                except ChunkNotFound:
-                    next_level.wipe(chunk_id)
-                except ChunkWiped:
-                    pass
-                else:
-                    # write that to next level
-                    # TODO: write into other thread
-                    next_level.write(chunk_id, old_data)
-                # write data to base
-                # TODO: write into other thread
-                base_level.write(chunk_id, data)
 
             # check if we must truncate
             num_chunks_base = base_level.max_chunk() + 1
@@ -325,9 +317,54 @@ class Backy():
                 for chunk_id in range(num_chunks_src, num_chunks_base):
                     data = base_level.read(chunk_id)
                     next_level.write(chunk_id, data)
-
             max_chunk_src = num_chunks_src - 1  # chunk_ids count from 0
-            base_level.truncate(max_chunk_src)
+            # need to do this twice. This time because last chunk must be last to get an different size.
+            if base_level.max_chunk() > max_chunk_src:
+                base_level.truncate(max_chunk_src)
+
+            if hints:
+                read_chunks = chunks_from_hints(hints, self.chunk_size)
+            else:
+                read_chunks = range(num_chunks_src)
+
+            for chunk_id in sorted(read_chunks):
+                source_file.seek(chunk_id * self.chunk_size)  # TODO: check if seek costs when it's == tell.
+                data = source_file.read(self.chunk_size)
+                if not data:
+                    break  # EOF
+
+                data_checksum = hashlib.md5(data).hexdigest()
+                logger.debug('Read chunk {} (checksum {})'.format(chunk_id, data_checksum))
+                try:
+                    base_checksum = base_level.read_meta(chunk_id).checksum
+                except (ChunkWiped, ChunkNotFound):
+                    pass
+                else:
+                    if data_checksum == base_checksum:
+                        logger.debug('Checksum matches for chunk {}'.format(chunk_id))
+                        continue  # base already matches
+
+                # read from base
+                try:
+                    old_data = base_level.read(chunk_id)
+                    logger.debug('Read old data chunk {} (checksum {})'.format(chunk_id, base_checksum))
+                    # TODO: Throw away buffers
+                except ChunkNotFound:
+                    next_level.wipe(chunk_id)
+                except ChunkWiped:
+                    pass
+                else:
+                    # write that to next level
+                    # TODO: write into other thread
+                    logger.debug('Wrote old data chunk {} to level {} (checksum {})'.format(chunk_id, next_level_number, base_checksum))
+                    next_level.write(chunk_id, old_data)
+                # write data to base
+                # TODO: write into other thread
+                logger.debug('Wrote new data chunk {} (checksum {})'.format(chunk_id, data_checksum))
+                base_level.write(chunk_id, data)
+
+            # need to do this again. This time because last chunk can have different size.
+            base_level.truncate()
 
             logger.info('Successfully backed up level {} ({}:{})'.format(
                 next_level_number,
@@ -354,7 +391,7 @@ class Backy():
 
         # create a read list
         max_chunk = max([l.max_chunk() for l in levels if not l.empty])
-        # TODO: Check if max_chunk is -1. No idea how this could happen.
+        # TODO: Check if max_chunk is -1. No idea how this could happen however.
         num_chunks = max_chunk + 1
         read_list = []
 
@@ -421,8 +458,7 @@ class Commands():
         self.path = path
 
 
-    def backup(self, source, backupname):
-        hints = []  # TODO
+    def backup(self, source, backupname, hints=None):
         backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.backup(source, hints)
 

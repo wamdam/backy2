@@ -106,12 +106,12 @@ def test_level_wrong_checksum(caplog, test_path):
 def test_backup(test_path):
     backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
 
-    data_1 = os.urandom(4*CHUNK_SIZE_MIN)   # 4 complete chunks
-    data_2 = data_1 + os.urandom(10)    # append 10 bytes
-    data_3 = data_2[:3*CHUNK_SIZE_MIN]      # truncate to 3 chunks
-    data_4 = data_3 + os.urandom(10)    # append 10 bytes
-    data_5 = data_3                     # remove those 10 bytes again
-    data_6 = os.urandom(CHUNK_SIZE_MIN) + data_5[CHUNK_SIZE_MIN:]  # Change 1st chunk
+    data_1 = os.urandom(4*CHUNK_SIZE_MIN)                           # 4 complete chunks
+    data_2 = data_1 + os.urandom(10)                                # append 10 bytes
+    data_3 = data_2[:3*CHUNK_SIZE_MIN-10]                           # truncate to 3 chunks - 10 bytes
+    data_4 = data_3 + os.urandom(10)                                # append 10 bytes
+    data_5 = data_3                                                 # remove those 10 bytes again
+    data_6 = os.urandom(CHUNK_SIZE_MIN) + data_5[CHUNK_SIZE_MIN:]   # Change 1st chunk
 
     src_1 = os.path.join(test_path, 'data_1')
     src_2 = os.path.join(test_path, 'data_2')
@@ -269,3 +269,32 @@ def test_scrub_wrong_checksum(test_path, caplog):
     assert 'SCRUB: Checksum for chunk 0 does not match.' in caplog.text()
     assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum == ''
 
+
+def test_hints(test_path):
+    def write_chunk(f, chunk_id, offset, length):
+        f.seek(CHUNK_SIZE_MIN*chunk_id + offset)
+        _from = f.tell()
+        _length = f.write(os.urandom(length))
+        return _from, _length
+
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    src = os.path.join(test_path, 'data')
+    #open(src, 'wb').write(os.urandom(CHUNK_SIZE_MIN*8))
+    open(src, 'wb').write(b'\0' * CHUNK_SIZE_MIN*8)
+    backy.backup(src)
+
+    # change a chunk and backup using hints
+    with open(src, 'r+b') as f:
+        _from, length = write_chunk(f, 3, 10, 30)
+    backy.backup(src, hints=[(_from, length)])
+
+    assert open(src, 'rb').read() == open(backy.data_filename(), 'rb').read()
+
+
+def test_chunks_from_hints():
+    hints = [(10, 100), (1024, 2048), (4096, 3000), (14000, 10), (16383, 1025)]
+    #         0          1, 2          4, 5, 6       13,          15, 16
+    chunk_size = 1024
+    cfh = backy2.main.chunks_from_hints(hints, chunk_size)
+    assert sorted(list(cfh)) == [0, 1, 2, 4, 5, 6, 13, 15, 16]
