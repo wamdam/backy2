@@ -458,7 +458,15 @@ class Commands():
         self.path = path
 
 
-    def backup(self, source, backupname, hints=None):
+    def backup(self, source, backupname, rbd):
+        hints = None
+        if rbd:
+            # TODO: next
+            # if '-' get from stdin
+            # else read from file
+            # convert rbd into hints
+            pass
+
         backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.backup(source, hints)
 
@@ -503,6 +511,7 @@ def main():
     p.add_argument(
         'backupname',
         help='Destination file. Will be a copy of source.')
+    p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.set_defaults(func='backup')
 
     # RESTORE
