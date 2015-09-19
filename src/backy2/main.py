@@ -60,10 +60,9 @@ class Level():
     the addition.
     """
 
-    def __init__(self, data_filename, index_filename, chunk_size, temporary=False):
+    def __init__(self, data_filename, index_filename, chunk_size):
         self.data_filename = data_filename
         self.index_filename = index_filename
-        self.temporary = temporary
         self.chunk_size = chunk_size
 
 
@@ -81,9 +80,6 @@ class Level():
     def close(self):
         self.data.close()
         self._write_index()
-        if self.temporary:
-            os.unlink(self.data_filename)
-            os.unlink(self.index_filename)
 
 
     def __enter__(self):
