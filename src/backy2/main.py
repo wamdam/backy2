@@ -362,7 +362,7 @@ class Backy():
             data_filename = level.data_filename
             #index_filename = level.index_filename
             chunk = level.read_meta(chunk_id)
-            logger.debug('Restore {} bytes from {}:{} with checksum {}'.format(
+            logger.debug('Restore {:12d} bytes from {:>20s}:{:<12d} with checksum {}'.format(
                 chunk.length,
                 data_filename,
                 chunk.offset,
@@ -399,12 +399,14 @@ class Commands():
     def restore(self, backupname, target, level):
         if level == '':
             level = None  # restore latest
-        backy = Backy(self.path, backupname)
+        else:
+            level = int(level)
+        backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.restore(target, level)
 
 
     def scrub(self, backupname, level):
-        backy = Backy(self.path, backupname)
+        backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.scrub(level)
 
 
