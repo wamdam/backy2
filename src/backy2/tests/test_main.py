@@ -104,10 +104,91 @@ def test_level_wrong_checksum(caplog, test_path):
 # Test Backup
 
 def test_backup(test_path):
-    src = 'src'
-    dst = 'dst'
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE)
 
-    with open(os.path.join(test_path, src), 'wb') as f:
-        f.write(os.urandom(4*CHUNK_SIZE))
-    backy = backy2.main.Backy(test_path, dst, CHUNK_SIZE)
-    backy.backup(os.path.join(test_path, src), dst)
+    data_1 = os.urandom(4*CHUNK_SIZE)   # 4 complete chunks
+    data_2 = data_1 + os.urandom(10)    # append 10 bytes
+    data_3 = data_2[:3*CHUNK_SIZE]      # truncate to 3 chunks
+    data_4 = data_3 + os.urandom(10)    # append 10 bytes
+    data_5 = data_3                     # remove those 10 bytes again
+
+    src_1 = os.path.join(test_path, 'data_1')
+    src_2 = os.path.join(test_path, 'data_2')
+    src_3 = os.path.join(test_path, 'data_3')
+    src_4 = os.path.join(test_path, 'data_4')
+    src_5 = os.path.join(test_path, 'data_5')
+
+    # this test backups and restores the generated data files and
+    # tests them after restoring against filesize and content.
+
+    # create backups
+
+    with open(src_1, 'wb') as f:
+        f.write(data_1)
+    with open(src_2, 'wb') as f:
+        f.write(data_2)
+    with open(src_3, 'wb') as f:
+        f.write(data_3)
+    with open(src_4, 'wb') as f:
+        f.write(data_4)
+    with open(src_5, 'wb') as f:
+        f.write(data_5)
+
+    restore = os.path.join(test_path, 'restore')
+
+    # 1st day, test backup
+    backy.backup(src_1)
+    # restore of level 0 is a 0 byte file.
+    backy.restore(restore)
+    assert open(restore, 'rb').read() == data_1
+    backy.restore(restore, 0)
+    assert open(restore, 'rb').read() == b''
+
+    # 2nd day, test both backups
+    backy.backup(src_2)
+    backy.restore(restore)
+    assert open(restore, 'rb').read() == data_2
+    backy.restore(restore, 1)
+    assert open(restore, 'rb').read() == data_1
+    backy.restore(restore, 0)
+    assert open(restore, 'rb').read() == b''
+
+    # 3rd day, test all backups
+    backy.backup(src_3)
+    backy.restore(restore)
+    assert open(restore, 'rb').read() == data_3
+    backy.restore(restore, 2)
+    assert open(restore, 'rb').read() == data_2
+    backy.restore(restore, 1)
+    assert open(restore, 'rb').read() == data_1
+    backy.restore(restore, 0)
+    assert open(restore, 'rb').read() == b''
+
+    # 4th day, test all backups
+    backy.backup(src_4)
+    backy.restore(restore)
+    assert open(restore, 'rb').read() == data_4
+    backy.restore(restore, 3)
+    assert open(restore, 'rb').read() == data_3
+    backy.restore(restore, 2)
+    assert open(restore, 'rb').read() == data_2
+    backy.restore(restore, 1)
+    assert open(restore, 'rb').read() == data_1
+    backy.restore(restore, 0)
+    assert open(restore, 'rb').read() == b''
+
+    # 5th day, test all backups
+    backy.backup(src_5)
+    backy.restore(restore)
+    assert open(restore, 'rb').read() == data_5
+    backy.restore(restore, 4)
+    assert open(restore, 'rb').read() == data_4
+    backy.restore(restore, 3)
+    assert open(restore, 'rb').read() == data_3
+    backy.restore(restore, 2)
+    assert open(restore, 'rb').read() == data_2
+    backy.restore(restore, 1)
+    assert open(restore, 'rb').read() == data_1
+    backy.restore(restore, 0)
+    assert open(restore, 'rb').read() == b''
+

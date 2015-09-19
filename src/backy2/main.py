@@ -196,7 +196,7 @@ class Level():
         _del = []
         for _chunk_id in self.index.keys():
             if _chunk_id > chunk_id:
-                _del.append(chunk_id)
+                _del.append(_chunk_id)
         for _chunk_id in _del:
             del(self.index[_chunk_id])
 
@@ -235,24 +235,32 @@ class Backy():
         return levels[-1] + 1
 
 
+    def data_filename(self, level=None):
+        if level is not None:
+            return self.base + 'data.' + str(level)
+        else:
+            return self.base + 'data'
+
+
+    def index_filename(self, level=None):
+        if level is not None:
+            return self.base + 'index.' + str(level)
+        else:
+            return self.base + 'index'
+
+
     def backup(self, source, hints=[]):
-        base_datafile_path = self.base + 'data'
-        base_indexfile_path = self.base + 'index'
+        next_level_number = self.get_next_level()
 
-        next_level = self.get_next_level()
-
-        next_datafile_path = self.base + 'data' + '.' + str(next_level)
-        next_indexfile_path = self.base + 'index' + '.' + str(next_level)
-
-        logger.debug('Base data file:  {}'.format(base_datafile_path))
-        logger.debug('Base index file: {}'.format(base_indexfile_path))
+        logger.debug('Base data file:  {}'.format(self.data_filename()))
+        logger.debug('Base index file: {}'.format(self.index_filename()))
         logger.debug('Levels:          {}'.format(self.get_levels()))
-        logger.debug('Next level:      {}'.format(next_level))
-        logger.debug('Next data file:  {}'.format(next_datafile_path))
-        logger.debug('Next index file: {}'.format(next_indexfile_path))
+        logger.debug('Next level:      {}'.format(next_level_number))
+        logger.debug('Next data file:  {}'.format(self.data_filename(next_level_number)))
+        logger.debug('Next index file: {}'.format(self.index_filename(next_level_number)))
 
-        with Level(base_datafile_path, base_indexfile_path, self.chunk_size).open() as base_level, \
-                Level(next_datafile_path, next_indexfile_path, self.chunk_size).open() as next_level, \
+        with Level(self.data_filename(), self.index_filename(), self.chunk_size) as base_level, \
+                Level(self.data_filename(next_level_number), self.index_filename(next_level_number), self.chunk_size) as next_level, \
                 open(source, 'rb') as source_file:
 
             # determine source size
@@ -263,9 +271,6 @@ class Backy():
             for chunk_id in range(num_chunks_src):
                 data = source_file.read(self.chunk_size)
                 if not data:
-                    # TODO: Shorten index to the current chunk_id
-                    # and write the possible rest of data to the next level.
-                    # That would happen when the base shrunk
                     break  # EOF
 
                 data_checksum = hashlib.md5(data).hexdigest()
@@ -280,18 +285,21 @@ class Backy():
                 # read from base
                 try:
                     old_data = base_level.read(chunk_id)
+                    # TODO: Throw away buffers
                 except ChunkNotFound:
                     next_level.wipe(chunk_id)
                 except ChunkWiped:
                     pass
                 else:
                     # write that to next level
+                    # TODO: write into other thread
                     next_level.write(chunk_id, old_data)
                 # write data to base
+                # TODO: write into other thread
                 base_level.write(chunk_id, data)
 
+            # check if we must truncate
             num_chunks_base = base_level.max_chunk() + 1
-            # TODO: Check if chunk sizes match or at least if last chunk's length differs and truncate too
             if num_chunks_base > num_chunks_src:
                 # write rest to next level and truncate base
                 for chunk_id in range(num_chunks_src, num_chunks_base):
@@ -301,9 +309,73 @@ class Backy():
             max_chunk_src = num_chunks_src - 1  # chunk_ids count from 0
             base_level.truncate(max_chunk_src)
 
+            logger.info('Successfully backed up level {} ({}:{})'.format(
+                next_level_number,
+                next_level.data_filename,
+                next_level.index_filename,
+                ))
 
-    def restore(self, level, target):
-        pass
+
+    def restore(self, target, level=None):
+        """ Restore a given level (or base if level is None) to target.
+        warning: This overwrites data in target.
+        """
+        all_levels = self.get_levels()
+        if level is not None and level not in all_levels:
+            raise BackyException('Level {} not found.'.format(level))
+
+        if level is None:
+            to_restore_levels = []
+        else:
+            to_restore_levels = all_levels[all_levels.index(level):]
+
+        levels = [Level(self.data_filename(l), self.index_filename(l), self.chunk_size).open() for l in to_restore_levels]
+        levels.append(Level(self.data_filename(), self.index_filename(), self.chunk_size).open())
+
+        # create a read list
+        max_chunk = max([l.max_chunk() for l in levels])
+        num_chunks = max_chunk + 1
+        read_list = []
+
+        end = False
+        for chunk_id in range(num_chunks):
+            found = False
+            for level in levels:
+                if chunk_id in level.index:
+                    try:
+                        level.read_meta(chunk_id)
+                    except ChunkWiped:
+                        end = True
+                    else:
+                        if not end:
+                            read_list.append((chunk_id, level))
+                        else:
+                            raise BackyException('Invalid backup found: Non-wiped chunk where it should be wiped: '
+                                    'Chunk {} in level {}:{}'.format(chunk_id, level.index_filename, level.data_filename))
+                    found = True
+                    break
+            if not found:
+                raise BackyException('Chunk {} not found in any backup.'.format(chunk_id))
+
+        # debug output
+        for chunk_id, level in read_list:
+            data_filename = level.data_filename
+            #index_filename = level.index_filename
+            chunk = level.read_meta(chunk_id)
+            logger.debug('Restore {} bytes from {}:{} with checksum {}'.format(
+                chunk.length,
+                data_filename,
+                chunk.offset,
+                chunk.checksum,
+            ))
+
+        with open(target, 'wb') as target:
+            for chunk_id, level in read_list:
+                data = level.read(chunk_id)
+                target.write(data)
+
+        for level in levels:
+            level.close()
 
 
     def scrub(self, level):
