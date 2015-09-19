@@ -394,19 +394,18 @@ class Commands():
         hints = []  # TODO
         backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.backup(source, hints)
-        #logger.info('Backup {} -> {}.'.format(source, backupname))
 
 
     def restore(self, backupname, target, level):
+        if level == '':
+            level = None  # restore latest
         backy = Backy(self.path, backupname)
-        backy.restore(level, target)
-        #logger.info('Restore {} ({}) -> {}.'.format(level, backupname, target))
+        backy.restore(target, level)
 
 
     def scrub(self, backupname, level):
         backy = Backy(self.path, backupname)
         backy.scrub(level)
-        #logger.info('scrub {} ({}).'.format(level, backupname))
 
 
 def main():
@@ -437,7 +436,7 @@ def main():
     p = subparsers.add_parser(
         'restore',
         help="Restore a given backup with level to a given target.")
-    p.add_argument('-l', '--level', default='0')
+    p.add_argument('-l', '--level', default='')
     p.add_argument('backupname')
     p.add_argument('target')
     p.set_defaults(func='restore')
