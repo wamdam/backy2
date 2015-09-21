@@ -469,7 +469,7 @@ class Backy():
                     logger.critical('SCRUB: Checksum for chunk {} does not match.'.format(chunk_id))
                     level.invalidate_chunk(chunk_id)
                 checked += 1
-        logger.info("Deep scrub completed, {} chunks checked.".format(checked))
+        logger.info("Scrub completed, {} chunks checked.".format(checked))
 
 
     def deep_scrub(self, source, level=None, percentile=100):
