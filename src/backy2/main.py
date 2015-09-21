@@ -7,6 +7,7 @@ import glob
 import math
 import hashlib
 import logging
+import random
 import os
 import sys
 
@@ -436,10 +437,14 @@ class Backy():
             level.close()
 
 
-    def scrub(self, level=None):
+    def scrub(self, level=None, source=None):
+        """ Scrub a level against its own checksums
+        """
         all_levels = self.get_levels()
         if level is not None and level not in all_levels:
             raise BackyException('Level {} not found.'.format(level))
+
+        checked = 0
 
         with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level:
             for chunk_id in level.index:
@@ -448,6 +453,45 @@ class Backy():
                 except ChunkChecksumWrong:
                     logger.critical('SCRUB: Checksum for chunk {} does not match.'.format(chunk_id))
                     level.invalidate_chunk(chunk_id)
+                checked += 1
+        logger.info("Deep scrub completed, {} chunks checked.".format(checked))
+
+
+    def deep_scrub(self, source, level=None, percentile=100):
+        """ Scrub a level against a source image.
+        If percentile is given, only check percentile percent of the data blocks.
+        Returns the number of checked chunks.
+        """
+        logger.info("Performing deep scrub with {}% chunk checks.".format(percentile))
+        all_levels = self.get_levels()
+        if level is not None and level not in all_levels:
+            raise BackyException('Level {} not found.'.format(level))
+
+        checked = 0
+
+        with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level, \
+                open(source, 'rb') as source_file:
+
+            source_file.seek(0, 2)  # to the end
+
+            for chunk_id in level.index:
+                if percentile < 100 and random.randint(1, 100) > percentile:
+                    continue
+                try:
+                    backup_data = level.read(chunk_id, raise_on_error=True)
+                except ChunkChecksumWrong:
+                    logger.critical('SCRUB: Checksum for chunk {} does not match.'.format(chunk_id))
+                    level.invalidate_chunk(chunk_id)
+                # check source
+                chunk = level.index[chunk_id]
+                source_file.seek(chunk.offset)
+                source_data = source_file.read(chunk.length)
+                if backup_data != source_data:
+                    logger.critical('SCRUB: Source data for chunk {} does not match.'.format(chunk_id))
+                    level.invalidate_chunk(chunk_id)
+                checked += 1
+        logger.info("Deep scrub completed, {} chunks checked.".format(checked))
+        return checked
 
 
 
@@ -480,13 +524,18 @@ class Commands():
         backy.restore(target, level)
 
 
-    def scrub(self, backupname, level):
+    def scrub(self, backupname, level, source, percentile):
         if level == '':
             level = None  # restore latest
         else:
             level = int(level)
+        if percentile:
+            percentile = int(percentile)
         backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
-        backy.scrub(level)
+        if source:
+            backy.deep_scrub(source, level, percentile)
+        else:
+            backy.scrub(level)
 
 
 def main():
@@ -528,6 +577,10 @@ def main():
         'scrub',
         help="Scrub a given backup and check for consistency.")
     p.add_argument('-l', '--level', default='')
+    p.add_argument('-s', '--source', default=None,
+        help="Source, optional. If given, check if source matches backup in addition to checksum tests.")
+    p.add_argument('-p', '--percentile', default=100,
+        help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('backupname')
     p.set_defaults(func='scrub')
 

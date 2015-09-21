@@ -3,6 +3,7 @@ import os
 import sys
 import backy2.main
 import shutil
+import time
 
 CHUNK_SIZE = 1024*4096
 CHUNK_SIZE_MIN = 1024
@@ -253,13 +254,13 @@ def test_scrub_wrong_checksum(test_path, caplog):
 
     # test if all is good
     backy.scrub()
-    assert 'SCRUB: Checksum for chunk 0 does not match.' not in caplog.text()
+    assert 'SCRUB: Checksum for chunk' not in caplog.text()
     assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum != ''
 
-    # change something (i.e. sun flare changes some bits)
+    # change something in backup data (i.e. sun flare changes some bits)
     backup_data = open(backy.data_filename(), 'rb').read()
     _ = list(backup_data)
-    _[0] = (_[0] + 1) % 256
+    _[0] = (_[0] + 1) % 256  # add 1 to the first byte
     backup_data = bytes(_)
     with open(backy.data_filename(), 'wb') as f:
         f.write(backup_data)
@@ -268,6 +269,58 @@ def test_scrub_wrong_checksum(test_path, caplog):
     backy.scrub()
     assert 'SCRUB: Checksum for chunk 0 does not match.' in caplog.text()
     assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum == ''
+
+
+def test_deep_scrub_wrong_data(test_path, caplog):
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    data = os.urandom(4*CHUNK_SIZE_MIN)   # 4 complete chunks
+    src = os.path.join(test_path, 'data')
+    with open(src, 'wb') as f:
+        f.write(data)
+
+    backy.backup(src)
+
+    # test if all is good
+    backy.deep_scrub(src)
+    assert 'SCRUB: Source data for chunk' not in caplog.text()
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum != ''
+
+    # change something in source data (i.e. sun flare changes some bits)
+    src_data = open(src, 'rb').read()
+    _ = list(src_data)
+    _[0] = (_[0] + 1) % 256  # add 1 to the first byte
+    src_data = bytes(_)
+    with open(src, 'wb') as f:
+        f.write(src_data)
+
+    # test if all is good
+    backy.deep_scrub(src)
+    assert 'SCRUB: Source data for chunk 0 does not match.' in caplog.text()
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum == ''
+
+
+def test_deep_scrub_performance_percentile(test_path):
+    """ This test could behave better. When system i/o is heavy, this could fail
+    because we're measuring performance here..."""
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE)
+
+    src = os.path.join(test_path, 'data')
+    with open(src, 'wb') as f:
+        f.write(b'\0' * CHUNK_SIZE * 10)
+
+    backy.backup(src)
+
+    t = time.time()
+    c1 = backy.deep_scrub(src)
+    dt1 = time.time() - t
+
+    t = time.time()
+    c2 = backy.deep_scrub(src, percentile=50)
+    dt2 = time.time() - t
+
+    assert dt1 > dt2
+    assert c1 > c2
 
 
 def test_hints(test_path):
