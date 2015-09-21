@@ -7,6 +7,7 @@ import glob
 import math
 import hashlib
 import logging
+import json
 import random
 import os
 import sys
@@ -241,6 +242,12 @@ def chunks_from_hints(hints, chunk_size):
     return chunks
 
 
+def hints_from_rbd_diff(rbd_diff):
+    """ Return the required offset:length tuples from a rbd json diff
+    """
+    data = json.loads(rbd_diff)
+    return [(l['offset'], l['length']) for l in data if l['exists']=='true']
+
 
 class Backy():
     """ Handle several levels of backup with restore and scrubbing """
@@ -311,6 +318,13 @@ class Backy():
             source_file.seek(0)
             num_chunks_src = math.ceil(source_size / self.chunk_size)
 
+            # Sanity check:
+            # check hints for validity, i.e. too high offsets, ...
+            if hints:
+                max_offset = max([h[0]+h[1] for h in hints])
+                if max_offset > source_size:
+                    raise BackyException('Hints have higher offsets than source file.')
+
             # check if we must truncate
             num_chunks_base = base_level.max_chunk() + 1
             if num_chunks_base > num_chunks_src:
@@ -325,6 +339,7 @@ class Backy():
 
             if hints:
                 read_chunks = chunks_from_hints(hints, self.chunk_size)
+                logger.debug('Hints indicate to backup chunks {}'.format(','.join(map(str, read_chunks))))
             else:
                 read_chunks = range(num_chunks_src)
 
@@ -505,11 +520,11 @@ class Commands():
     def backup(self, source, backupname, rbd):
         hints = None
         if rbd:
+            hints = hints_from_rbd_diff(open(rbd, 'r').read())
             # TODO: next
             # if '-' get from stdin
             # else read from file
             # convert rbd into hints
-            pass
 
         backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
         backy.backup(source, hints)
