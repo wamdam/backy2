@@ -1,7 +1,6 @@
 # -*- encoding: utf-8 -*-
 
 #from prettytable import PrettyTable
-from collections import defaultdict
 import argparse
 import glob
 import math
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 1024*4096  # 4MB
 CHUNK_STATUS_EXISTS = 0
-CHUNK_STATUS_WIPED = 1
+CHUNK_STATUS_DESTROYED = 1
 
 def init_logging(backupdir, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
@@ -170,7 +169,8 @@ class Level():
         length = chunk.length
         checksum = chunk.checksum
         data = self.data.read(length)
-        if not hashlib.md5(data).hexdigest() == checksum:
+        if hashlib.md5(data).hexdigest() != checksum:
+            self.invalidate_chunk(chunk_id)
             if raise_on_error:
                 raise ChunkChecksumWrong('Checksum for chunk {} does not match'.format(chunk_id))
             else:
@@ -197,7 +197,16 @@ class Level():
 
 
     def invalidate_chunk(self, chunk_id):
-        self.index.get(chunk_id).checksum = ''
+        self.index.get(chunk_id).status = CHUNK_STATUS_DESTROYED
+
+
+    def get_invalid_chunk_ids(self):
+        c = set()
+        for chunk_id in self.index.chunk_ids():
+            chunk = self.index.get(chunk_id)
+            if chunk.status == CHUNK_STATUS_DESTROYED:
+                c.add(chunk_id)
+        return c
 
 
 def chunks_from_hints(hints, chunk_size):
@@ -297,7 +306,10 @@ class Backy():
                     raise BackyException('Hints have higher offsets than source file.')
 
             if hints:
-                read_chunks = chunks_from_hints(hints, self.chunk_size)
+                hinted_chunks = chunks_from_hints(hints, self.chunk_size)
+                # TODO: Test destroyed chunks reading
+                destroyed_chunks = base_level.get_invalid_chunk_ids()  # always re-read destroyed chunks
+                read_chunks = hinted_chunks.union(destroyed_chunks)
                 logger.debug('Hints indicate to backup chunks {}'.format(','.join(map(str, read_chunks))))
             else:
                 read_chunks = range(num_chunks_src)
@@ -446,8 +458,7 @@ class Backy():
                     backup_data = level.read(chunk_id, raise_on_error=True)
                 except ChunkChecksumWrong:
                     logger.critical('SCRUB: Checksum for chunk {} does not match.'.format(chunk_id))
-                    # TODO: Shall we really invalidate?
-                    #level.invalidate_chunk(chunk_id)
+                    level.invalidate_chunk(chunk_id)
                 else:
                     # check source
                     chunk = level.read_meta(chunk_id)
