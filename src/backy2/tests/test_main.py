@@ -61,10 +61,10 @@ def test_level_consistency(test_path):
 def test_level_wrong_size(test_path):
     s1 = os.urandom(10)
     s2 = os.urandom(10)
-    s3 = os.urandom(11)
+    s3 = os.urandom(CHUNK_SIZE_MIN + 1)
     data_file = os.path.join(test_path, '_test.data')
     index_file = os.path.join(test_path, '_test.index')
-    with backy2.main.Level(data_file, index_file, CHUNK_SIZE) as lw:
+    with backy2.main.Level(data_file, index_file, CHUNK_SIZE_MIN) as lw:
         lw.write(1, s1)
         lw.write(2, s2)
         with pytest.raises(backy2.main.BackyException):
@@ -94,7 +94,7 @@ def test_level_wrong_checksum(caplog, test_path):
     with backy2.main.Level(data_file, index_file, CHUNK_SIZE) as lw:
         lw.write(1, s1)
         # nasty hack, destroy checksum for chunk_id 1
-        lw.index[1].checksum = 'haha'
+        lw.index.get(1).checksum = 'haha'
 
     with backy2.main.Level(data_file, index_file, CHUNK_SIZE) as lw:
         lw.read(1)
@@ -109,17 +109,13 @@ def test_backup(test_path):
 
     data_1 = os.urandom(4*CHUNK_SIZE_MIN)                           # 4 complete chunks
     data_2 = data_1 + os.urandom(10)                                # append 10 bytes
-    data_3 = data_2[:3*CHUNK_SIZE_MIN-10]                           # truncate to 3 chunks - 10 bytes
+    data_3 = os.urandom(CHUNK_SIZE_MIN) + data_2[CHUNK_SIZE_MIN:]   # Change 1st chunk
     data_4 = data_3 + os.urandom(10)                                # append 10 bytes
-    data_5 = data_3                                                 # remove those 10 bytes again
-    data_6 = os.urandom(CHUNK_SIZE_MIN) + data_5[CHUNK_SIZE_MIN:]   # Change 1st chunk
 
     src_1 = os.path.join(test_path, 'data_1')
     src_2 = os.path.join(test_path, 'data_2')
     src_3 = os.path.join(test_path, 'data_3')
     src_4 = os.path.join(test_path, 'data_4')
-    src_5 = os.path.join(test_path, 'data_5')
-    src_6 = os.path.join(test_path, 'data_6')
 
     # this test backups and restores the generated data files and
     # tests them after restoring against filesize and content.
@@ -134,10 +130,6 @@ def test_backup(test_path):
         f.write(data_3)
     with open(src_4, 'wb') as f:
         f.write(data_4)
-    with open(src_5, 'wb') as f:
-        f.write(data_5)
-    with open(src_6, 'wb') as f:
-        f.write(data_6)
 
     restore = os.path.join(test_path, 'restore')
 
@@ -172,38 +164,6 @@ def test_backup(test_path):
     # 4th day, test all backups
     backy.backup(src_4)
     backy.restore(restore)
-    assert open(restore, 'rb').read() == data_4
-    backy.restore(restore, 3)
-    assert open(restore, 'rb').read() == data_3
-    backy.restore(restore, 2)
-    assert open(restore, 'rb').read() == data_2
-    backy.restore(restore, 1)
-    assert open(restore, 'rb').read() == data_1
-    backy.restore(restore, 0)
-    assert open(restore, 'rb').read() == b''
-
-    # 5th day, test all backups
-    backy.backup(src_5)
-    backy.restore(restore)
-    assert open(restore, 'rb').read() == data_5
-    backy.restore(restore, 4)
-    assert open(restore, 'rb').read() == data_4
-    backy.restore(restore, 3)
-    assert open(restore, 'rb').read() == data_3
-    backy.restore(restore, 2)
-    assert open(restore, 'rb').read() == data_2
-    backy.restore(restore, 1)
-    assert open(restore, 'rb').read() == data_1
-    backy.restore(restore, 0)
-    assert open(restore, 'rb').read() == b''
-
-    # 6th day, test all backups
-    backy.backup(src_6)
-    backy.restore(restore)
-    assert open(restore, 'rb').read() == data_6
-    backy.restore(restore, 5)
-    assert open(restore, 'rb').read() == data_5
-    backy.restore(restore, 4)
     assert open(restore, 'rb').read() == data_4
     backy.restore(restore, 3)
     assert open(restore, 'rb').read() == data_3
@@ -255,7 +215,7 @@ def test_scrub_wrong_checksum(test_path, caplog):
     # test if all is good
     backy.scrub()
     assert 'SCRUB: Checksum for chunk' not in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum != ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum != ''
 
     # change something in backup data (i.e. sun flare changes some bits)
     backup_data = open(backy.data_filename(), 'rb').read()
@@ -268,7 +228,7 @@ def test_scrub_wrong_checksum(test_path, caplog):
     # test if all is good
     backy.scrub()
     assert 'SCRUB: Checksum for chunk 0 does not match.' in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum == ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum == ''
 
 
 def test_deep_scrub_wrong_data(test_path, caplog):
@@ -284,7 +244,7 @@ def test_deep_scrub_wrong_data(test_path, caplog):
     # test if all is good
     backy.deep_scrub(src)
     assert 'SCRUB: Source data for chunk' not in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum != ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum != ''
 
     # change something in source data (i.e. sun flare changes some bits)
     src_data = open(src, 'rb').read()
@@ -297,7 +257,7 @@ def test_deep_scrub_wrong_data(test_path, caplog):
     # test if all is good
     backy.deep_scrub(src)
     assert 'SCRUB: Source data for chunk 0 does not match.' in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().index[0].checksum == ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum == ''
 
 
 def test_deep_scrub_performance_percentile(test_path):
@@ -351,3 +311,82 @@ def test_chunks_from_hints():
     chunk_size = 1024
     cfh = backy2.main.chunks_from_hints(hints, chunk_size)
     assert sorted(list(cfh)) == [0, 1, 2, 4, 5, 6, 13, 15, 16]
+
+
+# test Index
+
+def test_index(test_path):
+    index = backy2.main.Index(CHUNK_SIZE_MIN)
+    index_filename = os.path.join(test_path, 'backup..index')
+    with pytest.raises(FileNotFoundError):
+        index.read(index_filename)
+
+    # new chunks
+
+    chunk12 = index.get(12)
+    assert chunk12.offset == 0 * CHUNK_SIZE_MIN
+    chunk5 = index.get(5)
+    assert chunk5.offset == 1 * CHUNK_SIZE_MIN
+    chunk8 = index.get(8)
+    assert chunk8.offset == 2 * CHUNK_SIZE_MIN
+
+    # see if they stay where they are
+
+    chunk12 = index.get(12)
+    assert chunk12.offset == 0 * CHUNK_SIZE_MIN
+    chunk5 = index.get(5)
+    assert chunk5.offset == 1 * CHUNK_SIZE_MIN
+    chunk8 = index.get(8)
+    assert chunk8.offset == 2 * CHUNK_SIZE_MIN
+
+    # write
+
+    index.write(index_filename)
+
+    # read
+
+    index = backy2.main.Index(CHUNK_SIZE_MIN)
+    index.read(index_filename)
+
+    # see if they still are where they should be
+
+    chunk8 = index.get(8)
+    assert chunk8.offset == 2 * CHUNK_SIZE_MIN
+    chunk5 = index.get(5)
+    assert chunk5.offset == 1 * CHUNK_SIZE_MIN
+    chunk12 = index.get(12)
+    assert chunk12.offset == 0 * CHUNK_SIZE_MIN
+
+    # add one
+
+    chunk1 = index.get(1)
+    assert chunk1.offset == 3 * CHUNK_SIZE_MIN
+
+    # change one
+    #
+    chunk12.checksum = '123'
+
+    # write
+
+    index.write(index_filename)
+
+    # read
+
+    index = backy2.main.Index(CHUNK_SIZE_MIN)
+    index.read(index_filename)
+
+    # check again
+
+    chunk1 = index.get(1)
+    assert chunk1.offset == 3 * CHUNK_SIZE_MIN
+    chunk8 = index.get(8)
+    assert chunk8.offset == 2 * CHUNK_SIZE_MIN
+    chunk5 = index.get(5)
+    assert chunk5.offset == 1 * CHUNK_SIZE_MIN
+    chunk12 = index.get(12)
+    assert chunk12.offset == 0 * CHUNK_SIZE_MIN
+    assert chunk12.checksum == '123'
+
+
+
+# test initial sparse base

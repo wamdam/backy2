@@ -47,10 +47,6 @@ class ChunkNotFound(BackyException):
     pass
 
 
-class ChunkWiped(BackyException):
-    pass
-
-
 class Chunk():
     checksum = ''
     offset = 0
@@ -59,33 +55,89 @@ class Chunk():
     #data = b''
 
 
+class Index():
+    """ A level index
+    """
+    def __init__(self, chunk_size):
+        self.chunk_size = chunk_size
+        self.size = 0           # size in bytes
+        self._index = {}
+
+
+    def write(self, filename):
+        with open(filename, 'w') as f:
+            f.write(str(self.size) + '\n')
+            for k in sorted(self._index.keys()):
+                v = self._index[k]
+                line = '|'.join([str(k), v.checksum, str(v.offset), str(v.length), str(v.status)])
+                f.write(line + '\n')
+
+
+    def read(self, filename):
+        with open(filename, 'r') as f:
+            self.size = int(f.readline().strip())
+            for line in f.readlines():
+                _chunk_id, checksum, _offset, _length, status = line.strip().split('|')
+                chunk_id = int(_chunk_id)
+                chunk = Chunk()
+                chunk.checksum = checksum
+                chunk.offset = int(_offset)
+                chunk.length = int(_length)
+                chunk.status = int(status)
+                self._index[chunk_id] = chunk
+        return self
+
+
+    def _next_offset(self):
+        return len(self._index) * self.chunk_size
+
+
+    def get(self, chunk_id):
+        """ Get an existing chunk or create a new one
+        """
+        if self.has(chunk_id):
+            return self._index[chunk_id]
+        else:
+            chunk = Chunk()
+            chunk.offset = self._next_offset()
+            self._index[chunk_id] = chunk
+            return chunk
+
+
+    def has(self, chunk_id):
+        return chunk_id in self._index
+
+
+    def chunk_ids(self):
+        return self._index.keys()
+
+
 class Level():
     """ Writes and reads a single level, i.e. a data-file and an index.
-    data size is variable.
-    Levels are addable to each other. The result depends on the order of
-    the addition.
+    data size is variable, but at max. chunk_size.
     """
 
     def __init__(self, data_filename, index_filename, chunk_size):
         self.data_filename = data_filename
         self.index_filename = index_filename
         self.chunk_size = chunk_size
+        self.index = Index(self.chunk_size)
 
 
     def open(self):
         if not os.path.exists(self.data_filename):
-            # touch them
             open(self.data_filename, 'wb').close()
-            open(self.index_filename, 'wb').close()
-
         self.data = open(self.data_filename, 'r+b')
-        self._read_index()
+        try:
+            self.index.read(self.index_filename)
+        except FileNotFoundError:
+            pass
         return self
 
 
     def close(self):
         self.data.close()
-        self._write_index()
+        self.index.write(self.index_filename)
 
 
     def __enter__(self):
@@ -96,91 +148,25 @@ class Level():
         self.close()
 
 
-    def _read_index(self):
-        self.index = defaultdict(Chunk)
-        for line in open(self.index_filename):
-            _chunk_id, checksum, _offset, _length, status = line.strip().split('|')
-            chunk_id = int(_chunk_id)
-            chunk = self.index[chunk_id]
-            chunk.checksum = checksum
-            chunk.offset = int(_offset)
-            chunk.length = int(_length)
-            chunk.status = int(status)
-
-
-    def _write_index(self):
-        with open(self.index_filename, 'w') as f:
-            for k in sorted(self.index.keys()):
-                v = self.index[k]
-                line = '|'.join([str(k), v.checksum, str(v.offset), str(v.length), str(v.status)])
-                f.write(line + '\n')
-
-
-    def seek(self, chunk_id):
-        here = self.data.tell()
-        if chunk_id == -1:
-            self.data.seek(0, 2)
-        else:
-            there = self.index[chunk_id].offset
-            if here != there:
-                self.data.seek(there)
-
-
-    def _tell(self):
-        """ Tell the real, i.e. byte position in the file """
-        return self.data.tell()
-
-
-    def max_chunk(self):
-        """ Returns the max. known chunk in this level """
-        if self.index.keys():
-            return max(self.index.keys())
-        else:
-            return -1
-
-
     def write(self, chunk_id, data):
         """ Write data to a given chunk ID.
         A write with no data means that the chunk was wiped.
         """
+        if len(data) > self.chunk_size:
+            raise BackyException('Unable to write chunk, size > chunk size.')
         checksum = hashlib.md5(data).hexdigest()
-        if chunk_id in self.index:
-            # size must match except that it's the last chunk.
-            if self.index[chunk_id].length != len(data) and chunk_id != self.max_chunk():
-                raise BackyException('Unable to write chunk, size does not match.')
-            self.seek(chunk_id)
-        else:
-            self.seek(-1)  # end of file
-        chunk = self.index[chunk_id]
+        chunk = self.index.get(chunk_id)
+        self.data.seek(chunk.offset)
         chunk.checksum = checksum
-        chunk.offset = self._tell()
         chunk.length = len(data)
-        if data:
-            chunk.status = CHUNK_STATUS_EXISTS
-        else:
-            chunk.status = CHUNK_STATUS_WIPED
+        chunk.status = CHUNK_STATUS_EXISTS
         self.data.write(data)
-
-
-    @property
-    def empty(self):
-        return self.max_chunk() == 0
-
-
-    def wipe(self, chunk_id):
-        """ Mark data as wiped for chunk_id """
-        self.write(chunk_id, b'')
 
 
     def read(self, chunk_id, raise_on_error=False):
         """ Read a given chunk ID's data from the level and validate """
-        if not chunk_id in self.index:
-            raise ChunkNotFound()
-        if self.index[chunk_id].status == CHUNK_STATUS_WIPED:
-            raise ChunkWiped()
-
-        self.seek(chunk_id)
-        chunk = self.index[chunk_id]
+        chunk = self.read_meta(chunk_id)   # raises ChunkNotFound
+        self.data.seek(chunk.offset)
         length = chunk.length
         checksum = chunk.checksum
         data = self.data.read(length)
@@ -194,41 +180,24 @@ class Level():
 
     def read_meta(self, chunk_id):
         """ Read a given chunk ID's meta data from the level """
-        if not chunk_id in self.index:
+        if not self.index.has(chunk_id):
             raise ChunkNotFound()
-        if self.index[chunk_id].status == CHUNK_STATUS_WIPED:
-            raise ChunkWiped()
-
-        chunk = self.index[chunk_id]
-        return chunk
+        return self.index.get(chunk_id)
 
 
-    def truncate(self, chunk_id=None):
-        """ Truncate the level after the given chunk_id.
-        If no chunk_id is given, truncate the last one according to the index.
-        """
-        if not chunk_id:
-            chunk_id = self.max_chunk()
-        if chunk_id not in self.index:
-            raise BackyException('Cannot truncate to unknown chunk_id {}'.format(chunk_id))
+    def set_size(self, size):
+        if self.index.size > size:
+            raise BackyException('Shrinking is unsupported. Make a new backup.')
+        self.index.size = size
 
-        # truncate index
-        _del = []
-        for _chunk_id in self.index.keys():
-            if _chunk_id > chunk_id:
-                _del.append(_chunk_id)
-        for _chunk_id in _del:
-            del(self.index[_chunk_id])
 
-        # truncate data to index
-        last_chunk = self.index[chunk_id]
-        logger.debug('Truncating base to {}'.format(last_chunk.offset + last_chunk.length))
-        self.data.truncate(last_chunk.offset + last_chunk.length)
+    @property
+    def size(self):
+        return self.index.size
 
 
     def invalidate_chunk(self, chunk_id):
-        chunk = self.index[chunk_id]
-        chunk.checksum = ''
+        self.index.get(chunk_id).checksum = ''
 
 
 def chunks_from_hints(hints, chunk_size):
@@ -257,7 +226,6 @@ class Backy():
     def __init__(self, path, backupname, chunk_size):
         if '.data.' in backupname or '.index.' in backupname:
            raise BackyException('Reserved name found in backupname.')
-        #self.path = path
         self.backupname = backupname
         self.base = os.path.join(path, self.BASE.format(backupname=backupname))
         self.chunk_size = chunk_size
@@ -279,17 +247,17 @@ class Backy():
 
 
     def data_filename(self, level=None):
-        if level is not None:
-            return self.base + 'data.' + str(level)
-        else:
+        if level is None:
             return self.base + 'data'
+        else:
+            return self.base + 'data.' + str(level)
 
 
     def index_filename(self, level=None):
-        if level is not None:
-            return self.base + 'index.' + str(level)
-        else:
+        if level is None:
             return self.base + 'index'
+        else:
+            return self.base + 'index.' + str(level)
 
 
     def backup(self, source, hints=None):
@@ -318,24 +286,15 @@ class Backy():
             source_file.seek(0)
             num_chunks_src = math.ceil(source_size / self.chunk_size)
 
+            next_level.set_size(base_level.size)  # store old size
+            base_level.set_size(source_size)
+
             # Sanity check:
             # check hints for validity, i.e. too high offsets, ...
             if hints:
                 max_offset = max([h[0]+h[1] for h in hints])
                 if max_offset > source_size:
                     raise BackyException('Hints have higher offsets than source file.')
-
-            # check if we must truncate
-            num_chunks_base = base_level.max_chunk() + 1
-            if num_chunks_base > num_chunks_src:
-                # write rest to next level and truncate base
-                for chunk_id in range(num_chunks_src, num_chunks_base):
-                    data = base_level.read(chunk_id)
-                    next_level.write(chunk_id, data)
-            max_chunk_src = num_chunks_src - 1  # chunk_ids count from 0
-            # need to do this twice. This time because last chunk must be last to get an different size.
-            if base_level.max_chunk() > max_chunk_src:
-                base_level.truncate(max_chunk_src)
 
             if hints:
                 read_chunks = chunks_from_hints(hints, self.chunk_size)
@@ -347,13 +306,13 @@ class Backy():
                 source_file.seek(chunk_id * self.chunk_size)  # TODO: check if seek costs when it's == tell.
                 data = source_file.read(self.chunk_size)
                 if not data:
-                    break  # EOF
+                    raise BackyException('EOF reached on source when there should be data.')
 
                 data_checksum = hashlib.md5(data).hexdigest()
                 logger.debug('Read chunk {} (checksum {})'.format(chunk_id, data_checksum))
                 try:
                     base_checksum = base_level.read_meta(chunk_id).checksum
-                except (ChunkWiped, ChunkNotFound):
+                except ChunkNotFound:
                     pass
                 else:
                     if data_checksum == base_checksum:
@@ -366,21 +325,18 @@ class Backy():
                     logger.debug('Read old data chunk {} (checksum {})'.format(chunk_id, base_checksum))
                     # TODO: Throw away buffers
                 except ChunkNotFound:
-                    next_level.wipe(chunk_id)
-                except ChunkWiped:
+                    # when base level doesn't know about this chunk, we also need
+                    # no information in the next level.
                     pass
                 else:
                     # write that to next level
                     # TODO: write into other thread
-                    logger.debug('Wrote old data chunk {} to level {} (checksum {})'.format(chunk_id, next_level_number, base_checksum))
                     next_level.write(chunk_id, old_data)
+                    logger.debug('Wrote old data chunk {} to level {} (checksum {})'.format(chunk_id, next_level_number, base_checksum))
                 # write data to base
                 # TODO: write into other thread
-                logger.debug('Wrote new data chunk {} (checksum {})'.format(chunk_id, data_checksum))
                 base_level.write(chunk_id, data)
-
-            # need to do this again. This time because last chunk can have different size.
-            base_level.truncate()
+                logger.debug('Wrote new data chunk {} (checksum {})'.format(chunk_id, data_checksum))
 
             logger.info('Successfully backed up level {} ({}:{})'.format(
                 next_level_number,
@@ -393,6 +349,7 @@ class Backy():
         """ Restore a given level (or base if level is None) to target.
         warning: This overwrites data in target.
         """
+        logger.debug('Starting restore of level {} into {}'.format(level, target))
         all_levels = self.get_levels()
         if level is not None and level not in all_levels:
             raise BackyException('Level {} not found.'.format(level))
@@ -402,39 +359,29 @@ class Backy():
         else:
             to_restore_levels = all_levels[all_levels.index(level):]
 
+        # old levels
         levels = [Level(self.data_filename(l), self.index_filename(l), self.chunk_size).open() for l in to_restore_levels]
+        # base level
         levels.append(Level(self.data_filename(), self.index_filename(), self.chunk_size).open())
 
         # create a read list
-        max_chunk = max([l.max_chunk() for l in levels if not l.empty])
-        # TODO: Check if max_chunk is -1. No idea how this could happen however.
+        max_chunk = (levels[0].size - 1) // self.chunk_size
         num_chunks = max_chunk + 1
         read_list = []
 
-        end = False
         for chunk_id in range(num_chunks):
             found = False
             for level in levels:
-                if chunk_id in level.index:
-                    try:
-                        level.read_meta(chunk_id)
-                    except ChunkWiped:
-                        end = True
-                    else:
-                        if not end:
-                            read_list.append((chunk_id, level))
-                        else:
-                            raise BackyException('Invalid backup found: Non-wiped chunk where it should be wiped: '
-                                    'Chunk {} in level {}:{}'.format(chunk_id, level.index_filename, level.data_filename))
+                if level.index.has(chunk_id):
+                    read_list.append((chunk_id, level))
                     found = True
                     break
             if not found:
-                logger.debug('Chunk {} not found in any level. If the base backup is sparse, this is ok.'.format(chunk_id))
+                raise BackyException('Chunk {} not found in any backup.'.format(chunk_id))
 
         # debug output
         for chunk_id, level in read_list:
             data_filename = level.data_filename
-            #index_filename = level.index_filename
             chunk = level.read_meta(chunk_id)
             logger.debug('Restore {:12d} bytes from {:>20s}:{:<12d} with checksum {}'.format(
                 chunk.length,
@@ -446,11 +393,13 @@ class Backy():
         with open(target, 'wb') as target:
             for chunk_id, level in read_list:
                 data = level.read(chunk_id)
-                target.seek(chunk_id * self.chunk_size)  # to support sparse base backups
+                target.seek(chunk_id * self.chunk_size)
                 target.write(data)
 
         for level in levels:
             level.close()
+
+        # TODO: Test if same number of chunks really leads to index.size bytes.
 
 
     def scrub(self, level=None, source=None):
@@ -463,7 +412,7 @@ class Backy():
         checked = 0
 
         with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level:
-            for chunk_id in level.index:
+            for chunk_id in level.index.chunk_ids():
                 try:
                     level.read(chunk_id, raise_on_error=True)
                 except ChunkChecksumWrong:
@@ -490,21 +439,23 @@ class Backy():
 
             source_file.seek(0, 2)  # to the end
 
-            for chunk_id in level.index:
+            for chunk_id in level.index.chunk_ids():
                 if percentile < 100 and random.randint(1, 100) > percentile:
                     continue
                 try:
                     backup_data = level.read(chunk_id, raise_on_error=True)
                 except ChunkChecksumWrong:
                     logger.critical('SCRUB: Checksum for chunk {} does not match.'.format(chunk_id))
-                    level.invalidate_chunk(chunk_id)
-                # check source
-                chunk = level.index[chunk_id]
-                source_file.seek(chunk.offset)
-                source_data = source_file.read(chunk.length)
-                if backup_data != source_data:
-                    logger.critical('SCRUB: Source data for chunk {} does not match.'.format(chunk_id))
-                    level.invalidate_chunk(chunk_id)
+                    # TODO: Shall we really invalidate?
+                    #level.invalidate_chunk(chunk_id)
+                else:
+                    # check source
+                    chunk = level.read_meta(chunk_id)
+                    source_file.seek(chunk.offset)
+                    source_data = source_file.read(chunk.length)
+                    if backup_data != source_data:
+                        logger.critical('SCRUB: Source data for chunk {} does not match.'.format(chunk_id))
+                        level.invalidate_chunk(chunk_id)
                 checked += 1
         logger.info("Deep scrub completed, {} chunks checked.".format(checked))
         return checked
