@@ -137,3 +137,11 @@ backy backup -r mydiff /vms/somevm@backup123 /mnt/backups/somevm
 tbd.
 
 
+## Disclaimer
+
+We don't take any responsibility if this software doesn't do what you think or
+even if it doesn't do what is described here or anywhere else. It's up to you
+to read the code yourself and decide if you want to use it.
+We are using it and we wrote it for ourselves. If you're unsure, use it as
+a template to develop your own backup software.
+
