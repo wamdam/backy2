@@ -389,7 +389,7 @@ class Backy():
                     found = True
                     break
             if not found:
-                raise BackyException('Chunk {} not found in any backup.'.format(chunk_id))
+                logger.debug('Chunk {} not found in any level. If the base backup is sparse, this is ok.'.format(chunk_id))
 
         # debug output
         for chunk_id, level in read_list:
