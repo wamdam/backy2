@@ -537,20 +537,6 @@ class Backy():
             ))
         logger.info('')
 
-"""
-    for diff in diffs:
-        mtime = os.path.getmtime(diff)
-        size = os.path.getsize(diff)
-        sumsize += size
-        datacreated = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
-        #index_filename = "%s.index" % diff
-        print "Level %d from %s (Size: %4.1fGB)   Restore: d9t-backy -r %s %d {outfile}" % (level, datacreated, float(size)/1024/1024/1024, infile, level)
-
-        level += 1
-    print ""
-    print "Statistics: Backup contains %d levels with a total size of %.1fGB" % (level, float(sumsize)/1024/1024/1024)
-"""
-
 
 class Commands():
     """Proxy between CLI calls and actual backup code."""
