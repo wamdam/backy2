@@ -215,7 +215,7 @@ def test_scrub_wrong_checksum(test_path, caplog):
     # test if all is good
     backy.scrub()
     assert 'SCRUB: Checksum for chunk' not in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum != ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).status == backy2.main.CHUNK_STATUS_EXISTS
 
     # change something in backup data (i.e. sun flare changes some bits)
     backup_data = open(backy.data_filename(), 'rb').read()
@@ -228,7 +228,7 @@ def test_scrub_wrong_checksum(test_path, caplog):
     # test if all is good
     backy.scrub()
     assert 'SCRUB: Checksum for chunk 0 does not match.' in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum == ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).status == backy2.main.CHUNK_STATUS_DESTROYED
 
 
 def test_deep_scrub_wrong_data(test_path, caplog):
@@ -244,7 +244,7 @@ def test_deep_scrub_wrong_data(test_path, caplog):
     # test if all is good
     backy.deep_scrub(src)
     assert 'SCRUB: Source data for chunk' not in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum != ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).status == backy2.main.CHUNK_STATUS_EXISTS
 
     # change something in source data (i.e. sun flare changes some bits)
     src_data = open(src, 'rb').read()
@@ -257,7 +257,7 @@ def test_deep_scrub_wrong_data(test_path, caplog):
     # test if all is good
     backy.deep_scrub(src)
     assert 'SCRUB: Source data for chunk 0 does not match.' in caplog.text()
-    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).checksum == ''
+    assert backy2.main.Level(backy.data_filename(), backy.index_filename(), CHUNK_SIZE_MIN).open().read_meta(0).status == backy2.main.CHUNK_STATUS_DESTROYED
 
 
 def test_deep_scrub_performance_percentile(test_path):
@@ -388,5 +388,14 @@ def test_index(test_path):
     assert chunk12.checksum == '123'
 
 
-
 # test initial sparse base
+
+def _patch(filename, offset, data=None):
+    """ write data into a file at offset """
+    with open(filename, 'r+b') as f:
+        f.seek(offset)
+        f.write(data)
+
+def test_initial_sparse_backup(test_path):
+    pass
+
