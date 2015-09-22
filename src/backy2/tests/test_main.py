@@ -34,7 +34,7 @@ def test_display_usage(capsys, argv):
     assert exit.value.code == 0
     out, err = capsys.readouterr()
     assert """\
-usage: py.test [-h] [-v] [-b BACKUPDIR] {backup,restore,scrub} ...
+usage: py.test [-h] [-v] [-b BACKUPDIR] {backup,restore,scrub,cleanup,ls} ...
 """ == out
     assert err == ""
 
@@ -473,3 +473,6 @@ def test_initial_sparse_with_levels(test_path):
     checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
     assert checked == len(in_base)
 
+
+# TODO: test cleanup
+# TODO: test ls
