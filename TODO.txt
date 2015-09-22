@@ -1,0 +1,2 @@
+* When rbd diff says exists:'false', eventually release the chunk from base
+
