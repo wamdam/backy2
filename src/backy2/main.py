@@ -3,6 +3,7 @@
 #from prettytable import PrettyTable
 import argparse
 import glob
+import datetime
 import math
 import hashlib
 import logging
@@ -116,11 +117,12 @@ class Level():
     data size is variable, but at max. chunk_size.
     """
 
-    def __init__(self, data_filename, index_filename, chunk_size):
+    def __init__(self, data_filename, index_filename, chunk_size, mtime=None):
         self.data_filename = data_filename
         self.index_filename = index_filename
         self.chunk_size = chunk_size
         self.index = Index(self.chunk_size)
+        self.mtime = mtime
 
 
     def open(self):
@@ -137,6 +139,7 @@ class Level():
     def close(self):
         self.data.close()
         self.index.write(self.index_filename)
+        self.set_mtime(self.mtime)
 
 
     def __enter__(self):
@@ -196,6 +199,11 @@ class Level():
         return self.index.size
 
 
+    def level_size(self):
+        """ Return the used disk space for this level """
+        return os.path.getsize(self.data_filename)
+
+
     def invalidate_chunk(self, chunk_id):
         self.index.get(chunk_id).status = CHUNK_STATUS_DESTROYED
 
@@ -207,6 +215,19 @@ class Level():
             if chunk.status == CHUNK_STATUS_DESTROYED:
                 c.add(chunk_id)
         return c
+
+
+    def set_mtime(self, mtime):
+        if mtime is None:
+            os.utime(self.index_filename, None)
+            os.utime(self.data_filename, None)
+        else:
+            os.utime(self.index_filename, (mtime, mtime))
+            os.utime(self.data_filename, (mtime, mtime))
+
+
+    def get_mtime(self):
+        return os.path.getmtime(self.index_filename)
 
 
 def chunks_from_hints(hints, chunk_size):
@@ -295,6 +316,11 @@ class Backy():
             source_file.seek(0)
             num_chunks_src = math.ceil(source_size / self.chunk_size)
 
+            try:
+                next_level.mtime = base_level.get_mtime()
+            except FileNotFoundError:
+                next_level.mtime = None
+
             next_level.set_size(base_level.size)  # store old size
             base_level.set_size(source_size)
 
@@ -349,6 +375,7 @@ class Backy():
                 # TODO: write into other thread
                 base_level.write(chunk_id, data)
                 logger.debug('Wrote new data chunk {} (checksum {})'.format(chunk_id, data_checksum))
+
 
             logger.info('Successfully backed up level {} ({}:{})'.format(
                 next_level_number,
@@ -482,6 +509,48 @@ class Backy():
         return checked
 
 
+    def ls(self):
+        levels = [(None, Level(self.data_filename(), self.index_filename(), self.chunk_size))]
+        for level_number in self.get_levels():
+            levels.append((level_number, Level(self.data_filename(level_number), self.index_filename(level_number), self.chunk_size)))
+
+        sum_size = 0
+        logger.info('Backup {}'.format(self.backupname))
+        logger.info('----------------------------')
+        for level_number, level in levels:
+            level_size = level.level_size()
+            sum_size += level_size
+            size = level.size
+            created = datetime.datetime.fromtimestamp(level.get_mtime()).strftime("%Y-%m-%d %H:%M:%S")
+            logger.info('  Level {:>4} from {} (Size: {:6.1f}GB / {:6.1f}GB)  Restore: backy restore {} {} {{outfile}}'.format(
+                'Base' if level_number is None else level_number,
+                created,
+                level_size/1024/1024/1024,
+                size/1024/1024/1024,
+                '-l {} '.format(level_number) if level_number is not None else '',
+                self.backupname,
+                ))
+
+        logger.info("Statistics: Backup contains {} levels with a total size of {:.1f}GB".format(
+            len(levels),
+            sum_size/1024/1024/1024,
+            ))
+        logger.info('')
+
+"""
+    for diff in diffs:
+        mtime = os.path.getmtime(diff)
+        size = os.path.getsize(diff)
+        sumsize += size
+        datacreated = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+        #index_filename = "%s.index" % diff
+        print "Level %d from %s (Size: %4.1fGB)   Restore: d9t-backy -r %s %d {outfile}" % (level, datacreated, float(size)/1024/1024/1024, infile, level)
+
+        level += 1
+    print ""
+    print "Statistics: Backup contains %d levels with a total size of %.1fGB" % (level, float(sumsize)/1024/1024/1024)
+"""
+
 
 class Commands():
     """Proxy between CLI calls and actual backup code."""
@@ -524,6 +593,17 @@ class Commands():
             backy.deep_scrub(source, level, percentile)
         else:
             backy.scrub(level)
+
+
+    def ls(self, backupname):
+        if not backupname:
+            where = os.path.join(self.path)
+            files = glob.glob(where + '/' + '*..index')
+            backupnames = [f.split('..')[0].split('/')[-1] for f in files]
+        else:
+            backupnames = [backupname]
+        for backupname in backupnames:
+            Backy(self.path, backupname, chunk_size=CHUNK_SIZE).ls()
 
 
 def main():
@@ -571,6 +651,13 @@ def main():
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('backupname')
     p.set_defaults(func='scrub')
+
+    # LS
+    p = subparsers.add_parser(
+        'ls',
+        help="List existing backups.")
+    p.add_argument('backupname', nargs='?', default="")
+    p.set_defaults(func='ls')
 
     args = parser.parse_args()
 
