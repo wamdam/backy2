@@ -123,6 +123,7 @@ class Level():
         self.chunk_size = chunk_size
         self.index = Index(self.chunk_size)
         self.mtime = mtime
+        self._rm = False
 
 
     def open(self):
@@ -137,9 +138,10 @@ class Level():
 
 
     def close(self):
-        self.data.close()
-        self.index.write(self.index_filename)
-        self.set_mtime(self.mtime)
+        if not self._rm:
+            self.data.close()
+            self.index.write(self.index_filename)
+            self.set_mtime(self.mtime)
 
 
     def __enter__(self):
@@ -228,6 +230,14 @@ class Level():
 
     def get_mtime(self):
         return os.path.getmtime(self.index_filename)
+
+
+    def rm(self):
+        logger.debug('Deleting {}'.format(self.index_filename))
+        os.unlink(self.index_filename)
+        logger.debug('Deleting {}'.format(self.data_filename))
+        os.unlink(self.data_filename)
+        self._rm = True
 
 
 def chunks_from_hints(hints, chunk_size):
@@ -538,6 +548,18 @@ class Backy():
         logger.info('')
 
 
+    def cleanup(self, keeplevels=7):
+        """ Delete oldest levels, only keep keep_levels.
+        Always keeps base.
+        """
+        levels = self.get_levels()
+        delete_levels = levels[:-keeplevels]
+        for level_number in delete_levels:
+            with Level(self.data_filename(level_number), self.index_filename(level_number), self.chunk_size) as level:
+                logger.info('Deleting level {} of backup {}.'.format(level_number, self.backupname))
+                level.rm()
+
+
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
@@ -592,6 +614,18 @@ class Commands():
             Backy(self.path, backupname, chunk_size=CHUNK_SIZE).ls()
 
 
+    def cleanup(self, backupname, keeplevels):
+        keeplevels = int(keeplevels)
+        if not backupname:
+            where = os.path.join(self.path)
+            files = glob.glob(where + '/' + '*..index')
+            backupnames = [f.split('..')[0].split('/')[-1] for f in files]
+        else:
+            backupnames = [backupname]
+        for backupname in backupnames:
+            Backy(self.path, backupname, chunk_size=CHUNK_SIZE).cleanup(keeplevels)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Backup and restore for block devices.',
@@ -637,6 +671,14 @@ def main():
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('backupname')
     p.set_defaults(func='scrub')
+
+    # CLEANUP
+    p = subparsers.add_parser(
+        'cleanup',
+        help="Clean backup levels, only keep given number of newest levels.")
+    p.add_argument('-l', '--keeplevels', default='7')
+    p.add_argument('backupname', nargs='?', default="")
+    p.set_defaults(func='cleanup')
 
     # LS
     p = subparsers.add_parser(
