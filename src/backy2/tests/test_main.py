@@ -4,6 +4,7 @@ import sys
 import backy2.main
 import shutil
 import time
+import random
 
 CHUNK_SIZE = 1024*4096
 CHUNK_SIZE_MIN = 1024
@@ -392,10 +393,83 @@ def test_index(test_path):
 
 def _patch(filename, offset, data=None):
     """ write data into a file at offset """
+    if not os.path.exists(filename):
+        open(filename, 'wb')
     with open(filename, 'r+b') as f:
         f.seek(offset)
         f.write(data)
 
 def test_initial_sparse_backup(test_path):
-    pass
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    src = os.path.join(test_path, 'data')
+    hints = []
+    for i in range(32):
+        if random.randint(0, 1):  # 50/50
+            _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+        else:
+            _patch(src, i * CHUNK_SIZE_MIN, b'\0' * CHUNK_SIZE_MIN)
+
+    backy.backup(src, hints)
+
+    restore = os.path.join(test_path, 'restore')
+    backy.restore(restore)
+    checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
+    assert checked == len(hints)
+
+
+def test_initial_sparse_backup_with_sparse_beginning_and_end(test_path):
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    src = os.path.join(test_path, 'data')
+    hints = []
+    for i in range(32):
+        if random.randint(0, 1) or i in (0, 31):
+            _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+        else:
+            _patch(src, i * CHUNK_SIZE_MIN, b'\0' * CHUNK_SIZE_MIN)
+
+    backy.backup(src, hints)
+
+    restore = os.path.join(test_path, 'restore')
+    backy.restore(restore)
+    checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
+    assert checked == len(hints)
+
+
+def test_initial_sparse_with_levels(test_path):
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    src = os.path.join(test_path, 'data')
+    hints = []
+    in_base = set()  # chunk_ids
+    for i in range(32):
+        if random.randint(0, 1) or i in (0, 31):
+            _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+            in_base.add(i)
+        else:
+            _patch(src, i * CHUNK_SIZE_MIN, b'\0' * CHUNK_SIZE_MIN)
+
+    backy.backup(src, hints)
+    restore = os.path.join(test_path, 'restore')
+    backy.restore(restore)
+    checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
+    assert checked == len(in_base)
+
+    # change blocks
+    hints = []
+    for i in range(32):
+        if random.randint(0, 1):
+            _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+            in_base.add(i)
+
+    backy.backup(src, hints)
+    restore = os.path.join(test_path, 'restore')
+    backy.restore(restore)
+    checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
+    assert checked == len(in_base)
 

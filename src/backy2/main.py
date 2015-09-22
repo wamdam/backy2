@@ -395,18 +395,30 @@ class Backy():
         for chunk_id, level in read_list:
             data_filename = level.data_filename
             chunk = level.read_meta(chunk_id)
-            logger.debug('Restore {:12d} bytes from {:>20s}:{:<12d} with checksum {}'.format(
+            logger.debug('Restore {:12d} bytes from {:>20s}:{:<12d} with checksum {} and status {}'.format(
                 chunk.length,
                 data_filename,
                 chunk.offset,
                 chunk.checksum,
+                {
+                    CHUNK_STATUS_EXISTS:'CHUNK_STATUS_EXISTS',
+                    CHUNK_STATUS_DESTROYED:'CHUNK_STATUS_DESTROYED'
+                    }.get(chunk.status, ''),
             ))
 
         with open(target, 'wb') as target:
-            for chunk_id, level in read_list:
+            last_write_position = 0
+            for chunk_id, level in sorted(read_list):
                 data = level.read(chunk_id)
                 target.seek(chunk_id * self.chunk_size)
                 target.write(data)
+                last_write_position = target.tell()
+            # if the last block was sparse, then the last write position is not at
+            # the end of the to-be-restored file. So we seek there and write.
+            if last_write_position < levels[0].size:
+                target.seek(levels[0].size-1)
+                target.write(b'\0')
+                logger.debug('Fixed target size to {} bytes, as last block is sparse.'.format(target.tell()))
 
         for level in levels:
             level.close()
@@ -449,8 +461,6 @@ class Backy():
         with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level, \
                 open(source, 'rb') as source_file:
 
-            source_file.seek(0, 2)  # to the end
-
             for chunk_id in level.index.chunk_ids():
                 if percentile < 100 and random.randint(1, 100) > percentile:
                     continue
@@ -462,7 +472,7 @@ class Backy():
                 else:
                     # check source
                     chunk = level.read_meta(chunk_id)
-                    source_file.seek(chunk.offset)
+                    source_file.seek(chunk_id * self.chunk_size)
                     source_data = source_file.read(chunk.length)
                     if backup_data != source_data:
                         logger.critical('SCRUB: Source data for chunk {} does not match.'.format(chunk_id))
