@@ -463,7 +463,7 @@ class Backy():
         # TODO: Test if same number of chunks really leads to index.size bytes.
 
 
-    def scrub(self, level=None, source=None):
+    def scrub(self, level=None, source=None, percentile=100):
         """ Scrub a level against its own checksums
         """
         all_levels = self.get_levels()
@@ -474,6 +474,8 @@ class Backy():
 
         with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level:
             for chunk_id in level.index.chunk_ids():
+                if percentile < 100 and random.randint(1, 100) > percentile:
+                    continue
                 try:
                     level.read(chunk_id, raise_on_error=True)
                 except ChunkChecksumWrong:
@@ -600,7 +602,7 @@ class Commands():
         if source:
             backy.deep_scrub(source, level, percentile)
         else:
-            backy.scrub(level)
+            backy.scrub(level, percentile)
 
 
     def ls(self, backupname):
