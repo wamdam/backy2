@@ -3,5 +3,9 @@
 * In case of restore: Maybe write unknown chunks as \0? This works for spares
   writes on image files automatically, but not on device files. Maybe give this
   as an option...
-* When backup, ceph exists='false' chunks are expected to be full of \0 on scrub.
-  Maybe write them as \0 or mark them in the index?
+* Possibly detect chunks full of \0 and give them special treatment in the index
+  and don't write them to the disk. On restore, they should be rewritten as \0
+  and deep_scrub should check the source against \0s.
+* Add capability of rewriting a base file, because over time there could be
+  a significant number of not-anymore-existing blocks. Rewriting would leave them
+  out of the data file

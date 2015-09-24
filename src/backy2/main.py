@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 1024*4096  # 4MB
 CHUNK_STATUS_EXISTS = 0
 CHUNK_STATUS_DESTROYED = 1
-#CHUNK_STATUS_NOTEXISTS = 2
+CHUNK_STATUS_NOTEXISTS = 2
 
 def init_logging(logdir, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
@@ -219,8 +219,7 @@ class Level():
 
 
     def unexist_chunk(self, chunk_id):
-        #self.index.get(chunk_id).status = CHUNK_STATUS_NOTEXISTS
-        self.index.remove(chunk_id)
+        self.index.get(chunk_id).status = CHUNK_STATUS_NOTEXISTS
 
 
     def get_invalid_chunk_ids(self):
@@ -468,6 +467,9 @@ class Backy():
         with open(target, 'wb') as target:
             last_write_position = 0
             for chunk_id, level in sorted(read_list):
+                chunk = level.read_meta(chunk_id)
+                if chunk.status == CHUNK_STATUS_NOTEXISTS:
+                    continue
                 data = level.read(chunk_id)
                 target.seek(chunk_id * self.chunk_size)
                 target.write(data)
@@ -497,6 +499,9 @@ class Backy():
 
         with Level(self.data_filename(level), self.index_filename(level), self.chunk_size) as level:
             for chunk_id in level.index.chunk_ids():
+                chunk = level.read_meta(chunk_id)
+                if chunk.status == CHUNK_STATUS_NOTEXISTS:
+                    continue
                 try:
                     level.read(chunk_id, raise_on_error=True)
                 except ChunkChecksumWrong:
@@ -522,6 +527,9 @@ class Backy():
                 open(source, 'rb') as source_file:
 
             for chunk_id in level.index.chunk_ids():
+                chunk = level.read_meta(chunk_id)
+                if chunk.status == CHUNK_STATUS_NOTEXISTS:
+                    continue
                 if percentile < 100 and random.randint(1, 100) > percentile:
                     continue
                 try:
