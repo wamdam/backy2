@@ -1,2 +1,7 @@
 * When rbd diff says exists:'false', eventually release the chunk from base
 * Make sure that mtime is kept when scrub finds defect blocks
+* In case of restore: Maybe write unknown chunks as \0? This works for spares
+  writes on image files automatically, but not on device files. Maybe give this
+  as an option...
+* When backup, ceph exists='false' chunks are expected to be full of \0 on scrub.
+  Maybe write them as \0 or mark them in the index?

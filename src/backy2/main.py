@@ -345,8 +345,9 @@ class Backy():
                 hinted_chunks = chunks_from_hints(hints, self.chunk_size)
                 # TODO: Test destroyed chunks reading
                 destroyed_chunks = base_level.get_invalid_chunk_ids()  # always re-read destroyed chunks
+                logger.debug('These destroyed chunks will be backed up again: {}'.format(','.join(map(str, destroyed_chunks))))
+                logger.debug('Hints indicate to backup chunks {}'.format(','.join(map(str, hinted_chunks))))
                 read_chunks = hinted_chunks.union(destroyed_chunks)
-                logger.debug('Hints indicate to backup chunks {}'.format(','.join(map(str, read_chunks))))
             else:
                 read_chunks = range(num_chunks_src)
 
