@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 1024*4096  # 4MB
 CHUNK_STATUS_EXISTS = 0
 CHUNK_STATUS_DESTROYED = 1
+#CHUNK_STATUS_NOTEXISTS = 2
 
 def init_logging(logdir, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
@@ -106,6 +107,10 @@ class Index():
 
     def has(self, chunk_id):
         return chunk_id in self._index
+
+
+    def remove(self, chunk_id):
+        del(self._index[chunk_id])
 
 
     def chunk_ids(self):
@@ -210,6 +215,11 @@ class Level():
         self.index.get(chunk_id).status = CHUNK_STATUS_DESTROYED
 
 
+    def unexist_chunk(self, chunk_id):
+        #self.index.get(chunk_id).status = CHUNK_STATUS_NOTEXISTS
+        self.index.remove(chunk_id)
+
+
     def get_invalid_chunk_ids(self):
         c = set()
         for chunk_id in self.index.chunk_ids():
@@ -243,7 +253,7 @@ class Level():
 def chunks_from_hints(hints, chunk_size):
     """ Helper method """
     chunks = set()
-    for offset, length in hints:
+    for offset, length, exists in hints:
         start_chunk = offset // chunk_size  # integer division
         end_chunk = start_chunk + (length-1) // chunk_size
         for i in range(start_chunk, end_chunk+1):
@@ -255,7 +265,7 @@ def hints_from_rbd_diff(rbd_diff):
     """ Return the required offset:length tuples from a rbd json diff
     """
     data = json.loads(rbd_diff)
-    return [(l['offset'], l['length']) for l in data if l['exists']=='true']
+    return [(l['offset'], l['length'], True if l['exists']=='true' else False) for l in data]
 
 
 class Backy():
@@ -342,7 +352,15 @@ class Backy():
                     raise BackyException('Hints have higher offsets than source file.')
 
             if hints:
-                hinted_chunks = chunks_from_hints(hints, self.chunk_size)
+                # hint[2] is False for non-existing hints
+                non_existing_hinted_chunks = chunks_from_hints([hint for hint in hints if not hint[2]], self.chunk_size)
+                if non_existing_hinted_chunks:
+                    logger.debug('Hints indicate to mark chunks as non-existent: {}'.format(','.join(map(str, non_existing_hinted_chunks))))
+                for non_existing_hinted_chunk_id in non_existing_hinted_chunks:
+                    base_level.unexist_chunk(non_existing_hinted_chunk_id)
+
+                # hint[2] is True for existing hints
+                hinted_chunks = chunks_from_hints([hint for hint in hints if hint[2]], self.chunk_size)
                 # TODO: Test destroyed chunks reading
                 destroyed_chunks = base_level.get_invalid_chunk_ids()  # always re-read destroyed chunks
                 logger.debug('These destroyed chunks will be backed up again: {}'.format(','.join(map(str, destroyed_chunks))))

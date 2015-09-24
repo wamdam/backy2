@@ -301,13 +301,19 @@ def test_hints(test_path):
     # change a chunk and backup using hints
     with open(src, 'r+b') as f:
         _from, length = write_chunk(f, 3, 10, 30)
-    backy.backup(src, hints=[(_from, length)])
+    backy.backup(src, hints=[(_from, length, True)])
 
     assert open(src, 'rb').read() == open(backy.data_filename(), 'rb').read()
 
 
 def test_chunks_from_hints():
-    hints = [(10, 100), (1024, 2048), (4096, 3000), (14000, 10), (16383, 1025)]
+    hints = [
+        (10, 100, True),
+        (1024, 2048, True),
+        (4096, 3000, True),
+        (14000, 10, True),
+        (16383, 1025, True),
+        ]
     #         0          1, 2          4, 5, 6       13,          15, 16
     chunk_size = 1024
     cfh = backy2.main.chunks_from_hints(hints, chunk_size)
@@ -407,7 +413,7 @@ def test_initial_sparse_backup(test_path):
     for i in range(32):
         if random.randint(0, 1):  # 50/50
             _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
-            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN, True))
         else:
             _patch(src, i * CHUNK_SIZE_MIN, b'\0' * CHUNK_SIZE_MIN)
 
@@ -427,7 +433,7 @@ def test_initial_sparse_backup_with_sparse_beginning_and_end(test_path):
     for i in range(32):
         if random.randint(0, 1) or i in (0, 31):
             _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
-            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN, True))
         else:
             _patch(src, i * CHUNK_SIZE_MIN, b'\0' * CHUNK_SIZE_MIN)
 
@@ -448,7 +454,7 @@ def test_initial_sparse_with_levels(test_path):
     for i in range(32):
         if random.randint(0, 1) or i in (0, 31):
             _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
-            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN, True))
             in_base.add(i)
         else:
             _patch(src, i * CHUNK_SIZE_MIN, b'\0' * CHUNK_SIZE_MIN)
@@ -464,7 +470,7 @@ def test_initial_sparse_with_levels(test_path):
     for i in range(32):
         if random.randint(0, 1):
             _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
-            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN))
+            hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN, True))
             in_base.add(i)
 
     backy.backup(src, hints)
