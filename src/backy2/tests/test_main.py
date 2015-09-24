@@ -394,8 +394,8 @@ def test_index(test_path):
     assert chunk12.offset == 0 * CHUNK_SIZE_MIN
     assert chunk12.checksum == '123'
 
-
-# test initial sparse base
+# TODO: test remove() method
+# TODO: test initial sparse base
 
 def _patch(filename, offset, data=None):
     """ write data into a file at offset """
@@ -478,6 +478,41 @@ def test_initial_sparse_with_levels(test_path):
     backy.restore(restore)
     checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
     assert checked == len(in_base)
+
+
+def test_multiple_sparse_with_levels(test_path):
+    backy = backy2.main.Backy(test_path, 'backup', CHUNK_SIZE_MIN)
+
+    src = os.path.join(test_path, 'data')
+    hints = []
+    in_base = dict()  # chunk_ids
+    for i in range(32):
+        _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
+        exists = bool(random.randint(0, 1))
+        hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN, exists))
+        in_base[i] = exists
+
+    backy.backup(src, hints)
+    restore = os.path.join(test_path, 'restore')
+    backy.restore(restore)
+    checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
+    should_be = [x for x in in_base.items() if x[1]]
+    assert checked == len(should_be)
+
+    # change blocks
+    hints = []
+    for i in range(32):
+        _patch(src, i * CHUNK_SIZE_MIN, os.urandom(CHUNK_SIZE_MIN))
+        exists = bool(random.randint(0, 1))
+        hints.append((i * CHUNK_SIZE_MIN, CHUNK_SIZE_MIN, exists))
+        in_base[i] = exists
+
+    backy.backup(src, hints)
+    restore = os.path.join(test_path, 'restore')
+    backy.restore(restore)
+    checked = backy.deep_scrub(src)  # this must not raise or else restore is defect
+    should_be = [x for x in in_base.items() if x[1]]
+    assert checked == len(should_be)
 
 
 # TODO: test cleanup

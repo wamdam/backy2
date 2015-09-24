@@ -110,7 +110,10 @@ class Index():
 
 
     def remove(self, chunk_id):
-        del(self._index[chunk_id])
+        try:
+            del(self._index[chunk_id])
+        except KeyError:
+            logger.warning("Strange: chunk {} does not exist anymore, but hasn't existed before.".format(chunk_id))
 
 
     def chunk_ids(self):
