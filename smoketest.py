@@ -41,14 +41,14 @@ class TestPath():
 
 
 with TestPath() as testpath:
-    size = 32*4*MB + random.randint(-4*MB, 4*MB)
+    size = 32*4*kB + random.randint(-4*kB, 4*kB)
     from_version = None
 
     for i in range(100):
         print('Run {}'.format(i+1))
         hints = []
         for i in range(random.randint(0, 10)):  # up to 10 changes
-            patch_size = random.randint(0, 4*MB)
+            patch_size = random.randint(0, 4*kB)
             if random.randint(0, 1):
                 data = os.urandom(patch_size)
                 exists = True
@@ -61,7 +61,7 @@ with TestPath() as testpath:
             hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
         print('  Applied {} changes.'.format(len(hints)))
         open(os.path.join(testpath, 'hints'), 'w').write(json.dumps(hints))
-        backy = Backy(os.path.join(testpath, 'backy'))
+        backy = Backy(os.path.join(testpath, 'backy'), block_size=4096)
         version_uid = backy.backup(
             'data-backup',
             os.path.join(testpath, 'data'),
