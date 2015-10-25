@@ -439,9 +439,14 @@ class Backy():
         logger.info(tbl)
 
 
-    def scrub(self, version_uid, percentile=100):
+    def scrub(self, version_uid, source=None, percentile=100):
         self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        if source:
+            source_file = open(source, 'rb')
+        else:
+            source_file = None
+
         for block in blocks:
             if block['uid']:
                 if percentile < 100 and random.randint(1, 100) > percentile:
@@ -464,6 +469,17 @@ class Backy():
                             ))
                     self.meta_backend.set_blocks_invalid(block['uid'], block['checksum'])
                 else:
+                    if source_file:
+                        source_file.seek(block['id'] * self.block_size)
+                        source_data = source_file.read(block['size'])
+                        if source_data != data:
+                            logger.error('Source data has changed for block {} '
+                                '(UID {}) (is: {} should-be: {}'.format(
+                                    block['id'],
+                                    block['uid'],
+                                    HASH_FUNCTION(source_data).hexdigest(),
+                                    data_checksum,
+                                    ))
                     logger.debug('Scrub of block {} (UID {}) ok.'.format(
                         block['id'],
                         block['uid'],
@@ -615,10 +631,7 @@ class Commands():
         if percentile:
             percentile = int(percentile)
         backy = Backy(self.path)
-        if source:
-            backy.deep_scrub(version_uid, source, percentile)
-        else:
-            backy.scrub(version_uid, percentile)
+        backy.scrub(version_uid, source, percentile)
 
 
     def ls(self):
