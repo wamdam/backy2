@@ -50,9 +50,9 @@ def blocks_from_hints(hints, block_size):
     """ Helper method """
     blocks = set()
     for offset, length, exists in hints:
-        start_block = offset // block_size  # integer division
-        end_block = start_block + (length-1) // block_size
-        for i in range(start_block, end_block+1):
+        start_block = math.floor(offset / block_size)
+        end_block = math.ceil((offset + length) / block_size)
+        for i in range(start_block, end_block):
             blocks.add(i)
     return blocks
 
@@ -502,6 +502,11 @@ class Backy():
         return versions
 
 
+    def ls_version(self, version_uid):
+        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        return blocks
+
+
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
@@ -548,6 +553,7 @@ class Backy():
                                     HASH_FUNCTION(source_data).hexdigest(),
                                     data_checksum,
                                     ))
+                            import pdb; pdb.set_trace()
                             state = False
                     logger.debug('Scrub of block {} (UID {}) ok.'.format(
                         block['id'],
@@ -733,21 +739,35 @@ class Commands():
             exit(1)
 
 
-    def ls(self):
-        versions = Backy(self.path).ls()
-        tbl = PrettyTable()
-        # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
-        for version in versions:
-            tbl.add_row([
-                version['date'],
-                version['name'],
-                version['size'],
-                version['size_bytes'],
-                version['uid'],
-                version['valid'],
-                ])
-        print(tbl)
+    def ls(self, version_uid):
+        if version_uid:
+            blocks = Backy(self.path).ls_version(version_uid)
+            tbl = PrettyTable()
+            tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
+            for block in blocks:
+                tbl.add_row([
+                    block['id'],
+                    block['date'],
+                    block['uid'],
+                    block['size'],
+                    block['valid'],
+                    ])
+            print(tbl)
+        else:
+            versions = Backy(self.path).ls()
+            tbl = PrettyTable()
+            # TODO: number of invalid blocks, used disk space, shared disk space
+            tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
+            for version in versions:
+                tbl.add_row([
+                    version['date'],
+                    version['name'],
+                    version['size'],
+                    version['size_bytes'],
+                    version['uid'],
+                    version['valid'],
+                    ])
+            print(tbl)
 
 
     def cleanup(self):
@@ -817,6 +837,7 @@ def main():
     p = subparsers.add_parser(
         'ls',
         help="List existing backups.")
+    p.add_argument('version_uid', nargs='?', default=None, help='Show verbose blocks for this version')
     p.set_defaults(func='ls')
 
     args = parser.parse_args()

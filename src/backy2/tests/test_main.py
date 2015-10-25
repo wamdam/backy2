@@ -7,8 +7,7 @@ import shutil
 #import random
 import uuid
 
-CHUNK_SIZE = 1024*4096
-CHUNK_SIZE_MIN = 1024
+BLOCK_SIZE = 1024*4096
 
 @pytest.yield_fixture
 def argv():
@@ -27,6 +26,22 @@ def test_path(request):
         shutil.rmtree(path)
     request.addfinalizer(fin)
     return path
+
+
+def test_blocks_from_hints():
+    hints = [
+        (10, 100, True),
+        (1024, 2048, True),
+        (4096, 3000, True),
+        (14000, 10, True),
+        (16383, 1025, True),
+        (8657, 885, True),
+        #(35458871, 3624441, True),
+        ]
+    #         0          1, 2          4, 5, 6       13,          15, 16
+    block_size = 1024
+    cfh = backy2.backy.blocks_from_hints(hints, block_size)
+    assert sorted(list(cfh)) == [0, 1, 2, 4, 5, 6, 8, 9, 13, 15, 16]
 
 
 def test_FileBackend_path(test_path):
