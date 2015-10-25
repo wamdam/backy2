@@ -567,7 +567,7 @@ class Backy():
         return state
 
 
-    def restore(self, version_uid, target, sparse=True):
+    def restore(self, version_uid, target, sparse=False):
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         with open(target, 'wb') as f:

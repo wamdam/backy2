@@ -74,7 +74,7 @@ with TestPath() as testpath:
             print('  Scrub successful')
             assert backy.scrub(version_uid, os.path.join(testpath, 'data')) == True
             print('  Deep scrub successful')
-            backy.restore(version_uid, os.path.join(testpath, 'restore'))
+            backy.restore(version_uid, os.path.join(testpath, 'restore'), sparse=False)
             assert same(os.path.join(testpath, 'data'), os.path.join(testpath, 'restore')) == True
             print('  Restore successful')
         except AssertionError:
