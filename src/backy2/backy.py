@@ -337,6 +337,21 @@ class SQLiteBackend(MetaBackend):
         return blocks
 
 
+    def rm_version(self, version_uid):
+        self.cursor.execute('''
+            SELECT COUNT(*) AS num_blocks FROM blocks WHERE version_uid=?
+            ''', (version_uid,))
+        num_blocks = self.cursor.fetchone()['num_blocks']
+        self.cursor.execute('''
+            DELETE FROM blocks WHERE version_uid=?
+            ''', (version_uid,))
+        self.cursor.execute('''
+            DELETE FROM versions WHERE uid=?
+            ''', (version_uid,))
+        self.conn.commit()
+        return num_blocks
+
+
     def get_all_block_uids(self):
         self.cursor.execute('''SELECT distinct(uid) FROM blocks''')
         rows = self.cursor.fetchall()
@@ -591,6 +606,15 @@ class Backy():
                 f.write(b'\0')
 
 
+    def rm(self, version_uid):
+        self.meta_backend.get_version(version_uid)  # just to raise if not exists
+        num_blocks = self.meta_backend.rm_version(version_uid)
+        logger.info('Removed backup version {} with {} blocks.'.format(
+            version_uid,
+            num_blocks,
+            ))
+
+
     def backup(self, name, source, hints, from_version):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
@@ -694,6 +718,11 @@ class Commands():
         backy.restore(version_uid, target, sparse)
 
 
+    def rm(self, version_uid):
+        backy = Backy(self.path)
+        backy.rm(version_uid)
+
+
     def scrub(self, version_uid, source, percentile):
         if percentile:
             percentile = int(percentile)
@@ -743,6 +772,13 @@ def main():
     p.add_argument('version_uid')
     p.add_argument('target')
     p.set_defaults(func='restore')
+
+    # RM
+    p = subparsers.add_parser(
+        'rm',
+        help="Remove a given backup version. This will only remove meta data and you will have to cleanup after this.")
+    p.add_argument('version_uid')
+    p.set_defaults(func='rm')
 
     # SCRUB
     p = subparsers.add_parser(
