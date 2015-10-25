@@ -3,8 +3,9 @@
 from prettytable import PrettyTable
 import argparse
 #import configparser
-import glob
+#import glob
 import datetime
+import fnmatch
 import fileinput
 import math
 import hashlib
@@ -226,7 +227,7 @@ class SQLiteBackend(MetaBackend):
     def set_version_invalid(self, uid):
         self.cursor.execute('''
             UPDATE versions SET valid=0 WHERE uid = ?
-        ''')
+        ''', (uid,))
         self.conn.commit()
         logger.info('Marked version invalid (UID {})'.format(
             uid,
@@ -236,7 +237,7 @@ class SQLiteBackend(MetaBackend):
     def set_version_valid(self, uid):
         self.cursor.execute('''
             UPDATE versions SET valid=1 WHERE uid = ?
-        ''')
+        ''', (uid,))
         self.conn.commit()
         logger.debug('Marked version valid (UID {})'.format(
             uid,
@@ -336,6 +337,12 @@ class SQLiteBackend(MetaBackend):
         return blocks
 
 
+    def get_all_block_uids(self):
+        self.cursor.execute('''SELECT distinct(uid) FROM blocks''')
+        rows = self.cursor.fetchall()
+        return [b['uid'] for b in rows]
+
+
     def close(self):
         self.conn.close()
 
@@ -347,6 +354,7 @@ class FileBackend(DataBackend):
 
     DEPTH = 2
     SPLIT = 2
+    SUFFIX = '.blob'
 
     def _uid(self):
         return uuid.uuid1().hex
@@ -363,11 +371,16 @@ class FileBackend(DataBackend):
         return os.path.join(*parts[:self.DEPTH])
 
 
+    def _filename(self, uid):
+        path = os.path.join(self.path, self._path(uid))
+        return os.path.join(path, uid + self.SUFFIX)
+
+
     def save(self, data):
         uid = self._uid()
         path = os.path.join(self.path, self._path(uid))
         makedirs(path)
-        filename = os.path.join(path, uid)
+        filename = self._filename(uid)
         if os.path.exists(filename):
             raise ValueError('Found a file {} where this is impossible.'.format(filename))
         with open(filename, 'wb') as f:
@@ -377,19 +390,26 @@ class FileBackend(DataBackend):
 
 
     def rm(self, uid):
-        path = os.path.join(self.path, self._path(uid))
-        filename = os.path.join(path, uid)
+        filename = self._filename(uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
         os.unlink(filename)
 
 
     def read(self, uid):
-        path = os.path.join(self.path, self._path(uid))
-        filename = os.path.join(path, uid)
+        filename = self._filename(uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
         return open(filename, 'rb').read()
+
+
+    def get_all_blob_uids(self):
+        matches = []
+        for root, dirnames, filenames in os.walk(self.path):
+            for filename in fnmatch.filter(filenames, '*.blob'):
+                uid = filename.split('.')[0]
+                matches.append(uid)
+        return matches
 
 
 
@@ -636,6 +656,17 @@ class Backy():
         logger.info('New version: {}'.format(version_uid))
 
 
+    def cleanup(self):
+        """ Delete unreferenced blob UIDs """
+        active_block_uids = set(self.meta_backend.get_all_block_uids())
+        active_blob_uids = set(self.data_backend.get_all_blob_uids())
+        remove_candidates = active_blob_uids.difference(active_block_uids)
+        for remove_candidate in remove_candidates:
+            logger.debug('Cleanup: Removing UID {}'.format(remove_candidate))
+            self.data_backend.rm(remove_candidate)
+        logger.info('Cleanup: Removed {} blobs'.format(len(remove_candidates)))
+
+
     def close(self):
         self.meta_backend.close()
         self.data_backend.close()
@@ -674,16 +705,8 @@ class Commands():
         Backy(self.path).ls()
 
 
-    def cleanup(self, backupname, keeplevels):
-        keeplevels = int(keeplevels)
-        if not backupname:
-            where = os.path.join(self.path)
-            files = glob.glob(where + '/' + '*..index')
-            backupnames = [f.split('..')[0].split('/')[-1] for f in files]
-        else:
-            backupnames = [backupname]
-        for backupname in backupnames:
-            Backy(self.path, backupname, block_size=BLOCK_SIZE).cleanup(keeplevels)
+    def cleanup(self):
+        Backy(self.path).cleanup()
 
 
 def main():
@@ -735,9 +758,7 @@ def main():
     # CLEANUP
     p = subparsers.add_parser(
         'cleanup',
-        help="Clean backup levels, only keep given number of newest levels.")
-    p.add_argument('-l', '--keeplevels', default='7')
-    p.add_argument('backupname', nargs='?', default="")
+        help="Clean unreferenced blobs.")
     p.set_defaults(func='cleanup')
 
     # LS
