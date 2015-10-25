@@ -29,3 +29,4 @@ report.xml
 .coverage
 d9t
 data
+_smoketest
