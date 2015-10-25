@@ -687,7 +687,7 @@ class Backy():
 
             for block in blocks:
                 if block['id'] in read_blocks or not block['valid']:
-                    source_file.seek(block['id'] * self.block_size)  # TODO: check if seek costs when it's == tell.
+                    source_file.seek(block['id'] * self.block_size)
                     data = source_file.read(self.block_size)
                     if not data:
                         raise RuntimeError('EOF reached on source when there should be data.')
