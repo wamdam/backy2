@@ -499,22 +499,13 @@ class Backy():
 
     def ls(self):
         versions = self.meta_backend.get_versions()
-        tbl = PrettyTable()
-        # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
-        for version in versions:
-            tbl.add_row([
-                version['date'],
-                version['name'],
-                version['size'],
-                version['size_bytes'],
-                version['uid'],
-                version['valid'],
-                ])
-        print(tbl)
+        return versions
 
 
     def scrub(self, version_uid, source=None, percentile=100):
+        """ Returns a boolean (state). If False, there were errors, if True
+        all was ok
+        """
         self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
@@ -522,6 +513,7 @@ class Backy():
         else:
             source_file = None
 
+        state = True
         for block in blocks:
             if block['uid']:
                 if percentile < 100 and random.randint(1, 100) > percentile:
@@ -543,6 +535,7 @@ class Backy():
                             block['checksum'],
                             ))
                     self.meta_backend.set_blocks_invalid(block['uid'], block['checksum'])
+                    state = False
                 else:
                     if source_file:
                         source_file.seek(block['id'] * self.block_size)
@@ -555,6 +548,7 @@ class Backy():
                                     HASH_FUNCTION(source_data).hexdigest(),
                                     data_checksum,
                                     ))
+                            state = False
                     logger.debug('Scrub of block {} (UID {}) ok.'.format(
                         block['id'],
                         block['uid'],
@@ -564,6 +558,7 @@ class Backy():
                     block['id'],
                     block['uid'],
                     ))
+        return state
 
 
     def restore(self, version_uid, target, sparse=True):
@@ -683,6 +678,7 @@ class Backy():
                     logger.debug('Keeping block {}'.format(block['id']))
         self.meta_backend.set_version_valid(version_uid)
         logger.info('New version: {}'.format(version_uid))
+        return version_uid
 
 
     def cleanup(self):
@@ -732,11 +728,26 @@ class Commands():
         if percentile:
             percentile = int(percentile)
         backy = Backy(self.path)
-        backy.scrub(version_uid, source, percentile)
+        state = backy.scrub(version_uid, source, percentile)
+        if not state:
+            exit(1)
 
 
     def ls(self):
-        Backy(self.path).ls()
+        versions = Backy(self.path).ls()
+        tbl = PrettyTable()
+        # TODO: number of invalid blocks, used disk space, shared disk space
+        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
+        for version in versions:
+            tbl.add_row([
+                version['date'],
+                version['name'],
+                version['size'],
+                version['size_bytes'],
+                version['uid'],
+                version['valid'],
+                ])
+        print(tbl)
 
 
     def cleanup(self):
