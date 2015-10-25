@@ -79,6 +79,16 @@ class MetaBackend():
         raise NotImplementedError()
 
 
+    def set_version_invalid(self, uid):
+        """ Mark a version as invalid """
+        raise NotImplementedError()
+
+
+    def set_version_valid(self, uid):
+        """ Mark a version as valid """
+        raise NotImplementedError()
+
+
     def get_version(self, uid):
         """ Returns a version as a dict """
         raise NotImplementedError()
@@ -100,18 +110,34 @@ class MetaBackend():
 
 
     def set_blocks_invalid(self, uid, checksum):
-        """ Set blocks pointing to this uid with the given checksum invalid.
+        """ Set blocks pointing to this block uid with the given checksum invalid.
         This happens, when a block is found invalid during read or scrub.
         """
         raise NotImplementedError()
+
 
     def get_block(self, block_uid):
         """ Get a dict of a single block """
         raise NotImplementedError()
 
 
+    def get_block_by_checksum(self, checksum):
+        """ Get a block by its checksum. This is useful for deduplication """
+        raise NotImplementedError()
+
+
     def get_blocks_by_version(self, version_uid):
         """ Returns an ordered (by id asc) list of blocks for a version uid """
+        raise NotImplementedError()
+
+
+    def rm_version(self, version_uid):
+        """ Remove a version from the meta data store """
+        raise NotImplementedError()
+
+
+    def get_all_block_uids(self):
+        """ Get all block uids existing in the meta data store """
         raise NotImplementedError()
 
 
@@ -139,6 +165,11 @@ class DataBackend():
 
     def rm(self, uid):
         """ Deletes a block """
+        raise NotImplementedError()
+
+
+    def get_all_blob_uids(self):
+        """ Get all existing blob uids """
         raise NotImplementedError()
 
 
