@@ -2,8 +2,6 @@
 
 from prettytable import PrettyTable
 import argparse
-#import configparser
-#import glob
 import datetime
 import fnmatch
 import fileinput
@@ -13,6 +11,7 @@ import logging
 import json
 import random
 import sqlite3
+#import shutil
 import uuid
 import os
 import sys
@@ -155,6 +154,11 @@ class SQLiteBackend(MetaBackend):
     def __init__(self, path):
         MetaBackend.__init__(self, path)
         dbpath = os.path.join(self.path, self.DBFILENAME)
+
+        ## always make a db backup
+        #dbpath_bak = dbpath + '.' + self._now() + '.bak'
+        #if not os.path.exists(dbpath_bak):
+            #shutil.copyfile(dbpath, dbpath_bak)
 
         def dict_factory(cursor, row):
             """ A row factory for sqlite3 which emulates a dict cursor. """
