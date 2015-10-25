@@ -17,10 +17,14 @@ supports. If hints are available, only relevant data sections are read.
 Especially on ceph volumes, the first AND all subsequent backups only require
 changed blocks to be stored.
 
+Invalid backups, due to data errors and otherwise broken backups (system crash)
+are probably recognized (for bit rod we recommend scrubs) and you cannot backup
+a diff on them.
+
 On other volume types, if you can extract blocks used by the filesystem, also
 only those blocks will be read.
 
-backy makes heavy usage of rollsum files. Each ``chunk`` is checksummed and the
+backy makes heavy usage of rollsums. Each ``block`` is checksummed and the
 checksum is stored with the backup. Whenever a forward increment is created,
 the source data is read and only compared to the stored checksum. That way,
 the backup storage space's i/o is not used at all for determining which blocks
@@ -33,15 +37,17 @@ No bit loss anymore!
 Scrub can also compare the backup against an existing image, i.g. a snapshot.
 With this ``deep scrub`` also percentile checks are available.
 
-When scrub finds invalid blocks, it marks them for being backed up on the
-next run.
+When scrub finds invalid blocks, it marks the blocks and all versions containing
+this block as invalid (however, restores are still possible with this
+deficiency).
 
-For each backup level, only changed *chunks* are stored so forward increments
+For each backup version, only changed ``blocks`` are stored so forward increments
 are usually very small.
 
-For restore, backy only writes existing blocks and sparses out the others.
-That means, if you have a terabyte to restore, only the used blocks are
-restored to an image, the rest is left "sparse".
+For restore, backy is able to only write existing blocks and sparses out the
+others. This is possible for new image files and on fresh volumes, e.g. on
+ceph. This shouldn't be done on volumes that don't know about block sparses,
+like classic partitions or classic lvm.
 
 So backy is, especially in combination with rich featured block storage, a
 very fast and reliable backup and restore tool.
@@ -53,15 +59,19 @@ it mostly behaves like *cp* but with all features.
 ## Usage
 
 ```
-usage: backy [-h] [-v] [-b BACKUPDIR] {backup,restore,scrub} ...
+usage: backy [-h] [-v] [-b BACKUPDIR] {backup,restore,rm,scrub,cleanup,ls} ...
 
 Backup and restore for block devices.
 
 positional arguments:
-  {backup,restore,scrub}
+  {backup,restore,rm,scrub,cleanup,ls}
     backup              Perform a backup.
     restore             Restore a given backup with level to a given target.
+    rm                  Remove a given backup version. This will only remove
+                        meta data and you will have to cleanup after this.
     scrub               Scrub a given backup and check for consistency.
+    cleanup             Clean unreferenced blobs.
+    ls                  List existing backups.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -72,42 +82,43 @@ optional arguments:
 ### backup
 
 ```
-usage: backy backup [-h] [-r RBD] source backupname
+usage: backy backup [-h] [-r RBD] [-f FROM_VERSION] source name
 
 positional arguments:
-  source             Source file
-  backupname         Destination file. Will be a copy of source.
+  source                Source file
+  name                  Backup name
 
 optional arguments:
-  -h, --help         show this help message and exit
-  -r RBD, --rbd RBD  Hints as rbd json format
+  -h, --help            show this help message and exit
+  -r RBD, --rbd RBD     Hints as rbd json format
+  -f FROM_VERSION, --from-version FROM_VERSION
+                        Use this version-uid as base
 ```
 
 ### restore
 
 ```
-usage: backy restore [-h] [-l LEVEL] backupname target
+usage: backy restore [-h] [-s] version_uid target
 
 positional arguments:
-  backupname
+  version_uid
   target
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -l LEVEL, --level LEVEL
+  -h, --help    show this help message and exit
+  -s, --sparse  Write restore file sparse (does not work with legacy devices)
 ```
 
 ### scrub
 
 ```
-usage: backy scrub [-h] [-l LEVEL] [-s SOURCE] [-p PERCENTILE] backupname
+usage: backy scrub [-h] [-s SOURCE] [-p PERCENTILE] version_uid
 
 positional arguments:
-  backupname
+  version_uid
 
 optional arguments:
   -h, --help            show this help message and exit
-  -l LEVEL, --level LEVEL
   -s SOURCE, --source SOURCE
                         Source, optional. If given, check if source matches
                         backup in addition to checksum tests.
@@ -116,32 +127,58 @@ optional arguments:
                         0..100). Default: 100
 ```
 
+### rm
+```
+usage: backy rm [-h] version_uid
+
+positional arguments:
+  version_uid
+
+optional arguments:
+  -h, --help   show this help message and exit
+```
+
+
+### cleanup
+```
+usage: backy cleanup [-h]
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
 ## Examples
 
 ### Defaults
 
 ```
-backy backup /dev/image /mnt/backups/image
-backy restore /mnt/backups/image /dev/image
+TBD
 ```
 
 ### Ceph
 
 ```
 rbd --format json diff --from-snap someoldsnap vms/somevm@backup123 > mydiff
-backy backup -r mydiff /vms/somevm@backup123 /mnt/backups/somevm
+backy backup -r mydiff /vms/somevm@backup123 testbackup
 ```
 
 ### lvm
 
-tbd.
+```
+TBD
+```
 
 
 ## Disclaimer
 
+This software is in a very early stage and we are currently testing it. You
+should not rely on it to work probably. Invalid backups and data loss are
+possible and the software is currently mostly untested.
+
 We don't take any responsibility if this software doesn't do what you think or
 even if it doesn't do what is described here or anywhere else. It's up to you
 to read the code yourself and decide if you want to use it.
+
 We are using it and we wrote it for ourselves. If you're unsure, use it as
 a template to develop your own backup software.
 
