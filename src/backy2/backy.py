@@ -491,7 +491,7 @@ class Backy():
                 version['uid'],
                 version['valid'],
                 ])
-        logger.info(tbl)
+        print(tbl)
 
 
     def scrub(self, version_uid, source=None, percentile=100):
