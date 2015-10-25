@@ -573,14 +573,17 @@ class Backy():
             blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
             for block in blocks:
-                if block['id'] in read_blocks:
+                if block['id'] in read_blocks or not block['valid']:
                     source_file.seek(block['id'] * self.block_size)  # TODO: check if seek costs when it's == tell.
                     data = source_file.read(self.block_size)
                     if not data:
                         raise RuntimeError('EOF reached on source when there should be data.')
 
                     data_checksum = HASH_FUNCTION(data).hexdigest()
-                    logger.debug('Read block {} (checksum {})'.format(block['id'], data_checksum))
+                    if not block['valid']:
+                        logger.debug('Re-read block (bacause it was invalid) {} (checksum {})'.format(block['id'], data_checksum))
+                    else:
+                        logger.debug('Read block {} (checksum {})'.format(block['id'], data_checksum))
 
                     # dedup
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
