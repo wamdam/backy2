@@ -1,40 +1,4 @@
-
-
-OLD
-
-* When rbd diff says exists:'false', eventually release the chunk from base
-* Make sure that mtime is kept when scrub finds defect blocks
-* In case of restore: Maybe write unknown chunks as \0? This works for spares
-  writes on image files automatically, but not on device files. Maybe give this
-  as an option...
 * Possibly detect chunks full of \0 and give them special treatment in the index
   and don't write them to the disk. On restore, they should be rewritten as \0
   and deep_scrub should check the source against \0s.
-* Add capability of rewriting a base file, because over time there could be
-  a significant number of not-anymore-existing blocks. Rewriting would leave them
-  out of the data file
-
-
-# with rollsum feature
-backy backup source vda.20151001
-backy cp vda.20151001 vda.20151002
-backy backup source vda.20151002
-
-# without rollsum feature
-backy backup source vda.20151001
-backy backup source vda.20151002
-
-# with rollsum and hints feature
-rbd make snapshot vda@20151001
-rbd diff vda@20151001 > initial_hints
-backy backup -r initial_hints vda@20151001 vda.20151001
-rbd make snapshot vda@20151002
-rbd diff vda@20151002 --from-snap vda@20151001 > diff_hints
-backy cp vda.20151001 vda.20151002
-backy backup -r diff_hints source vda.20151002
-if $? != 0:
-    rbd diff vda@20151002 > initial_hints
-    backy backup -r initial_hints vda@20151002 vda.20151002
-
-TODO
 * Maybe add info to version what the orig filename was and warn if new one diffs
