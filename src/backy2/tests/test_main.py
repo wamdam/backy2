@@ -5,6 +5,7 @@ import backy2.backy
 import shutil
 import time
 import random
+import uuid
 
 CHUNK_SIZE = 1024*4096
 CHUNK_SIZE_MIN = 1024
@@ -85,6 +86,55 @@ def test_SQLiteBackend_version_not_found(test_path):
         backend.get_version('123')
     assert str(e.exconly()) == "KeyError: 'Version 123 not found.'"
     backend.close()
+
+
+def test_SQLiteBackend_block(test_path):
+    backend = backy2.backy.SQLiteBackend(test_path)
+    name = 'backup-mysystem1-20150110140015'
+    block_uid = 'asdfgh'
+    checksum = '1234567890'
+    size = 5000
+    id = 0
+    version_uid = backend.create_version(name, 10)
+    backend.set_block(id, version_uid, block_uid, checksum, size)
+
+    block = backend.get_block(block_uid)
+
+    assert block['checksum'] == checksum
+    assert block['uid'] == block_uid
+    assert block['id'] == id
+    assert block['size'] == size
+    assert block['version_uid'] == version_uid
+
+    backend.close()
+
+
+def test_SQLiteBackend_blocks_for_version(test_path):
+    TESTLEN = 10
+    backend = backy2.backy.SQLiteBackend(test_path)
+    version_name = 'backup-mysystem1-20150110140015'
+    version_uid = backend.create_version(version_name, TESTLEN)
+    block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
+    checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
+    size = 5000
+
+    for id in range(TESTLEN):
+        backend.set_block(id, version_uid, block_uids[id], checksums[id], size)
+
+    blocks = backend.get_blocks_for_version(version_uid)
+    assert len(blocks) == TESTLEN
+
+    # blocks are always ordered by id
+    for id in range(TESTLEN):
+        block = blocks[id]
+        assert block['id'] == id
+        assert block['checksum'] == checksums[id]
+        assert block['uid'] == block_uids[id]
+        assert block['size'] == size
+        assert block['version_uid'] == version_uid
+
+    backend.close()
+
 
 
 def _patch(filename, offset, data=None):

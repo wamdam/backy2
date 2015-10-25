@@ -171,12 +171,11 @@ class SQLiteBackend(MetaBackend):
         self.cursor.execute('''
             SELECT uid, date, name, size FROM versions WHERE uid=?
             ''', (uid,))
-        version = self.cursor.fetchone()  # might raise
+        version = self.cursor.fetchone()
         if version is None:
             # not found
             raise KeyError('Version {} not found.'.format(uid))
         return version
-
 
 
     def set_block(self, id, version_uid, block_uid, checksum, size):
@@ -185,6 +184,29 @@ class SQLiteBackend(MetaBackend):
             INSERT INTO blocks (uid, version_uid, id, date, checksum, size) VALUES (?, ?, ?, ?, ?, ?)
             ''', (block_uid, version_uid, id, now, checksum, size))
         self.conn.commit()
+
+
+    def get_block(self, block_uid):
+        self.cursor.execute('''
+            SELECT uid, version_uid, id, date, checksum, size FROM blocks WHERE uid=?
+            ''', (block_uid,))
+        block = self.cursor.fetchone()
+        if block is None:
+            # not found
+            raise KeyError('Block {} not found.'.format(block_uid))
+        return block
+
+
+    def get_blocks_for_version(self, version_uid):
+        self.cursor.execute('''
+            SELECT uid, version_uid, id, date, checksum, size FROM blocks
+            WHERE version_uid=? ORDER BY id ASC
+            ''', (version_uid,))
+        blocks = self.cursor.fetchall()
+        #if block is None:
+            ## not found
+            #raise KeyError('Block {} not found.'.format(uid))
+        return blocks
 
 
     def close(self):
