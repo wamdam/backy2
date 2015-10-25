@@ -183,7 +183,8 @@ class SQLiteBackend(MetaBackend):
              date text,
              checksum text,
              size integer,
-             FOREIGN KEY(version_uid) REFERENCES versions(uid)
+             FOREIGN KEY(version_uid) REFERENCES versions(uid),
+             PRIMARY KEY(version_uid, id)
              )''')
         self.cursor.execute('''
             CREATE INDEX IF NOT EXISTS block_uid on blocks(uid)
@@ -223,7 +224,7 @@ class SQLiteBackend(MetaBackend):
     def set_block(self, id, version_uid, block_uid, checksum, size, _commit=True):
         now = self._now()
         self.cursor.execute('''
-            INSERT INTO blocks (uid, version_uid, id, date, checksum, size) VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO blocks (uid, version_uid, id, date, checksum, size) VALUES (?, ?, ?, ?, ?, ?)
             ''', (block_uid, version_uid, id, now, checksum, size))
         if _commit:
             self.conn.commit()
@@ -334,21 +335,50 @@ class Backy():
         self.block_size = block_size
 
 
-    def cp(self, version_uid, name):
-        """ Copy a version into another version """
-        version = self.meta_backend.get_version(version_uid)
-        new_version_uid = self.meta_backend.create_version(name, version['size'], version['size_bytes'])
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        for block in blocks:
+    def _prepare_version(self, name, size_bytes, from_version_uid=None):
+        """ Prepares the metadata for a new version.
+        If from_version_uid is given, this is taken as the base, otherwise
+        a pure sparse version is created.
+        """
+        if from_version_uid:
+            self.meta_backend.get_version(from_version_uid)  # raise if not exists
+            old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
+        else:
+            old_blocks = None
+        size = math.ceil(size_bytes / self.block_size)
+        version_uid = self.meta_backend.create_version(name, size, size_bytes)
+        for id in range(size):
+            if old_blocks:
+                try:
+                    old_block = old_blocks[id]
+                except IndexError:
+                    uid = None
+                    checksum = None
+                    block_size = self.block_size
+                else:
+                    assert old_block['id'] == id
+                    uid = old_block['uid']
+                    checksum = old_block['checksum']
+                    block_size = old_block['size']
+            else:
+                uid = None
+                checksum = None
+                block_size = self.block_size
+
+            # the last block can differ in size, so let's check
+            _offset = id * self.block_size
+            block_size = min(block_size, size_bytes - _offset)
+
             self.meta_backend.set_block(
-                block['id'],
-                new_version_uid,
-                block['uid'],
-                block['checksum'],
-                block['size'],
+                id,
+                version_uid,
+                uid,
+                checksum,
+                block_size,
                 _commit=False)
         self.meta_backend._commit()
-        logger.info('New version: {}'.format(new_version_uid))
+        #logger.info('New version: {}'.format(version_uid))
+        return version_uid
 
 
     def ls(self):
@@ -406,7 +436,7 @@ class Backy():
                 f.write(b'\0')
 
 
-    def backup(self, name, source, hints):
+    def backup(self, name, source, hints, from_version):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -428,51 +458,45 @@ class Backy():
                     raise ValueError('Hints have higher offsets than source file.')
 
             if hints:
-                # hint[2] is False for non-existing hints
-                non_existing_hinted_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
-                if non_existing_hinted_blocks:
-                    logger.debug('Hints indicate to mark blocks as non-existent: {}'.format(','.join(map(str, non_existing_hinted_blocks))))
-                for non_existing_hinted_chunk_id in non_existing_hinted_blocks:
-                    #base_level.unexist_chunk(non_existing_hinted_chunk_id)
-                    pass
-
-                # hint[2] is True for existing hints
-                hinted_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
-                # TODO: Test destroyed blocks reading
+                sparse_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
+                read_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
                 #destroyed_blocks = base_level.get_invalid_chunk_ids()  # always re-read destroyed blocks
-                #logger.debug('These destroyed blocks will be backed up again: {}'.format(','.join(map(str, destroyed_blocks))))
-                logger.debug('Hints indicate to backup blocks {}'.format(','.join(map(str, hinted_blocks))))
                 #read_blocks = hinted_blocks.union(destroyed_blocks)
             else:
+                sparse_blocks = []
                 read_blocks = range(size)
-
-            version_uid = self.meta_backend.create_version(name, size, source_size)
-
+            sparse_blocks = set(sparse_blocks)
             read_blocks = set(read_blocks)
 
-            for block_id in range(size):
-                if block_id in read_blocks:
-                    source_file.seek(block_id * self.block_size)  # TODO: check if seek costs when it's == tell.
+            version_uid = self._prepare_version(name, source_size, from_version)
+            blocks = self.meta_backend.get_blocks_by_version(version_uid)
+
+            for block in blocks:
+                if block['id'] in read_blocks:
+                    source_file.seek(block['id'] * self.block_size)  # TODO: check if seek costs when it's == tell.
                     data = source_file.read(self.block_size)
                     if not data:
                         raise RuntimeError('EOF reached on source when there should be data.')
 
                     data_checksum = HASH_FUNCTION(data).hexdigest()
-                    logger.debug('Read block {} (checksum {})'.format(block_id, data_checksum))
+                    logger.debug('Read block {} (checksum {})'.format(block['id'], data_checksum))
 
                     # dedup
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
                     if existing_block and existing_block['size'] == len(data):
-                        self.meta_backend.set_block(block_id, version_uid, existing_block['uid'], data_checksum, len(data))
+                        self.meta_backend.set_block(block['id'], version_uid, existing_block['uid'], data_checksum, len(data))
                         logger.debug('Found existing block for id {} with uid {})'.format
-                                (block_id, existing_block['uid']))
+                                (block['id'], existing_block['uid']))
                     else:
                         block_uid = self.data_backend.save(data)
-                        self.meta_backend.set_block(block_id, version_uid, block_uid, data_checksum, len(data))
-                        logger.debug('Wrote block {} (checksum {})'.format(block_id, data_checksum))
+                        self.meta_backend.set_block(block['id'], version_uid, block_uid, data_checksum, len(data))
+                        logger.debug('Wrote block {} (checksum {})'.format(block['id'], data_checksum))
+                elif block['id'] in sparse_blocks:
+                    self.meta_backend.set_block(block['id'], version_uid, None, None, self.block_size)
+                    logger.debug('Skipping block (sparse) {}'.format(block['id']))
                 else:
-                    logger.debug('Skipping block {}'.format(block_id))
-                    self.meta_backend.set_block(block_id, version_uid, None, None, self.block_size)
+                    logger.debug('Skipping block {}'.format(block['id']))
+                    self.meta_backend.set_block(block['id'], version_uid, None, None, self.block_size)
         logger.info('New version: {}'.format(version_uid))
 
 
@@ -489,18 +513,13 @@ class Commands():
         self.path = path
 
 
-    def backup(self, name, source, rbd):
+    def backup(self, name, source, rbd, from_version):
         backy = Backy(self.path)
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        backy.backup(name, source, hints)
-
-
-    def cp(self, version_uid, name):
-        backy = Backy(self.path)
-        backy.cp(version_uid, name)
+        backy.backup(name, source, hints, from_version)
 
 
     def restore(self, version_uid, target, sparse):
@@ -561,19 +580,8 @@ def main():
         'name',
         help='Backup name')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
+    p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
     p.set_defaults(func='backup')
-
-    # BACKUP
-    p = subparsers.add_parser(
-        'cp',
-        help="Copy a backup version into another name.")
-    p.add_argument(
-        'version_uid',
-        help='Source version uid')
-    p.add_argument(
-        'name',
-        help='Target backup version name')
-    p.set_defaults(func='cp')
 
     # RESTORE
     p = subparsers.add_parser(
