@@ -372,7 +372,8 @@ class FileBackend(DataBackend):
     SUFFIX = '.blob'
 
     def _uid(self):
-        return uuid.uuid1().hex
+        # a uuid always starts with the same bytes, so let's widen this
+        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
 
 
     def _path(self, uid):
