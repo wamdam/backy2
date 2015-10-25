@@ -68,15 +68,17 @@ def test_FileBackend_save_read(test_path):
     backend.close()
 
 
-def test_SQLiteBackend_create_version(test_path):
+def test_SQLiteBackend_set_version(test_path):
     backend = backy2.backy.SQLiteBackend(test_path)
     name = 'backup-mysystem1-20150110140015'
-    uid = backend.create_version(name, 10)
+    uid = backend.set_version(name, 10, 5000, 1)
     assert(uid)
     version = backend.get_version(uid)
     assert version['name'] == name
     assert version['size'] == 10
+    assert version['size_bytes'] == 5000
     assert version['uid'] == uid
+    assert version['valid'] == 1
     backend.close()
 
 
@@ -95,8 +97,8 @@ def test_SQLiteBackend_block(test_path):
     checksum = '1234567890'
     size = 5000
     id = 0
-    version_uid = backend.create_version(name, 10)
-    backend.set_block(id, version_uid, block_uid, checksum, size)
+    version_uid = backend.set_version(name, 10, 5000, 1)
+    backend.set_block(id, version_uid, block_uid, checksum, size, 1)
 
     block = backend.get_block(block_uid)
 
@@ -113,13 +115,13 @@ def test_SQLiteBackend_blocks_by_version(test_path):
     TESTLEN = 10
     backend = backy2.backy.SQLiteBackend(test_path)
     version_name = 'backup-mysystem1-20150110140015'
-    version_uid = backend.create_version(version_name, TESTLEN)
+    version_uid = backend.set_version(version_name, TESTLEN, 5000, 1)
     block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
     checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
     size = 5000
 
     for id in range(TESTLEN):
-        backend.set_block(id, version_uid, block_uids[id], checksums[id], size)
+        backend.set_block(id, version_uid, block_uids[id], checksums[id], size, 1)
 
     blocks = backend.get_blocks_by_version(version_uid)
     assert len(blocks) == TESTLEN

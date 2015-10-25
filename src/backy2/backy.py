@@ -71,7 +71,7 @@ class MetaBackend():
         self.path = path
 
 
-    def create_version(self, version_name, size, size_bytes):
+    def set_version(self, version_name, size, size_bytes):
         """ Creates a new version with a given name.
         size is the number of blocks this version will contain.
         Returns a uid for this version.
@@ -179,8 +179,15 @@ class SQLiteBackend(MetaBackend):
 
     def _create(self):
         self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS versions
-             (uid text, date text, name text, size integer, size_bytes integer)''')
+            CREATE TABLE IF NOT EXISTS versions (
+             uid text,
+             date text,
+             name text,
+             size integer,
+             size_bytes integer,
+             valid integer,
+             PRIMARY KEY(uid)
+             )''')
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS blocks (
              uid text,
@@ -199,19 +206,46 @@ class SQLiteBackend(MetaBackend):
         self.conn.commit()
 
 
-    def create_version(self, version_name, size, size_bytes):
+    def set_version(self, version_name, size, size_bytes, valid):
         uid = self._uid()
         now = self._now()
         self.cursor.execute('''
-            INSERT INTO versions (uid, date, name, size, size_bytes) VALUES (?, ?, ?, ?, ?)
-            ''', (uid, now, version_name, size, size_bytes))
+            INSERT OR REPLACE INTO versions (
+                uid,
+                date,
+                name,
+                size,
+                size_bytes,
+                valid
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            ''', (uid, now, version_name, size, size_bytes, valid))
         self.conn.commit()
         return uid
 
 
+    def set_version_invalid(self, uid):
+        self.cursor.execute('''
+            UPDATE versions SET valid=0 WHERE uid = ?
+        ''')
+        self.conn.commit()
+        logger.info('Marked version invalid (UID {})'.format(
+            uid,
+            ))
+
+
+    def set_version_valid(self, uid):
+        self.cursor.execute('''
+            UPDATE versions SET valid=1 WHERE uid = ?
+        ''')
+        self.conn.commit()
+        logger.debug('Marked version valid (UID {})'.format(
+            uid,
+            ))
+
+
     def get_version(self, uid):
         self.cursor.execute('''
-            SELECT uid, date, name, size, size_bytes FROM versions WHERE uid=?
+            SELECT uid, date, name, size, size_bytes, valid FROM versions WHERE uid=?
             ''', (uid,))
         version = self.cursor.fetchone()
         if version is None:
@@ -222,7 +256,7 @@ class SQLiteBackend(MetaBackend):
 
     def get_versions(self):
         self.cursor.execute('''
-            SELECT uid, date, name, size, size_bytes FROM versions ORDER BY name asc, date asc
+            SELECT uid, date, name, size, size_bytes, valid FROM versions ORDER BY name asc, date asc
             ''')
         versions = self.cursor.fetchall()
         return versions
@@ -262,6 +296,8 @@ class SQLiteBackend(MetaBackend):
             checksum,
             ', '.join([v['version_uid'] for v in affected_version_uids])
             ))
+        for version_uid in affected_version_uids:
+            self.set_version_invalid(version_uid)
         return affected_version_uids
 
 
@@ -297,9 +333,6 @@ class SQLiteBackend(MetaBackend):
             WHERE version_uid=? ORDER BY id ASC
             ''', (version_uid,))
         blocks = self.cursor.fetchall()
-        #if block is None:
-            ## not found
-            #raise KeyError('Block {} not found.'.format(uid))
         return blocks
 
 
@@ -384,7 +417,8 @@ class Backy():
         else:
             old_blocks = None
         size = math.ceil(size_bytes / self.block_size)
-        version_uid = self.meta_backend.create_version(name, size, size_bytes)
+        # we always start with invalid versions, then validate them after backup
+        version_uid = self.meta_backend.set_version(name, size, size_bytes, 0)
         for id in range(size):
             if old_blocks:
                 try:
@@ -427,7 +461,7 @@ class Backy():
         versions = self.meta_backend.get_versions()
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid']
+        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
         for version in versions:
             tbl.add_row([
                 version['date'],
@@ -435,6 +469,7 @@ class Backy():
                 version['size'],
                 version['size_bytes'],
                 version['uid'],
+                version['valid'],
                 ])
         logger.info(tbl)
 
@@ -560,9 +595,6 @@ class Backy():
             if hints:
                 sparse_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
                 read_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
-                # TODO: Find invalid blocks and backup them
-                #destroyed_blocks = base_level.get_invalid_chunk_ids()  # always re-read destroyed blocks
-                #read_blocks = hinted_blocks.union(destroyed_blocks)
             else:
                 sparse_blocks = []
                 read_blocks = range(size)
@@ -600,6 +632,7 @@ class Backy():
                     logger.debug('Skipping block (sparse) {}'.format(block['id']))
                 else:
                     logger.debug('Keeping block {}'.format(block['id']))
+        self.meta_backend.set_version_valid(version_uid)
         logger.info('New version: {}'.format(version_uid))
 
 
