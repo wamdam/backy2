@@ -406,7 +406,8 @@ class Backy():
                     data = self.data_backend.read(block['uid'])
                     assert len(data) == block['size']
                     data_checksum = HASH_FUNCTION(data).hexdigest()
-                    f.write(data)
+                    written = f.write(data)
+                    assert written == len(data)
                     if data_checksum != block['checksum']:
                         logger.error('Checksum mismatch during restore for block '
                             '{} (is: {} should-be: {}). Block restored is '
@@ -416,13 +417,15 @@ class Backy():
                                 block['checksum'],
                                 ))
                     else:
-                        logger.debug('Restored block {} successfully.'.format(
+                        logger.debug('Restored block {} successfully ({} bytes).'.format(
                             block['id'],
+                            block['size'],
                             ))
                 elif not sparse:
                     f.write(b'\0'*block['size'])
-                    logger.debug('Restored sparse block {} successfully.'.format(
+                    logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
                         block['id'],
+                        block['size'],
                         ))
                 else:
                     logger.debug('Ignored sparse block {}.'.format(
@@ -492,11 +495,10 @@ class Backy():
                         self.meta_backend.set_block(block['id'], version_uid, block_uid, data_checksum, len(data))
                         logger.debug('Wrote block {} (checksum {})'.format(block['id'], data_checksum))
                 elif block['id'] in sparse_blocks:
-                    self.meta_backend.set_block(block['id'], version_uid, None, None, self.block_size)
+                    self.meta_backend.set_block(block['id'], version_uid, None, None, block['size'])
                     logger.debug('Skipping block (sparse) {}'.format(block['id']))
                 else:
-                    logger.debug('Skipping block {}'.format(block['id']))
-                    self.meta_backend.set_block(block['id'], version_uid, None, None, self.block_size)
+                    logger.debug('Keeping block {}'.format(block['id']))
         logger.info('New version: {}'.format(version_uid))
 
 
