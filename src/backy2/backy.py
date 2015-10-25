@@ -261,7 +261,7 @@ class SQLiteBackend(MetaBackend):
 
     def set_version_invalid(self, uid):
         self.cursor.execute('''
-            UPDATE versions SET valid=0 WHERE uid = ?
+            UPDATE versions SET valid=0 WHERE uid=?
         ''', (uid,))
         self.conn.commit()
         logger.info('Marked version invalid (UID {})'.format(
@@ -321,7 +321,8 @@ class SQLiteBackend(MetaBackend):
             SELECT DISTINCT(version_uid) FROM blocks WHERE
                 uid=? AND checksum=?
             ''', (uid, checksum))
-        affected_version_uids = self.cursor.fetchall()
+        _affected_version_uids = self.cursor.fetchall()
+        affected_version_uids = [v['version_uid'] for v in _affected_version_uids]
         self.cursor.execute('''
             UPDATE blocks SET valid=0 WHERE
                 uid=? AND checksum=?
@@ -330,7 +331,7 @@ class SQLiteBackend(MetaBackend):
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             uid,
             checksum,
-            ', '.join([v['version_uid'] for v in affected_version_uids])
+            ', '.join(affected_version_uids)
             ))
         for version_uid in affected_version_uids:
             self.set_version_invalid(version_uid)
@@ -483,7 +484,9 @@ class Backy():
         a pure sparse version is created.
         """
         if from_version_uid:
-            self.meta_backend.get_version(from_version_uid)  # raise if not exists
+            old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
+            if not old_version['valid']:
+                raise RuntimeError('You cannot base on an invalid version.')
             old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
         else:
             old_blocks = None
@@ -584,7 +587,6 @@ class Backy():
                                     HASH_FUNCTION(source_data).hexdigest(),
                                     data_checksum,
                                     ))
-                            import pdb; pdb.set_trace()
                             state = False
                     logger.debug('Scrub of block {} (UID {}) ok.'.format(
                         block['id'],
@@ -682,7 +684,12 @@ class Backy():
             sparse_blocks = set(sparse_blocks)
             read_blocks = set(read_blocks)
 
-            version_uid = self._prepare_version(name, source_size, from_version)
+            try:
+                version_uid = self._prepare_version(name, source_size, from_version)
+            except RuntimeError as e:
+                logger.error(str(e))
+                logger.error('Backy exiting.')
+                exit(1)
             blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
             for block in blocks:
