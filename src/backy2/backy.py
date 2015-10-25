@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 
-#from prettytable import PrettyTable
+from prettytable import PrettyTable
 import argparse
 #import configparser
 import glob
@@ -71,7 +71,7 @@ class MetaBackend():
         self.path = path
 
 
-    def create_version(self, version_name, size):
+    def create_version(self, version_name, size, size_bytes):
         """ Creates a new version with a given name.
         size is the number of blocks this version will contain.
         Returns a uid for this version.
@@ -84,11 +84,17 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size):
+    def get_versions(self):
+        """ Returns a list of all versions """
+        raise NotImplementedError()
+
+
+    def set_block(self, id, version_uid, block_uid, checksum, size, _commit=True):
         """ Set a block to <id> for a version's uid (which must exist) and
         store it's uid (which points to the data BLOB).
         checksum is the block's checksum
         size is the block's size
+        _commit is a hint if the transaction should be committed immediately.
         """
         raise NotImplementedError()
 
@@ -98,7 +104,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def get_blocks_for_version(self, version_uid):
+    def get_blocks_by_version(self, version_uid):
         """ Returns an ordered (by id asc) list of blocks for a version uid """
         raise NotImplementedError()
 
@@ -168,7 +174,7 @@ class SQLiteBackend(MetaBackend):
     def _create(self):
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS versions
-             (uid text, date text, name text, size integer)''')
+             (uid text, date text, name text, size integer, size_bytes integer)''')
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS blocks (
              uid text,
@@ -185,19 +191,19 @@ class SQLiteBackend(MetaBackend):
         self.conn.commit()
 
 
-    def create_version(self, version_name, size):
+    def create_version(self, version_name, size, size_bytes):
         uid = self._uid()
         now = self._now()
         self.cursor.execute('''
-            INSERT INTO versions (uid, date, name, size) VALUES (?, ?, ?, ?)
-            ''', (uid, now, version_name, size))
+            INSERT INTO versions (uid, date, name, size, size_bytes) VALUES (?, ?, ?, ?, ?)
+            ''', (uid, now, version_name, size, size_bytes))
         self.conn.commit()
         return uid
 
 
     def get_version(self, uid):
         self.cursor.execute('''
-            SELECT uid, date, name, size FROM versions WHERE uid=?
+            SELECT uid, date, name, size, size_bytes FROM versions WHERE uid=?
             ''', (uid,))
         version = self.cursor.fetchone()
         if version is None:
@@ -206,11 +212,24 @@ class SQLiteBackend(MetaBackend):
         return version
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size):
+    def get_versions(self):
+        self.cursor.execute('''
+            SELECT uid, date, name, size, size_bytes FROM versions ORDER BY name asc, date asc
+            ''')
+        versions = self.cursor.fetchall()
+        return versions
+
+
+    def set_block(self, id, version_uid, block_uid, checksum, size, _commit=True):
         now = self._now()
         self.cursor.execute('''
             INSERT INTO blocks (uid, version_uid, id, date, checksum, size) VALUES (?, ?, ?, ?, ?, ?)
             ''', (block_uid, version_uid, id, now, checksum, size))
+        if _commit:
+            self.conn.commit()
+
+
+    def _commit(self):
         self.conn.commit()
 
 
@@ -315,6 +334,78 @@ class Backy():
         self.block_size = block_size
 
 
+    def cp(self, version_uid, name):
+        """ Copy a version into another version """
+        version = self.meta_backend.get_version(version_uid)
+        new_version_uid = self.meta_backend.create_version(name, version['size'], version['size_bytes'])
+        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        for block in blocks:
+            self.meta_backend.set_block(
+                block['id'],
+                new_version_uid,
+                block['uid'],
+                block['checksum'],
+                block['size'],
+                _commit=False)
+        self.meta_backend._commit()
+        logger.info('New version: {}'.format(new_version_uid))
+
+
+    def ls(self):
+        versions = self.meta_backend.get_versions()
+        tbl = PrettyTable()
+        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid']
+        for version in versions:
+            tbl.add_row([
+                version['date'],
+                version['name'],
+                version['size'],
+                version['size_bytes'],
+                version['uid'],
+                ])
+        print(tbl)
+
+
+    def restore(self, version_uid, target, sparse=True):
+        version = self.meta_backend.get_version(version_uid)  # raise if version not exists
+        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        with open(target, 'wb') as f:
+            for block in blocks:
+                f.seek(block['id'] * self.block_size)
+                if block['uid']:
+                    data = self.data_backend.read(block['uid'])
+                    assert len(data) == block['size']
+                    data_checksum = HASH_FUNCTION(data).hexdigest()
+                    f.write(data)
+                    if data_checksum != block['checksum']:
+                        logger.error('Checksum mismatch during restore for block '
+                            '{} (is: {} should-be: {}). Block restored is '
+                            'invalid. Continuing.'.format(
+                                block['id'],
+                                data_checksum,
+                                block['checksum'],
+                                ))
+                    else:
+                        logger.debug('Restored block {} successfully.'.format(
+                            block['id'],
+                            ))
+                elif not sparse:
+                    f.write(b'\0'*block['size'])
+                    logger.debug('Restored sparse block {} successfully.'.format(
+                        block['id'],
+                        ))
+                else:
+                    logger.debug('Ignored sparse block {}.'.format(
+                        block['id'],
+                        ))
+            if f.tell() != version['size_bytes']:
+                # write last byte with \0, because this can only happen when
+                # the last block was left over in sparse mode.
+                last_block = blocks[-1]
+                f.seek(last_block['id'] * self.block_size + last_block['size'] - 1)
+                f.write(b'\0')
+
+
     def backup(self, name, source, hints):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
@@ -355,7 +446,7 @@ class Backy():
             else:
                 read_blocks = range(size)
 
-            version_uid = self.meta_backend.create_version(name, size)
+            version_uid = self.meta_backend.create_version(name, size, source_size)
 
             read_blocks = set(read_blocks)
 
@@ -382,6 +473,7 @@ class Backy():
                 else:
                     logger.debug('Skipping block {}'.format(block_id))
                     self.meta_backend.set_block(block_id, version_uid, None, None, self.block_size)
+        logger.info('New version: {}'.format(version_uid))
 
 
     def close(self):
@@ -406,13 +498,14 @@ class Commands():
         backy.backup(name, source, hints)
 
 
-    def restore(self, backupname, target, level):
-        if level == '':
-            level = None  # restore latest
-        else:
-            level = int(level)
-        backy = Backy(self.path, backupname, block_size=BLOCK_SIZE)
-        backy.restore(target, level)
+    def cp(self, version_uid, name):
+        backy = Backy(self.path)
+        backy.cp(version_uid, name)
+
+
+    def restore(self, version_uid, target, sparse):
+        backy = Backy(self.path)
+        backy.restore(version_uid, target, sparse)
 
 
     def scrub(self, backupname, level, source, percentile):
@@ -429,15 +522,8 @@ class Commands():
             backy.scrub(level)
 
 
-    def ls(self, backupname):
-        if not backupname:
-            where = os.path.join(self.path)
-            files = glob.glob(where + '/' + '*..index')
-            backupnames = [f.split('..')[0].split('/')[-1] for f in files]
-        else:
-            backupnames = [backupname]
-        for backupname in backupnames:
-            Backy(self.path, backupname, block_size=BLOCK_SIZE).ls()
+    def ls(self):
+        Backy(self.path).ls()
 
 
     def cleanup(self, backupname, keeplevels):
@@ -480,21 +566,21 @@ def main():
     # BACKUP
     p = subparsers.add_parser(
         'cp',
-        help="Copy backup into another name.")
+        help="Copy a backup version into another name.")
     p.add_argument(
-        'source',
-        help='Source backup name')
+        'version_uid',
+        help='Source version uid')
     p.add_argument(
-        'target',
-        help='Target backup name')
+        'name',
+        help='Target backup version name')
     p.set_defaults(func='cp')
 
     # RESTORE
     p = subparsers.add_parser(
         'restore',
         help="Restore a given backup with level to a given target.")
-    p.add_argument('-l', '--level', default='')
-    p.add_argument('backupname')
+    p.add_argument('-s', '--sparse', action='store_true', help='Write restore file sparse (does not work with legacy devices)')
+    p.add_argument('version_uid')
     p.add_argument('target')
     p.set_defaults(func='restore')
 
@@ -522,7 +608,6 @@ def main():
     p = subparsers.add_parser(
         'ls',
         help="List existing backups.")
-    p.add_argument('backupname', nargs='?', default="")
     p.set_defaults(func='ls')
 
     args = parser.parse_args()
