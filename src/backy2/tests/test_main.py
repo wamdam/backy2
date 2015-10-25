@@ -3,8 +3,8 @@ import os
 import sys
 import backy2.backy
 import shutil
-import time
-import random
+#import time
+#import random
 import uuid
 
 CHUNK_SIZE = 1024*4096
@@ -109,7 +109,7 @@ def test_SQLiteBackend_block(test_path):
     backend.close()
 
 
-def test_SQLiteBackend_blocks_for_version(test_path):
+def test_SQLiteBackend_blocks_by_version(test_path):
     TESTLEN = 10
     backend = backy2.backy.SQLiteBackend(test_path)
     version_name = 'backup-mysystem1-20150110140015'
@@ -121,7 +121,7 @@ def test_SQLiteBackend_blocks_for_version(test_path):
     for id in range(TESTLEN):
         backend.set_block(id, version_uid, block_uids[id], checksums[id], size)
 
-    blocks = backend.get_blocks_for_version(version_uid)
+    blocks = backend.get_blocks_by_version(version_uid)
     assert len(blocks) == TESTLEN
 
     # blocks are always ordered by id

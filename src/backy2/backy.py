@@ -2,12 +2,12 @@
 
 #from prettytable import PrettyTable
 import argparse
-import configparser
-#import glob
+#import configparser
+import glob
 import datetime
 import fileinput
-#import math
-#import hashlib
+import math
+import hashlib
 import logging
 import json
 #import random
@@ -19,11 +19,8 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 1024*4096  # 4MB
-CHUNK_STATUS_EXISTS = 0
-CHUNK_STATUS_DESTROYED = 1
-CHUNK_STATUS_NOTEXISTS = 2
-
+BLOCK_SIZE = 1024*4096  # 4MB
+HASH_FUNCTION = hashlib.sha512
 
 def init_logging(logdir, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
@@ -47,6 +44,17 @@ def hints_from_rbd_diff(rbd_diff):
     """
     data = json.loads(rbd_diff)
     return [(l['offset'], l['length'], True if l['exists']=='true' else False) for l in data]
+
+
+def blocks_from_hints(hints, block_size):
+    """ Helper method """
+    blocks = set()
+    for offset, length, exists in hints:
+        start_block = offset // block_size  # integer division
+        end_block = start_block + (length-1) // block_size
+        for i in range(start_block, end_block+1):
+            blocks.add(i)
+    return blocks
 
 
 def makedirs(path):
@@ -82,6 +90,16 @@ class MetaBackend():
         checksum is the block's checksum
         size is the block's size
         """
+        raise NotImplementedError()
+
+
+    def get_block(self, block_uid):
+        """ Get a dict of a single block """
+        raise NotImplementedError()
+
+
+    def get_blocks_for_version(self, version_uid):
+        """ Returns an ordered (by id asc) list of blocks for a version uid """
         raise NotImplementedError()
 
 
@@ -152,8 +170,18 @@ class SQLiteBackend(MetaBackend):
             CREATE TABLE IF NOT EXISTS versions
              (uid text, date text, name text, size integer)''')
         self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS blocks
-             (uid text, version_uid text, id integer, date text, checksum text, size integer)''')
+            CREATE TABLE IF NOT EXISTS blocks (
+             uid text,
+             version_uid text,
+             id integer,
+             date text,
+             checksum text,
+             size integer,
+             FOREIGN KEY(version_uid) REFERENCES versions(uid)
+             )''')
+        self.cursor.execute('''
+            CREATE INDEX IF NOT EXISTS block_uid on blocks(uid)
+            ''')
         self.conn.commit()
 
 
@@ -197,7 +225,15 @@ class SQLiteBackend(MetaBackend):
         return block
 
 
-    def get_blocks_for_version(self, version_uid):
+    def get_block_by_checksum(self, checksum):
+        self.cursor.execute('''
+            SELECT uid, version_uid, id, date, checksum, size FROM blocks WHERE checksum=?
+            ''', (checksum,))
+        block = self.cursor.fetchone()
+        return block  # None if nothing found
+
+
+    def get_blocks_by_version(self, version_uid):
         self.cursor.execute('''
             SELECT uid, version_uid, id, date, checksum, size FROM blocks
             WHERE version_uid=? ORDER BY id ASC
@@ -270,12 +306,82 @@ class Backy():
     """
     """
 
-    def __init__(self, path):
+    def __init__(self, path, block_size=BLOCK_SIZE):
         self.path = path
         self.datapath = os.path.join(self.path, 'data')
+        makedirs(self.datapath)
         self.meta_backend = SQLiteBackend(self.datapath)
         self.data_backend = FileBackend(self.datapath)
-        makedirs(self.datapath)
+        self.block_size = block_size
+
+
+    def backup(self, name, source, hints):
+        """ Create a backup from source.
+        If hints are given, they must be tuples of (offset, length, exists)
+        where offset and length are integers and exists is a boolean. Then, only
+        data within hints will be backed up.
+        Otherwise, the backup reads source and looks if checksums match with
+        the target.
+        """
+        with open(source, 'rb') as source_file:
+            # determine source size
+            source_file.seek(0, 2)  # to the end
+            source_size = source_file.tell()
+            source_file.seek(0)
+            size = math.ceil(source_size / self.block_size)
+
+            # Sanity check: check hints for validity, i.e. too high offsets, ...
+            if hints:
+                max_offset = max([h[0]+h[1] for h in hints])
+                if max_offset > source_size:
+                    raise ValueError('Hints have higher offsets than source file.')
+
+            if hints:
+                # hint[2] is False for non-existing hints
+                non_existing_hinted_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
+                if non_existing_hinted_blocks:
+                    logger.debug('Hints indicate to mark blocks as non-existent: {}'.format(','.join(map(str, non_existing_hinted_blocks))))
+                for non_existing_hinted_chunk_id in non_existing_hinted_blocks:
+                    #base_level.unexist_chunk(non_existing_hinted_chunk_id)
+                    pass
+
+                # hint[2] is True for existing hints
+                hinted_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
+                # TODO: Test destroyed blocks reading
+                #destroyed_blocks = base_level.get_invalid_chunk_ids()  # always re-read destroyed blocks
+                #logger.debug('These destroyed blocks will be backed up again: {}'.format(','.join(map(str, destroyed_blocks))))
+                logger.debug('Hints indicate to backup blocks {}'.format(','.join(map(str, hinted_blocks))))
+                #read_blocks = hinted_blocks.union(destroyed_blocks)
+            else:
+                read_blocks = range(size)
+
+            version_uid = self.meta_backend.create_version(name, size)
+
+            read_blocks = set(read_blocks)
+
+            for block_id in range(size):
+                if block_id in read_blocks:
+                    source_file.seek(block_id * self.block_size)  # TODO: check if seek costs when it's == tell.
+                    data = source_file.read(self.block_size)
+                    if not data:
+                        raise RuntimeError('EOF reached on source when there should be data.')
+
+                    data_checksum = HASH_FUNCTION(data).hexdigest()
+                    logger.debug('Read block {} (checksum {})'.format(block_id, data_checksum))
+
+                    # dedup
+                    existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
+                    if existing_block and existing_block['size'] == len(data):
+                        self.meta_backend.set_block(block_id, version_uid, existing_block['uid'], data_checksum, len(data))
+                        logger.debug('Found existing block for id {} with uid {})'.format
+                                (block_id, existing_block['uid']))
+                    else:
+                        block_uid = self.data_backend.save(data)
+                        self.meta_backend.set_block(block_id, version_uid, block_uid, data_checksum, len(data))
+                        logger.debug('Wrote block {} (checksum {})'.format(block_id, data_checksum))
+                else:
+                    logger.debug('Skipping block {}'.format(block_id))
+                    self.meta_backend.set_block(block_id, version_uid, None, None, self.block_size)
 
 
     def close(self):
@@ -291,15 +397,13 @@ class Commands():
         self.path = path
 
 
-    def backup(self, source, backupname, rbd):
+    def backup(self, name, source, rbd):
         backy = Backy(self.path)
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        import pdb; pdb.set_trace()
-
-        backy.backup(source, hints)
+        backy.backup(name, source, hints)
 
 
     def restore(self, backupname, target, level):
@@ -307,7 +411,7 @@ class Commands():
             level = None  # restore latest
         else:
             level = int(level)
-        backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
+        backy = Backy(self.path, backupname, block_size=BLOCK_SIZE)
         backy.restore(target, level)
 
 
@@ -318,7 +422,7 @@ class Commands():
             level = int(level)
         if percentile:
             percentile = int(percentile)
-        backy = Backy(self.path, backupname, chunk_size=CHUNK_SIZE)
+        backy = Backy(self.path, backupname, block_size=BLOCK_SIZE)
         if source:
             backy.deep_scrub(source, level, percentile)
         else:
@@ -333,7 +437,7 @@ class Commands():
         else:
             backupnames = [backupname]
         for backupname in backupnames:
-            Backy(self.path, backupname, chunk_size=CHUNK_SIZE).ls()
+            Backy(self.path, backupname, block_size=BLOCK_SIZE).ls()
 
 
     def cleanup(self, backupname, keeplevels):
@@ -345,7 +449,7 @@ class Commands():
         else:
             backupnames = [backupname]
         for backupname in backupnames:
-            Backy(self.path, backupname, chunk_size=CHUNK_SIZE).cleanup(keeplevels)
+            Backy(self.path, backupname, block_size=BLOCK_SIZE).cleanup(keeplevels)
 
 
 def main():
@@ -368,10 +472,22 @@ def main():
         'source',
         help='Source file')
     p.add_argument(
-        'backupname',
-        help='Destination file. Will be a copy of source.')
+        'name',
+        help='Backup name')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.set_defaults(func='backup')
+
+    # BACKUP
+    p = subparsers.add_parser(
+        'cp',
+        help="Copy backup into another name.")
+    p.add_argument(
+        'source',
+        help='Source backup name')
+    p.add_argument(
+        'target',
+        help='Target backup name')
+    p.set_defaults(func='cp')
 
     # RESTORE
     p = subparsers.add_parser(
