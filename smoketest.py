@@ -48,11 +48,12 @@ with TestPath() as testpath:
         print('Run {}'.format(i+1))
         hints = []
         for i in range(random.randint(0, 10)):  # up to 10 changes
-            patch_size = random.randint(0, 4*kB)
             if random.randint(0, 1):
+                patch_size = random.randint(0, 4*kB)
                 data = os.urandom(patch_size)
                 exists = True
             else:
+                patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
                 data = b'\0' * patch_size
                 exists = False
             offset = random.randint(0, size-1-patch_size)
