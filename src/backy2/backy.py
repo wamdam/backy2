@@ -516,7 +516,13 @@ class Backy():
 
             # the last block can differ in size, so let's check
             _offset = id * self.block_size
-            block_size = min(block_size, size_bytes - _offset)
+            new_block_size = min(block_size, size_bytes - _offset)
+            if new_block_size != block_size:
+                # last block changed, so set back all info
+                block_size = new_block_size
+                uid = None
+                checksum = None
+                valid = 1
 
             self.meta_backend.set_block(
                 id,
@@ -689,6 +695,7 @@ class Backy():
             except RuntimeError as e:
                 logger.error(str(e))
                 logger.error('Backy exiting.')
+                # TODO: Don't exit here, exit in Commands
                 exit(1)
             blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
