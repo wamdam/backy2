@@ -723,6 +723,8 @@ class Backy():
                         self.meta_backend.set_block(block['id'], version_uid, block_uid, data_checksum, len(data), valid=1)
                         logger.debug('Wrote block {} (checksum {})'.format(block['id'], data_checksum))
                 elif block['id'] in sparse_blocks:
+                    # This "elif" is very important. Because if the block is in read_blocks
+                    # AND sparse_blocks, it *must* be read.
                     self.meta_backend.set_block(block['id'], version_uid, None, None, block['size'], valid=1)
                     logger.debug('Skipping block (sparse) {}'.format(block['id']))
                 else:
@@ -752,8 +754,9 @@ class Backy():
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, path):
+    def __init__(self, path, machine_output):
         self.path = path
+        self.machine_output = machine_output
 
 
     def backup(self, name, source, rbd, from_version):
@@ -784,36 +787,76 @@ class Commands():
             exit(1)
 
 
+    def _ls_blocks_tbl_output(self, blocks):
+        tbl = PrettyTable()
+        tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
+        for block in blocks:
+            tbl.add_row([
+                block['id'],
+                block['date'],
+                block['uid'],
+                block['size'],
+                block['valid'],
+                ])
+        print(tbl)
+
+
+    def _ls_blocks_machine_output(self, blocks):
+        field_names = ['id', 'date', 'uid', 'size', 'valid']
+        print(' '.join(field_names))
+        for block in blocks:
+            print(' '.join(map(str, [
+                block['id'],
+                block['date'],
+                block['uid'],
+                block['size'],
+                block['valid'],
+                ])))
+
+
+    def _ls_versions_tbl_output(self, versions):
+        tbl = PrettyTable()
+        # TODO: number of invalid blocks, used disk space, shared disk space
+        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
+        for version in versions:
+            tbl.add_row([
+                version['date'],
+                version['name'],
+                version['size'],
+                version['size_bytes'],
+                version['uid'],
+                version['valid'],
+                ])
+        print(tbl)
+
+
+    def _ls_versions_machine_output(self, versions):
+        field_names = ['date', 'size', 'size_bytes', 'uid', 'version valid', 'name']
+        print(' '.join(field_names))
+        for version in versions:
+            print(' '.join(map(str, [
+                version['date'],
+                version['size'],
+                version['size_bytes'],
+                version['uid'],
+                version['valid'],
+                version['name'],
+                ])))
+
+
     def ls(self, version_uid):
         if version_uid:
             blocks = Backy(self.path).ls_version(version_uid)
-            tbl = PrettyTable()
-            tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
-            for block in blocks:
-                tbl.add_row([
-                    block['id'],
-                    block['date'],
-                    block['uid'],
-                    block['size'],
-                    block['valid'],
-                    ])
-            print(tbl)
+            if self.machine_output:
+                self._ls_blocks_machine_output(blocks)
+            else:
+                self._ls_blocks_tbl_output(blocks)
         else:
             versions = Backy(self.path).ls()
-            tbl = PrettyTable()
-            # TODO: number of invalid blocks, used disk space, shared disk space
-            tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
-            for version in versions:
-                tbl.add_row([
-                    version['date'],
-                    version['name'],
-                    version['size'],
-                    version['size_bytes'],
-                    version['uid'],
-                    version['valid'],
-                    ])
-            print(tbl)
-
+            if self.machine_output:
+                self._ls_versions_machine_output(versions)
+            else:
+                self._ls_versions_tbl_output(versions)
 
     def cleanup(self):
         Backy(self.path).cleanup()
@@ -828,6 +871,8 @@ def main():
         '-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument(
         '-b', '--backupdir', default='.')
+    parser.add_argument(
+        '-m', '--machine-output', action='store_true', default=False)
 
     subparsers = parser.add_subparsers()
 
@@ -899,7 +944,7 @@ def main():
         console_level = logging.INFO
     init_logging(args.backupdir, console_level)
 
-    commands = Commands(args.backupdir)
+    commands = Commands(args.backupdir, args.machine_output)
     func = getattr(commands, args.func)
 
     # Pass over to function
@@ -907,6 +952,7 @@ def main():
     del func_args['func']
     del func_args['verbose']
     del func_args['backupdir']
+    del func_args['machine_output']
 
     try:
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
