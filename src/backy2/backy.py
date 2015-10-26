@@ -806,6 +806,7 @@ class Commands():
         print(' '.join(field_names))
         for block in blocks:
             print(' '.join(map(str, [
+                'block',
                 block['id'],
                 block['date'],
                 block['uid'],
@@ -835,6 +836,7 @@ class Commands():
         print(' '.join(field_names))
         for version in versions:
             print(' '.join(map(str, [
+                'version',
                 version['date'],
                 version['size'],
                 version['size_bytes'],
