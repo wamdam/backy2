@@ -2,3 +2,5 @@
   and don't write them to the disk. On restore, they should be rewritten as \0
   and deep_scrub should check the source against \0s.
 * Maybe add info to version what the orig filename was and warn if new one diffs
+* Write tests for 100% coverage
+* Remove dependency on sql
