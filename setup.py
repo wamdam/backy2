@@ -39,6 +39,7 @@ Topic :: System :: Archiving :: Backup
         'pytest-capturelog',
         'pytest-timeout',
         'PrettyTable==0.7.2',
+        'sqlalchemy==1.0.9',
         ],
     entry_points="""
         [console_scripts]

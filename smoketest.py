@@ -6,8 +6,6 @@ import random
 import json
 from backy2.backy import Backy
 from backy2.backy import hints_from_rbd_diff
-from backy2.backy import init_logging
-import logging
 
 kB = 1024
 MB = kB * 1024

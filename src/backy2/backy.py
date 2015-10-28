@@ -1,6 +1,14 @@
 # -*- encoding: utf-8 -*-
 
 from prettytable import PrettyTable
+from configparser import ConfigParser  # python 3.3
+from functools import partial
+from sqlalchemy import Column, Boolean, String, Integer, ForeignKey
+from sqlalchemy import func, distinct
+from sqlalchemy.types import DateTime
+from sqlalchemy.orm import sessionmaker
+import sqlalchemy
+from sqlalchemy.ext.declarative import declarative_base
 import argparse
 import datetime
 import fnmatch
@@ -21,6 +29,37 @@ logger = logging.getLogger(__name__)
 
 BLOCK_SIZE = 1024*4096  # 4MB
 HASH_FUNCTION = hashlib.sha512
+
+CFG = {
+    'DB': {
+        'type': 'sql',
+        'engine': 'sqlite:////tmp/backy.sqlite',
+        }
+    }
+
+Base = declarative_base()
+
+class ConfigException(Exception):
+    pass
+
+class Config(dict):
+    def __init__(self, base_config, conffile=None):
+        if conffile:
+            config = ConfigParser()
+            config.read(conffile)
+            sections = config.sections()
+            difference = set(sections).difference(base_config.keys())
+            if difference:
+                raise ConfigException('Unknown config section(s): {}'.format(', '.join(difference)))
+            for section in sections:
+                items = config.items(section)
+                _cfg = base_config[section]
+                for item in items:
+                    if item[0] not in _cfg:
+                        raise ConfigException('Unknown setting "{}" in section "{}".'.format(item[0], section))
+                    _cfg[item[0]] = item[1]
+        for key, value in base_config.items():
+            self[key] = value
 
 def init_logging(logdir, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
@@ -67,9 +106,8 @@ def makedirs(path):
 class MetaBackend():
     """ Holds meta data """
 
-    def __init__(self, path):
-        self.path = path
-
+    def __init__(self):
+        pass
 
     def set_version(self, version_name, size, size_bytes):
         """ Creates a new version with a given name.
@@ -113,11 +151,6 @@ class MetaBackend():
         """ Set blocks pointing to this block uid with the given checksum invalid.
         This happens, when a block is found invalid during read or scrub.
         """
-        raise NotImplementedError()
-
-
-    def get_block(self, block_uid):
-        """ Get a dict of a single block """
         raise NotImplementedError()
 
 
@@ -177,157 +210,124 @@ class DataBackend():
         pass
 
 
-class SQLiteBackend(MetaBackend):
-    """ Stores meta data in a sqlite database """
+class Version(Base):
+    __tablename__ = 'versions'
+    uid = Column(String(36), primary_key=True)
+    date = Column("date", DateTime , default=func.now(), nullable=False)
+    name = Column(String, nullable=False)
+    size = Column(Integer, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    valid = Column(Integer, nullable=False)
 
-    DBFILENAME = 'backy.sqlite'
+    def __repr__(self):
+       return "<Version(uid='%s', name='%s', date='%s')>" % (
+                            self.uid, self.name, self.date)
 
-    def __init__(self, path):
-        MetaBackend.__init__(self, path)
-        dbpath = os.path.join(self.path, self.DBFILENAME)
 
-        ## always make a db backup
-        #dbpath_bak = dbpath + '.' + self._now() + '.bak'
-        #if not os.path.exists(dbpath_bak):
-            #shutil.copyfile(dbpath, dbpath_bak)
+class Block(Base):
+    __tablename__ = 'blocks'
+    uid = Column(String(32), nullable=True, index=True)
+    version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, nullable=False)
+    date = Column("date", DateTime , default=func.now(), nullable=False)
+    checksum = Column(String(128), index=True, nullable=True)
+    size = Column(Integer, nullable=True)
+    valid = Column(Integer, nullable=False)
 
-        def dict_factory(cursor, row):
-            """ A row factory for sqlite3 which emulates a dict cursor. """
-            d = {}
-            for idx, col in enumerate(cursor.description):
-                d[col[0]] = row[idx]
-            return d
+    def __repr__(self):
+       return "<Block(id='%s', uid='%s', version_uid='%s')>" % (
+                            self.id, self.uid, self.version_uid)
 
-        self.conn = sqlite3.connect(dbpath)
-        self.conn.row_factory = dict_factory
-        self.cursor = self.conn.cursor()
-        self._create()
+
+class SQLBackend(MetaBackend):
+    """ Stores meta data in an sql database """
+
+    def __init__(self, engine):
+        MetaBackend.__init__(self)
+        engine = sqlalchemy.create_engine(engine)
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        self.session = Session()
 
 
     def _uid(self):
         return str(uuid.uuid1())
 
 
-    def _now(self):
-        """ Returns datetime as isoformat (ex. 2015-10-25T10:43:03.823777+00:00) """
-        return datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
-
-
-    def _create(self):
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS versions (
-             uid text,
-             date text,
-             name text,
-             size integer,
-             size_bytes integer,
-             valid integer,
-             PRIMARY KEY(uid)
-             )''')
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS blocks (
-             uid text,
-             version_uid text,
-             id integer,
-             date text,
-             checksum text,
-             size integer,
-             valid integer,
-             FOREIGN KEY(version_uid) REFERENCES versions(uid),
-             PRIMARY KEY(version_uid, id)
-             )''')
-        self.cursor.execute('''
-            CREATE INDEX IF NOT EXISTS block_uid on blocks(uid)
-            ''')
-        self.conn.commit()
+    def _commit(self):
+        self.session.commit()
 
 
     def set_version(self, version_name, size, size_bytes, valid):
         uid = self._uid()
-        now = self._now()
-        self.cursor.execute('''
-            INSERT OR REPLACE INTO versions (
-                uid,
-                date,
-                name,
-                size,
-                size_bytes,
-                valid
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            ''', (uid, now, version_name, size, size_bytes, valid))
-        self.conn.commit()
+        version = Version(
+            uid=uid,
+            name=version_name,
+            size=size,
+            size_bytes=size_bytes,
+            valid=valid,
+            )
+        self.session.add(version)
+        self.session.commit()
         return uid
 
 
     def set_version_invalid(self, uid):
-        self.cursor.execute('''
-            UPDATE versions SET valid=0 WHERE uid=?
-        ''', (uid,))
-        self.conn.commit()
+        version = self.get_version(uid)
+        version.valid = 0
+        self.session.commit()
         logger.info('Marked version invalid (UID {})'.format(
             uid,
             ))
 
 
     def set_version_valid(self, uid):
-        self.cursor.execute('''
-            UPDATE versions SET valid=1 WHERE uid = ?
-        ''', (uid,))
-        self.conn.commit()
+        version = self.get_version(uid)
+        version.valid = 1
+        self.session.commit()
         logger.debug('Marked version valid (UID {})'.format(
             uid,
             ))
 
 
     def get_version(self, uid):
-        self.cursor.execute('''
-            SELECT uid, date, name, size, size_bytes, valid FROM versions WHERE uid=?
-            ''', (uid,))
-        version = self.cursor.fetchone()
+        version = self.session.query(Version).filter_by(uid=uid).first()
         if version is None:
-            # not found
             raise KeyError('Version {} not found.'.format(uid))
         return version
 
 
     def get_versions(self):
-        self.cursor.execute('''
-            SELECT uid, date, name, size, size_bytes, valid FROM versions ORDER BY name asc, date asc
-            ''')
-        versions = self.cursor.fetchall()
-        return versions
+        return self.session.query(Version).order_by(Version.name, Version.date).all()
 
 
     def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True):
-        now = self._now()
         valid = 1 if valid else 0
-        self.cursor.execute('''
-            INSERT OR REPLACE INTO blocks (
-                uid,
-                version_uid,
-                id,
-                date,
-                checksum,
-                size,
-                valid
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (block_uid, version_uid, id, now, checksum, size, valid))
+        block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
+        if block:
+            block.uid = block_uid
+            block.checksum = checksum
+            block.size = size
+            block.valid = valid
+        else:
+            block = Block(
+                id=id,
+                version_uid=version_uid,
+                uid=block_uid,
+                checksum=checksum,
+                size=size,
+                valid=valid
+                )
+            self.session.add(block)
         if _commit:
-            self.conn.commit()
+            self.session.commit()
 
 
     def set_blocks_invalid(self, uid, checksum):
-        self.cursor.execute('''
-            SELECT DISTINCT(version_uid) FROM blocks WHERE
-                uid=? AND checksum=?
-            ''', (uid, checksum))
-        _affected_version_uids = self.cursor.fetchall()
-        affected_version_uids = [v['version_uid'] for v in _affected_version_uids]
-        self.cursor.execute('''
-            UPDATE blocks SET valid=0 WHERE
-                uid=? AND checksum=?
-            ''', (uid, checksum))
-        self.conn.commit()
+        _affected_version_uids = self.session.query(distinct(Block.version_uid)).filter_by(uid=uid, checksum=checksum).all()
+        affected_version_uids = [v[0] for v in _affected_version_uids]
+        self.session.query(Block).filter_by(uid=uid, checksum=checksum).update(valid=False)
+        self.session.commit()
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             uid,
             checksum,
@@ -338,64 +338,30 @@ class SQLiteBackend(MetaBackend):
         return affected_version_uids
 
 
-    def _commit(self):
-        self.conn.commit()
-
-
-    def get_block(self, block_uid):
-        self.cursor.execute('''
-            SELECT uid, version_uid, id, date, checksum, size, valid
-            FROM blocks WHERE uid=?
-            ''', (block_uid,))
-        block = self.cursor.fetchone()
-        if block is None:
-            # not found
-            raise KeyError('Block {} not found.'.format(block_uid))
-        return block
-
-
     def get_block_by_checksum(self, checksum):
-        self.cursor.execute('''
-            SELECT uid, version_uid, id, date, checksum, size, valid
-            FROM blocks WHERE checksum=? and valid=1
-            ''', (checksum,))
-        block = self.cursor.fetchone()
-        return block  # None if nothing found
+        return self.session.query(Block).filter_by(checksum=checksum).first()
 
 
     def get_blocks_by_version(self, version_uid):
-        self.cursor.execute('''
-            SELECT uid, version_uid, id, date, checksum, size, valid
-            FROM blocks
-            WHERE version_uid=? ORDER BY id ASC
-            ''', (version_uid,))
-        blocks = self.cursor.fetchall()
-        return blocks
+        return self.session.query(Block).filter_by(version_uid=version_uid).all()
 
 
     def rm_version(self, version_uid):
-        self.cursor.execute('''
-            SELECT COUNT(*) AS num_blocks FROM blocks WHERE version_uid=?
-            ''', (version_uid,))
-        num_blocks = self.cursor.fetchone()['num_blocks']
-        self.cursor.execute('''
-            DELETE FROM blocks WHERE version_uid=?
-            ''', (version_uid,))
-        self.cursor.execute('''
-            DELETE FROM versions WHERE uid=?
-            ''', (version_uid,))
-        self.conn.commit()
+        affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
+        num_blocks = affected_blocks.count()
+        affected_blocks.delete()
+        self.session.query(Version).filter_by(uid=version_uid).delete()
+        self.session.commit()
         return num_blocks
 
 
     def get_all_block_uids(self):
-        self.cursor.execute('''SELECT distinct(uid) FROM blocks''')
-        rows = self.cursor.fetchall()
-        return [b['uid'] for b in rows]
+        rows = self.session.query(distinct(Block.uid)).all()
+        return [b[0] for b in rows]
 
 
     def close(self):
-        self.conn.close()
+        self.session.close()
 
 
 class FileBackend(DataBackend):
@@ -469,12 +435,12 @@ class Backy():
     """
     """
 
-    def __init__(self, path, block_size=BLOCK_SIZE):
+    def __init__(self, path, datapath='data', meta_backend=None, data_backend=None, block_size=BLOCK_SIZE):
         self.path = path
-        self.datapath = os.path.join(self.path, 'data')
-        makedirs(self.datapath)
-        self.meta_backend = SQLiteBackend(self.datapath)
-        self.data_backend = FileBackend(self.datapath)
+        real_datapath = os.path.join(self.path, datapath)
+        makedirs(real_datapath)
+        self.meta_backend = meta_backend if meta_backend else SQLBackend('sqlite:///{}/backy.sqlite'.format(real_datapath))
+        self.data_backend = data_backend if data_backend else FileBackend(real_datapath)
         self.block_size = block_size
 
 
@@ -485,7 +451,7 @@ class Backy():
         """
         if from_version_uid:
             old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
-            if not old_version['valid']:
+            if not old_version.valid:
                 raise RuntimeError('You cannot base on an invalid version.')
             old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
         else:
@@ -503,11 +469,11 @@ class Backy():
                     block_size = self.block_size
                     valid = 1
                 else:
-                    assert old_block['id'] == id
-                    uid = old_block['uid']
-                    checksum = old_block['checksum']
-                    block_size = old_block['size']
-                    valid = old_block['valid']
+                    assert old_block.id == id
+                    uid = old_block.uid
+                    checksum = old_block.checksum
+                    block_size = old_block.size
+                    valid = old_block.valid
             else:
                 uid = None
                 checksum = None
@@ -560,48 +526,48 @@ class Backy():
 
         state = True
         for block in blocks:
-            if block['uid']:
+            if block.uid:
                 if percentile < 100 and random.randint(1, 100) > percentile:
                     logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                        block['id'],
-                        block['uid'],
+                        block.id,
+                        block.uid,
                         percentile,
                         ))
                     continue
-                data = self.data_backend.read(block['uid'])
-                assert len(data) == block['size']
+                data = self.data_backend.read(block.uid)
+                assert len(data) == block.size
                 data_checksum = HASH_FUNCTION(data).hexdigest()
-                if data_checksum != block['checksum']:
+                if data_checksum != block.checksum:
                     logger.error('Checksum mismatch during scrub for block '
                         '{} (UID {}) (is: {} should-be: {}).'.format(
-                            block['id'],
-                            block['uid'],
+                            block.id,
+                            block.uid,
                             data_checksum,
-                            block['checksum'],
+                            block.checksum,
                             ))
-                    self.meta_backend.set_blocks_invalid(block['uid'], block['checksum'])
+                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                     state = False
                 else:
                     if source_file:
-                        source_file.seek(block['id'] * self.block_size)
-                        source_data = source_file.read(block['size'])
+                        source_file.seek(block.id * self.block_size)
+                        source_data = source_file.read(block.size)
                         if source_data != data:
                             logger.error('Source data has changed for block {} '
                                 '(UID {}) (is: {} should-be: {}'.format(
-                                    block['id'],
-                                    block['uid'],
+                                    block.id,
+                                    block.uid,
                                     HASH_FUNCTION(source_data).hexdigest(),
                                     data_checksum,
                                     ))
                             state = False
                     logger.debug('Scrub of block {} (UID {}) ok.'.format(
-                        block['id'],
-                        block['uid'],
+                        block.id,
+                        block.uid,
                         ))
             else:
                 logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
-                    block['id'],
-                    block['uid'],
+                    block.id,
+                    block.uid,
                     ))
         return state
 
@@ -611,43 +577,43 @@ class Backy():
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         with open(target, 'wb') as f:
             for block in blocks:
-                f.seek(block['id'] * self.block_size)
-                if block['uid']:
-                    data = self.data_backend.read(block['uid'])
-                    assert len(data) == block['size']
+                f.seek(block.id * self.block_size)
+                if block.uid:
+                    data = self.data_backend.read(block.uid)
+                    assert len(data) == block.size
                     data_checksum = HASH_FUNCTION(data).hexdigest()
                     written = f.write(data)
                     assert written == len(data)
-                    if data_checksum != block['checksum']:
+                    if data_checksum != block.checksum:
                         logger.error('Checksum mismatch during restore for block '
                             '{} (is: {} should-be: {}, block-valid: {}). Block '
                             'restored is invalid. Continuing.'.format(
-                                block['id'],
+                                block.id,
                                 data_checksum,
-                                block['checksum'],
-                                block['valid'],
+                                block.checksum,
+                                block.valid,
                                 ))
-                        self.meta_backend.set_blocks_invalid(block['uid'], block['checksum'])
+                        self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                     else:
                         logger.debug('Restored block {} successfully ({} bytes).'.format(
-                            block['id'],
-                            block['size'],
+                            block.id,
+                            block.size,
                             ))
                 elif not sparse:
-                    f.write(b'\0'*block['size'])
+                    f.write(b'\0'*block.size)
                     logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
-                        block['id'],
-                        block['size'],
+                        block.id,
+                        block.size,
                         ))
                 else:
                     logger.debug('Ignored sparse block {}.'.format(
-                        block['id'],
+                        block.id,
                         ))
-            if f.tell() != version['size_bytes']:
+            if f.tell() != version.size_bytes:
                 # write last byte with \0, because this can only happen when
                 # the last block was left over in sparse mode.
                 last_block = blocks[-1]
-                f.seek(last_block['id'] * self.block_size + last_block['size'] - 1)
+                f.seek(last_block.id * self.block_size + last_block.size - 1)
                 f.write(b'\0')
 
 
@@ -700,35 +666,35 @@ class Backy():
             blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
             for block in blocks:
-                if block['id'] in read_blocks or not block['valid']:
-                    source_file.seek(block['id'] * self.block_size)
+                if block.id in read_blocks or not block.valid:
+                    source_file.seek(block.id * self.block_size)
                     data = source_file.read(self.block_size)
                     if not data:
                         raise RuntimeError('EOF reached on source when there should be data.')
 
                     data_checksum = HASH_FUNCTION(data).hexdigest()
-                    if not block['valid']:
-                        logger.debug('Re-read block (bacause it was invalid) {} (checksum {})'.format(block['id'], data_checksum))
+                    if not block.valid:
+                        logger.debug('Re-read block (bacause it was invalid) {} (checksum {})'.format(block.id, data_checksum))
                     else:
-                        logger.debug('Read block {} (checksum {})'.format(block['id'], data_checksum))
+                        logger.debug('Read block {} (checksum {})'.format(block.id, data_checksum))
 
                     # dedup
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
-                    if existing_block and existing_block['size'] == len(data):
-                        self.meta_backend.set_block(block['id'], version_uid, existing_block['uid'], data_checksum, len(data), valid=1)
+                    if existing_block and existing_block.size == len(data):
+                        self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1)
                         logger.debug('Found existing block for id {} with uid {})'.format
-                                (block['id'], existing_block['uid']))
+                                (block.id, existing_block.uid))
                     else:
                         block_uid = self.data_backend.save(data)
-                        self.meta_backend.set_block(block['id'], version_uid, block_uid, data_checksum, len(data), valid=1)
-                        logger.debug('Wrote block {} (checksum {})'.format(block['id'], data_checksum))
-                elif block['id'] in sparse_blocks:
+                        self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1)
+                        logger.debug('Wrote block {} (checksum {})'.format(block.id, data_checksum))
+                elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
-                    self.meta_backend.set_block(block['id'], version_uid, None, None, block['size'], valid=1)
-                    logger.debug('Skipping block (sparse) {}'.format(block['id']))
+                    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1)
+                    logger.debug('Skipping block (sparse) {}'.format(block.id))
                 else:
-                    logger.debug('Keeping block {}'.format(block['id']))
+                    logger.debug('Keeping block {}'.format(block.id))
         self.meta_backend.set_version_valid(version_uid)
         logger.info('New version: {}'.format(version_uid))
         return version_uid
@@ -754,13 +720,19 @@ class Backy():
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, path, machine_output):
+    def __init__(self, path, machine_output, config):
         self.path = path
         self.machine_output = machine_output
+        self.config = config
+
+        if config['DB']['type'] == 'sql':
+            engine = config['DB']['engine']
+            meta_backend = SQLBackend(engine)
+        self.backy = partial(Backy, meta_backend=meta_backend)
 
 
     def backup(self, name, source, rbd, from_version):
-        backy = Backy(self.path)
+        backy = self.backy(self.path)
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
@@ -769,19 +741,19 @@ class Commands():
 
 
     def restore(self, version_uid, target, sparse):
-        backy = Backy(self.path)
+        backy = self.backy(self.path)
         backy.restore(version_uid, target, sparse)
 
 
     def rm(self, version_uid):
-        backy = Backy(self.path)
+        backy = self.backy(self.path)
         backy.rm(version_uid)
 
 
     def scrub(self, version_uid, source, percentile):
         if percentile:
             percentile = int(percentile)
-        backy = Backy(self.path)
+        backy = self.backy(self.path)
         state = backy.scrub(version_uid, source, percentile)
         if not state:
             exit(1)
@@ -792,11 +764,11 @@ class Commands():
         tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
         for block in blocks:
             tbl.add_row([
-                block['id'],
-                block['date'],
-                block['uid'],
-                block['size'],
-                block['valid'],
+                block.id,
+                block.date,
+                block.uid,
+                block.size,
+                int(block.valid),
                 ])
         print(tbl)
 
@@ -807,11 +779,11 @@ class Commands():
         for block in blocks:
             print(' '.join(map(str, [
                 'block',
-                block['id'],
-                block['date'],
-                block['uid'],
-                block['size'],
-                block['valid'],
+                block.id,
+                block.date,
+                block.uid,
+                block.size,
+                int(block.valid),
                 ])))
 
 
@@ -821,12 +793,12 @@ class Commands():
         tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
         for version in versions:
             tbl.add_row([
-                version['date'],
-                version['name'],
-                version['size'],
-                version['size_bytes'],
-                version['uid'],
-                version['valid'],
+                version.date,
+                version.name,
+                version.size,
+                version.size_bytes,
+                version.uid,
+                int(version.valid),
                 ])
         print(tbl)
 
@@ -837,31 +809,31 @@ class Commands():
         for version in versions:
             print(' '.join(map(str, [
                 'version',
-                version['date'],
-                version['size'],
-                version['size_bytes'],
-                version['uid'],
-                version['valid'],
-                version['name'],
+                version.date,
+                version.name,
+                version.size,
+                version.size_bytes,
+                version.uid,
+                int(version.valid),
                 ])))
 
 
     def ls(self, version_uid):
         if version_uid:
-            blocks = Backy(self.path).ls_version(version_uid)
+            blocks = self.backy(self.path).ls_version(version_uid)
             if self.machine_output:
                 self._ls_blocks_machine_output(blocks)
             else:
                 self._ls_blocks_tbl_output(blocks)
         else:
-            versions = Backy(self.path).ls()
+            versions = self.backy(self.path).ls()
             if self.machine_output:
                 self._ls_versions_machine_output(versions)
             else:
                 self._ls_versions_tbl_output(versions)
 
     def cleanup(self):
-        Backy(self.path).cleanup()
+        self.backy(self.path).cleanup()
 
 
 def main():
@@ -938,6 +910,29 @@ def main():
         parser.print_usage()
         sys.exit(0)
 
+    here = os.path.dirname(os.path.abspath(__file__))
+    conffilename = 'backy.cfg'
+    conffiles = [
+        os.path.join(args.backupdir, conffilename),
+        os.path.join('/etc', conffilename),
+        os.path.join('/etc', 'backy', conffilename),
+        os.path.join(here, conffilename),
+        os.path.join(here, '..', conffilename),
+        os.path.join(here, '..', '..', conffilename),
+        os.path.join(here, '..', '..', '..', conffilename),
+        ]
+    for conffile in conffiles:
+        if args.verbose:
+            print("Looking for {}... ".format(conffile), end="")
+        if os.path.exists(conffile):
+            if args.verbose:
+                print("Found.")
+            config = Config(CFG, conffile)
+            break
+        else:
+            if args.verbose:
+                print("")
+
     if args.verbose:
         console_level = logging.DEBUG
     #elif args.func == 'scheduler':
@@ -946,7 +941,7 @@ def main():
         console_level = logging.INFO
     init_logging(args.backupdir, console_level)
 
-    commands = Commands(args.backupdir, args.machine_output)
+    commands = Commands(args.backupdir, args.machine_output, config)
     func = getattr(commands, args.func)
 
     # Pass over to function
