@@ -83,30 +83,30 @@ def test_FileBackend_save_read(test_path):
     backend.close()
 
 
-def test_SQLiteBackend_set_version(test_path):
-    backend = backy2.backy.SQLiteBackend(test_path)
+def test_metabackend_set_version(test_path):
+    backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     name = 'backup-mysystem1-20150110140015'
     uid = backend.set_version(name, 10, 5000, 1)
     assert(uid)
     version = backend.get_version(uid)
-    assert version['name'] == name
-    assert version['size'] == 10
-    assert version['size_bytes'] == 5000
-    assert version['uid'] == uid
-    assert version['valid'] == 1
+    assert version.name == name
+    assert version.size == 10
+    assert version.size_bytes == 5000
+    assert version.uid == uid
+    assert version.valid == 1
     backend.close()
 
 
-def test_SQLiteBackend_version_not_found(test_path):
-    backend = backy2.backy.SQLiteBackend(test_path)
+def test_metabackend_version_not_found(test_path):
+    backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     with pytest.raises(KeyError) as e:
         backend.get_version('123')
     assert str(e.exconly()) == "KeyError: 'Version 123 not found.'"
     backend.close()
 
 
-def test_SQLiteBackend_block(test_path):
-    backend = backy2.backy.SQLiteBackend(test_path)
+def test_metabackend_block(test_path):
+    backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     name = 'backup-mysystem1-20150110140015'
     block_uid = 'asdfgh'
     checksum = '1234567890'
@@ -117,18 +117,18 @@ def test_SQLiteBackend_block(test_path):
 
     block = backend.get_block(block_uid)
 
-    assert block['checksum'] == checksum
-    assert block['uid'] == block_uid
-    assert block['id'] == id
-    assert block['size'] == size
-    assert block['version_uid'] == version_uid
+    assert block.checksum == checksum
+    assert block.uid == block_uid
+    assert block.id == id
+    assert block.size == size
+    assert block.version_uid == version_uid
 
     backend.close()
 
 
-def test_SQLiteBackend_blocks_by_version(test_path):
+def test_metabackend_blocks_by_version(test_path):
     TESTLEN = 10
-    backend = backy2.backy.SQLiteBackend(test_path)
+    backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     version_name = 'backup-mysystem1-20150110140015'
     version_uid = backend.set_version(version_name, TESTLEN, 5000, 1)
     block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
@@ -144,11 +144,11 @@ def test_SQLiteBackend_blocks_by_version(test_path):
     # blocks are always ordered by id
     for id in range(TESTLEN):
         block = blocks[id]
-        assert block['id'] == id
-        assert block['checksum'] == checksums[id]
-        assert block['uid'] == block_uids[id]
-        assert block['size'] == size
-        assert block['version_uid'] == version_uid
+        assert block.id == id
+        assert block.checksum == checksums[id]
+        assert block.uid == block_uids[id]
+        assert block.size == size
+        assert block.version_uid == version_uid
 
     backend.close()
 

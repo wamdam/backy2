@@ -159,6 +159,11 @@ class MetaBackend():
         raise NotImplementedError()
 
 
+    def get_block(self, uid):
+        """ Get a block by its uid """
+        raise NotImplementedError()
+
+
     def get_blocks_by_version(self, version_uid):
         """ Returns an ordered (by id asc) list of blocks for a version uid """
         raise NotImplementedError()
@@ -336,6 +341,10 @@ class SQLBackend(MetaBackend):
         for version_uid in affected_version_uids:
             self.set_version_invalid(version_uid)
         return affected_version_uids
+
+
+    def get_block(self, uid):
+        return self.session.query(Block).filter_by(uid=uid).first()
 
 
     def get_block_by_checksum(self, checksum):
