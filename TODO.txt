@@ -4,3 +4,5 @@
 * Maybe add info to version what the orig filename was and warn if new one diffs
 * Write tests for 100% coverage
 * Remove dependency on sql
+* Add tests for anything where scrub marks blocks as invalid (source changed,
+  bitrod in backup, ...
