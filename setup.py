@@ -40,6 +40,7 @@ Topic :: System :: Archiving :: Backup
         'pytest-timeout',
         'PrettyTable==0.7.2',
         'sqlalchemy==1.0.9',
+        'psycopg2==2.6.1',
         ],
     entry_points="""
         [console_scripts]

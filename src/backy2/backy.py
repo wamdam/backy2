@@ -3,7 +3,7 @@
 from prettytable import PrettyTable
 from configparser import ConfigParser  # python 3.3
 from functools import partial
-from sqlalchemy import Column, Boolean, String, Integer, ForeignKey
+from sqlalchemy import Column, Boolean, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
 from sqlalchemy.types import DateTime
 from sqlalchemy.orm import sessionmaker
@@ -220,8 +220,8 @@ class Version(Base):
     uid = Column(String(36), primary_key=True)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     name = Column(String, nullable=False)
-    size = Column(Integer, nullable=False)
-    size_bytes = Column(Integer, nullable=False)
+    size = Column(BigInteger, nullable=False)
+    size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
 
     def __repr__(self):
@@ -236,7 +236,7 @@ class Block(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     checksum = Column(String(128), index=True, nullable=True)
-    size = Column(Integer, nullable=True)
+    size = Column(BigInteger, nullable=True)
     valid = Column(Integer, nullable=False)
 
     def __repr__(self):
