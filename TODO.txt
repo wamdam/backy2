@@ -6,3 +6,10 @@
 * Remove dependency on sql
 * Add tests for anything where scrub marks blocks as invalid (source changed,
   bitrod in backup, ...
+* Make configurable if dedup should be done live
+* Add a dedup command for later dedups
+* Make writer thread to write while reading
+* Check if sha512 is a performance bottleneck
+* Check if it's faster to search for block's checksums in bulk than one on one.
+  Maybe live-dedup becomes faster that way
+* Add more statistics
