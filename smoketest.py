@@ -4,7 +4,7 @@ import os
 import shutil
 import random
 import json
-from backy2.backy import Backy
+from backy2.backy import Backy, SQLBackend, FileBackend
 from backy2.backy import hints_from_rbd_diff
 
 kB = 1024
@@ -65,7 +65,11 @@ with TestPath() as testpath:
         open(os.path.join(testpath, 'data'), 'r+b').truncate(size)
         print('  Applied {} changes, size is {}.'.format(len(hints), size))
         open(os.path.join(testpath, 'hints'), 'w').write(json.dumps(hints))
-        backy = Backy(os.path.join(testpath, 'backy'), block_size=4096)
+
+        # create backy
+        meta_backend = SQLBackend('sqlite:///'+testpath+'/backy.sqlite')
+        data_backend = FileBackend(path=testpath)
+        backy = Backy(meta_backend=meta_backend, data_backend=data_backend, block_size=4096)
         version_uid = backy.backup(
             'data-backup',
             os.path.join(testpath, 'data'),

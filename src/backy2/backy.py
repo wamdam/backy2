@@ -29,10 +29,17 @@ BLOCK_SIZE = 1024*4096  # 4MB
 HASH_FUNCTION = hashlib.sha512
 
 CFG = {
-    'DB': {
+    'DEFAULTS': {
+        'logfile': './backy.log',
+        },
+    'MetaBackend': {
         'type': 'sql',
         'engine': 'sqlite:////tmp/backy.sqlite',
-        }
+        },
+    'DataBackend': {
+        'type': 'files',
+        'path': '.',
+        },
     }
 
 Base = declarative_base()
@@ -59,13 +66,13 @@ class Config(dict):
         for key, value in base_config.items():
             self[key] = value
 
-def init_logging(logdir, console_level):  # pragma: no cover
+def init_logging(logfile, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s')),
     console.setLevel(console_level)
     #logger.addHandler(console)
 
-    logfile = logging.FileHandler(os.path.join(logdir, 'backy.log'))
+    logfile = logging.FileHandler(logfile)
     logfile.setLevel(logging.INFO)
     logfile.setFormatter(logging.Formatter('%(asctime)s [%(process)d] %(message)s')),
     #logger.addHandler(logfile)
@@ -442,12 +449,9 @@ class Backy():
     """
     """
 
-    def __init__(self, path, datapath='data', meta_backend=None, data_backend=None, block_size=BLOCK_SIZE):
-        self.path = path
-        real_datapath = os.path.join(self.path, datapath)
-        makedirs(real_datapath)
-        self.meta_backend = meta_backend if meta_backend else SQLBackend('sqlite:///{}/backy.sqlite'.format(real_datapath))
-        self.data_backend = data_backend if data_backend else FileBackend(real_datapath)
+    def __init__(self, meta_backend, data_backend, block_size=BLOCK_SIZE):
+        self.meta_backend = meta_backend
+        self.data_backend = data_backend
         self.block_size = block_size
 
 
@@ -727,19 +731,26 @@ class Backy():
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, path, machine_output, config):
-        self.path = path
+    def __init__(self, machine_output, config):
         self.machine_output = machine_output
         self.config = config
 
-        if config['DB']['type'] == 'sql':
-            engine = config['DB']['engine']
+        # configure meta backend
+        if config['MetaBackend']['type'] == 'sql':
+            engine = config['MetaBackend']['engine']
             meta_backend = SQLBackend(engine)
-        self.backy = partial(Backy, meta_backend=meta_backend)
+        else:
+            raise NotImplementedError('MetaBackend type {} unsupported.'.format(config['MetaBackend']['type']))
+
+        # configure file backend
+        if config['DataBackend']['type'] == 'files':
+            data_backend = FileBackend(config['DataBackend']['path'])
+
+        self.backy = partial(Backy, meta_backend=meta_backend, data_backend=data_backend)
 
 
     def backup(self, name, source, rbd, from_version):
-        backy = self.backy(self.path)
+        backy = self.backy()
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
@@ -748,19 +759,19 @@ class Commands():
 
 
     def restore(self, version_uid, target, sparse):
-        backy = self.backy(self.path)
+        backy = self.backy()
         backy.restore(version_uid, target, sparse)
 
 
     def rm(self, version_uid):
-        backy = self.backy(self.path)
+        backy = self.backy()
         backy.rm(version_uid)
 
 
     def scrub(self, version_uid, source, percentile):
         if percentile:
             percentile = int(percentile)
-        backy = self.backy(self.path)
+        backy = self.backy()
         state = backy.scrub(version_uid, source, percentile)
         if not state:
             exit(1)
@@ -827,20 +838,20 @@ class Commands():
 
     def ls(self, version_uid):
         if version_uid:
-            blocks = self.backy(self.path).ls_version(version_uid)
+            blocks = self.backy().ls_version(version_uid)
             if self.machine_output:
                 self._ls_blocks_machine_output(blocks)
             else:
                 self._ls_blocks_tbl_output(blocks)
         else:
-            versions = self.backy(self.path).ls()
+            versions = self.backy().ls()
             if self.machine_output:
                 self._ls_versions_machine_output(versions)
             else:
                 self._ls_versions_tbl_output(versions)
 
     def cleanup(self):
-        self.backy(self.path).cleanup()
+        self.backy().cleanup()
 
 
 def main():
@@ -850,8 +861,6 @@ def main():
 
     parser.add_argument(
         '-v', '--verbose', action='store_true', help='verbose output')
-    parser.add_argument(
-        '-b', '--backupdir', default='.')
     parser.add_argument(
         '-m', '--machine-output', action='store_true', default=False)
 
@@ -920,7 +929,6 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     conffilename = 'backy.cfg'
     conffiles = [
-        os.path.join(args.backupdir, conffilename),
         os.path.join('/etc', conffilename),
         os.path.join('/etc', 'backy', conffilename),
         os.path.join(here, conffilename),
@@ -946,16 +954,15 @@ def main():
         #console_level = logging.INFO
     else:
         console_level = logging.INFO
-    init_logging(args.backupdir, console_level)
+    init_logging(config['DEFAULTS']['logfile'], console_level)
 
-    commands = Commands(args.backupdir, args.machine_output, config)
+    commands = Commands(args.machine_output, config)
     func = getattr(commands, args.func)
 
     # Pass over to function
     func_args = dict(args._get_kwargs())
     del func_args['func']
     del func_args['verbose']
-    del func_args['backupdir']
     del func_args['machine_output']
 
     try:
