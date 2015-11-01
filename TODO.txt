@@ -13,3 +13,5 @@
 * Check if it's faster to search for block's checksums in bulk than one on one.
   Maybe live-dedup becomes faster that way
 * Add more statistics
+* get_all_blob_uids might be hard to do on a large nfs volume or some s3 compat.
+  space. So find something better.
