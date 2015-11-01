@@ -3,14 +3,13 @@
 from prettytable import PrettyTable
 from configparser import ConfigParser  # python 3.3
 from functools import partial
-from sqlalchemy import Column, Boolean, String, Integer, BigInteger, ForeignKey
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
 from sqlalchemy.types import DateTime
 from sqlalchemy.orm import sessionmaker
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
 import argparse
-import datetime
 import fnmatch
 import fileinput
 import math
@@ -18,7 +17,6 @@ import hashlib
 import logging
 import json
 import random
-import sqlite3
 #import shutil
 import uuid
 import os
