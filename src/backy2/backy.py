@@ -411,13 +411,15 @@ class FileBackend(DataBackend):
     def save(self, data):
         uid = self._uid()
         path = os.path.join(self.path, self._path(uid))
-        makedirs(path)
         filename = self._filename(uid)
-        if os.path.exists(filename):
-            raise ValueError('Found a file {} where this is impossible.'.format(filename))
-        with open(filename, 'wb') as f:
-            r = f.write(data)
-            assert r == len(data)
+        try:
+            with open(filename, 'wb') as f:
+                r = f.write(data)
+        except FileNotFoundError:
+            makedirs(path)
+            with open(filename, 'wb') as f:
+                r = f.write(data)
+        assert r == len(data)
         return uid
 
 
