@@ -1,17 +1,25 @@
+Backlog:
+
 * Possibly detect chunks full of \0 and give them special treatment in the index
   and don't write them to the disk. On restore, they should be rewritten as \0
   and deep_scrub should check the source against \0s.
 * Maybe add info to version what the orig filename was and warn if new one diffs
 * Write tests for 100% coverage
-* Remove dependency on sql
-* Add tests for anything where scrub marks blocks as invalid (source changed,
-  bitrod in backup, ...
-* Make configurable if dedup should be done live
+* Make configurable if dedup should be done live (takes <0.01s per block on psql)
 * Add a dedup command for later dedups
-* Make writer thread to write while reading
+* Remove dependency on sql
 * Check if sha512 is a performance bottleneck
 * Check if it's faster to search for block's checksums in bulk than one on one.
   Maybe live-dedup becomes faster that way
 * Add more statistics
 * get_all_blob_uids might be hard to do on a large nfs volume or some s3 compat.
   space. So find something better.
+* Add tests for anything where scrub marks blocks as invalid (source changed,
+  bitrod in backup, ...
+* write LargeFileBackend with 100GB sparse files and store blocks into them.
+  This should work around the nfs many files bottleneck
+
+Next:
+
+* Make writer thread to write while reading
+
