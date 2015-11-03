@@ -9,6 +9,9 @@ from sqlalchemy.types import DateTime
 from sqlalchemy.orm import sessionmaker
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
+import contextlib
+import errno
+import time
 import argparse
 import fnmatch
 import fileinput
@@ -17,6 +20,7 @@ import hashlib
 import logging
 import json
 import random
+import struct
 #import shutil
 import uuid
 import os
@@ -25,7 +29,8 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-BLOCK_SIZE = 1024*4096  # 4MB
+BLOCK_SIZE = 1024 * 4096  # 4MB
+LF_SIZE = 1024 * 1024 * 4096  # 4GB
 HASH_FUNCTION = hashlib.sha512
 
 CFG = {
@@ -39,6 +44,7 @@ CFG = {
     'DataBackend': {
         'type': 'files',
         'path': '.',
+        'additional_read_paths': '',
         },
     }
 
@@ -65,6 +71,28 @@ class Config(dict):
                     _cfg[item[0]] = item[1]
         for key, value in base_config.items():
             self[key] = value
+
+
+@contextlib.contextmanager
+def flock(path, wait_delay=.1, blocking=True):
+    """ locks a given path as a lockfile. Waits until lock is released
+    except blocking is False, then it raises when a lock exists.
+    """
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+        except OSError as e:
+            if e.errno != errno.EEXIST or not blocking:
+                raise
+            time.sleep(wait_delay)
+            continue
+        else:
+            break
+    try:
+        yield fd
+    finally:
+        os.unlink(path)
+
 
 def init_logging(logfile, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
@@ -113,6 +141,12 @@ class MetaBackend():
 
     def __init__(self):
         pass
+
+
+    @contextlib.contextmanager
+    def open(self):
+        raise NotImplementedError()
+
 
     def set_version(self, version_name, size, size_bytes):
         """ Creates a new version with a given name.
@@ -216,6 +250,12 @@ class DataBackend():
         raise NotImplementedError()
 
 
+    @contextlib.contextmanager
+    def open(self):
+        yield self
+        self.close()
+
+
     def close(self):
         pass
 
@@ -254,10 +294,17 @@ class SQLBackend(MetaBackend):
 
     def __init__(self, engine):
         MetaBackend.__init__(self)
-        engine = sqlalchemy.create_engine(engine)
+        self.engine = engine
+
+
+    @contextlib.contextmanager
+    def open(self):
+        engine = sqlalchemy.create_engine(self.engine)
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         self.session = Session()
+        yield self
+        self.close()
 
 
     def _uid(self):
@@ -408,6 +455,12 @@ class FileBackend(DataBackend):
         return os.path.join(path, uid + self.SUFFIX)
 
 
+    @contextlib.contextmanager
+    def open(self):
+        yield self
+        self.close()
+
+
     def save(self, data):
         uid = self._uid()
         path = os.path.join(self.path, self._path(uid))
@@ -444,6 +497,179 @@ class FileBackend(DataBackend):
         return matches
 
 
+class LargeFileBackend():
+    """ Holds BLOBs, never overwrites, stores in large files
+    Also holds *all* largefiles open at once and locks them.
+    Think about your ulimit open files (usually 1024) and the lf_size.
+    If your Backup is max. 4TB (including history), then
+    lf_size = 4GB
+    open_files = 1000
+    ---
+    makes ~4TB maximum backup space before running into ulimit.
+    For bigger backups raise open files and lf_size.
+    """
+
+    def __init__(self, path, additional_read_paths, block_size=BLOCK_SIZE, lf_size=LF_SIZE):
+        """
+        path is a string
+        additional_read_paths is a list of strings
+        """
+        self.path = path
+        self.additional_read_paths = additional_read_paths
+        self.block_size = block_size
+        self.lf_size = lf_size
+        self.index = {}  # key=uid, values = (lf, block, uid, size)
+        self.free_blocks = []  # values = (lf, block, uid, size)
+        self.lf_num_blocks = {}
+        self.lfs = []
+
+
+    def _uid(self):
+        # a uuid always starts with the same bytes, so let's widen this
+        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
+
+
+    def _files(self):
+        files = []
+        for filename in fnmatch.filter(os.listdir(self.path), '*.lf'):
+            files.append((os.path.join(self.path, filename), 'r+b'))
+        for path in self.additional_read_paths:
+            for filename in fnmatch.filter(os.listdir(path), '*.lf'):
+                files.append((os.path.join(self.path, filename), 'r'))
+        return files
+
+
+    def _get_lf_num_blocks(self, lf):
+        if lf.name in self.lf_num_blocks:
+            return self.lf_num_blocks[lf.name]
+
+        lf.seek(-16, 2)  # -16 bytes from the end
+        num_blocks = int(lf.read(16).rstrip(b'\0'))
+        self.lf_num_blocks[lf.name] = num_blocks
+        return num_blocks
+
+
+    def _read_index(self, lf):
+        """ Index is after the last block, so files will actually be a bit
+        larger than LF_SIZE.
+        For every block in LF_SIZE/BLOCK_SIZE, the following fixed-width structure
+        is stored ([name]<size>):
+        [uid]<32>[size]<10>
+        s = struct.Struct('32s 10s')
+        That means, that the format supports up to 10**10-1 big blocks.
+
+        The last 16 bytes are for the number of contained blocks.
+        """
+        num_blocks = self._get_lf_num_blocks(lf)
+        # sanity check
+        size = num_blocks * self.block_size + 42 * num_blocks + 16
+        pos = lf.seek(0, 2)  # to the end
+        if pos != size:
+            raise RuntimeError('Defect largefile: {} (size should be {} but is {})'.format(lf.name, size, pos))
+        lf.seek(self.block_size * num_blocks)
+        data = lf.read(num_blocks * 42)  # 32 for uid + 10 for size
+        if len(data) != num_blocks * 42:
+            raise RuntimeError('Defect largefile: {} (incomplete index)'.format(lf.name))
+        s = struct.Struct('32s 10s')
+        for block, entry in enumerate([data[i:i+42] for i in range(0, len(data), 42)]):
+            _uid, _size = s.unpack_from(entry)
+            uid = _uid.rstrip(b'\0')
+            size = int(_size.rstrip(b'\0'))
+            self.index[uid] = (lf, block, uid, size)
+            if size == 0 and lf.writable():
+                self.free_blocks.append((lf, block, uid, size))
+
+
+    def _set_block(self, lf, block, uid, size):
+        num_blocks = self._get_lf_num_blocks(lf)
+        lf.seek(self.block_size * (num_blocks + 1) + block * 42)
+        s = struct.Struct('32s 10s')
+        data = s.pack(uid.encode("ascii"), str(size).encode("ascii"))
+        lf.write(data)
+        self.index[uid] = (lf, block, uid, size)
+
+
+    @contextlib.contextmanager
+    def open(self):
+        """ Opens write- and readonly files """
+        self.lfs = []
+        for path, mode in self._files():
+            self.lfs.append(open(path, mode))
+            try:
+                flock(path+'.lock', blocking=False)
+            except IOError:
+                raise
+            logger.debug('Opened and locked {}'.format(path))
+        for lf in self.lfs:
+            self._read_index(lf)
+        yield self
+        self.close()
+
+
+    def _new_lf(self):
+        uid = str(uuid.uuid1())
+        path = os.path.join(self.path, uid + '.lf')
+        with open(path, 'wb') as f:
+            num_blocks = math.floor(self.lf_size / self.block_size)
+            f.seek(self.block_size * num_blocks)
+            s = struct.Struct('32s 10s')
+            for block in range(num_blocks):
+                data = s.pack(b'', b'0')
+                f.write(data)
+            sb = struct.Struct('16s')
+            data = sb.pack(str(num_blocks).encode("ascii"))
+            f.write(data)
+        lf = open(path, 'r+b')
+        self.lfs.append(lf)
+        self._read_index(lf)
+
+
+    def _get_free_block(self):
+        if len(self.free_blocks):
+            return self.free_blocks.pop()
+        else:
+            self._new_lf()
+            return self.free_blocks.pop()
+
+
+    def save(self, data):
+        """ Saves data, returns unique ID """
+        assert len(data) > 0  # we will not save or read 0 byte data
+        lf, block, _uid, size = self._get_free_block()
+        lf.seek(self.block_size * block)
+        r = lf.write(data)
+        if r != len(data):
+            raise RuntimeError("Unable to write block. Maybe disk full?")
+        uid = self._uid()
+        self._set_block(lf, block, uid, len(data))
+        return uid
+
+
+    def read(self, uid):
+        """ Returns b'<data>' or raises FileNotFoundError """
+        try:
+            lf, block, uid, size = self.index[uid]
+        except KeyError:
+            raise FileNotFoundError('Block not found (UID {})'.format(uid))
+        lf.seek(self.block_size * block)
+        data = lf.read(size)
+        return data
+
+
+    def rm(self, uid):
+        """ Deletes a block """
+        raise NotImplementedError()
+
+
+    def get_all_blob_uids(self):
+        """ Get all existing blob uids """
+        raise NotImplementedError()
+
+
+    def close(self):
+        for f in self.lfs:
+            f.close()
+
 
 class Backy():
     """
@@ -460,181 +686,187 @@ class Backy():
         If from_version_uid is given, this is taken as the base, otherwise
         a pure sparse version is created.
         """
-        if from_version_uid:
-            old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
-            if not old_version.valid:
-                raise RuntimeError('You cannot base on an invalid version.')
-            old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
-        else:
-            old_blocks = None
-        size = math.ceil(size_bytes / self.block_size)
-        # we always start with invalid versions, then validate them after backup
-        version_uid = self.meta_backend.set_version(name, size, size_bytes, 0)
-        for id in range(size):
-            if old_blocks:
-                try:
-                    old_block = old_blocks[id]
-                except IndexError:
+        with self.meta_backend.open() as meta_backend:
+            if from_version_uid:
+                old_version = meta_backend.get_version(from_version_uid)  # raise if not exists
+                if not old_version.valid:
+                    raise RuntimeError('You cannot base on an invalid version.')
+                old_blocks = meta_backend.get_blocks_by_version(from_version_uid)
+            else:
+                old_blocks = None
+            size = math.ceil(size_bytes / self.block_size)
+            # we always start with invalid versions, then validate them after backup
+            version_uid = meta_backend.set_version(name, size, size_bytes, 0)
+            for id in range(size):
+                if old_blocks:
+                    try:
+                        old_block = old_blocks[id]
+                    except IndexError:
+                        uid = None
+                        checksum = None
+                        block_size = self.block_size
+                        valid = 1
+                    else:
+                        assert old_block.id == id
+                        uid = old_block.uid
+                        checksum = old_block.checksum
+                        block_size = old_block.size
+                        valid = old_block.valid
+                else:
                     uid = None
                     checksum = None
                     block_size = self.block_size
                     valid = 1
-                else:
-                    assert old_block.id == id
-                    uid = old_block.uid
-                    checksum = old_block.checksum
-                    block_size = old_block.size
-                    valid = old_block.valid
-            else:
-                uid = None
-                checksum = None
-                block_size = self.block_size
-                valid = 1
 
-            # the last block can differ in size, so let's check
-            _offset = id * self.block_size
-            new_block_size = min(block_size, size_bytes - _offset)
-            if new_block_size != block_size:
-                # last block changed, so set back all info
-                block_size = new_block_size
-                uid = None
-                checksum = None
-                valid = 1
+                # the last block can differ in size, so let's check
+                _offset = id * self.block_size
+                new_block_size = min(block_size, size_bytes - _offset)
+                if new_block_size != block_size:
+                    # last block changed, so set back all info
+                    block_size = new_block_size
+                    uid = None
+                    checksum = None
+                    valid = 1
 
-            self.meta_backend.set_block(
-                id,
-                version_uid,
-                uid,
-                checksum,
-                block_size,
-                valid,
-                _commit=False)
-        self.meta_backend._commit()
-        #logger.info('New version: {}'.format(version_uid))
-        return version_uid
+                meta_backend.set_block(
+                    id,
+                    version_uid,
+                    uid,
+                    checksum,
+                    block_size,
+                    valid,
+                    _commit=False)
+            meta_backend._commit()
+            #logger.info('New version: {}'.format(version_uid))
+            return version_uid
 
 
     def ls(self):
-        versions = self.meta_backend.get_versions()
-        return versions
+        with self.meta_backend.open() as meta_backend:
+            versions = meta_backend.get_versions()
+            return versions
 
 
     def ls_version(self, version_uid):
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        return blocks
+        with self.meta_backend.open() as meta_backend:
+            blocks = meta_backend.get_blocks_by_version(version_uid)
+            return blocks
 
 
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
         """
-        self.meta_backend.get_version(version_uid)  # raise if version not exists
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        if source:
-            source_file = open(source, 'rb')
-        else:
-            source_file = None
+        with self.meta_backend.open() as meta_backend, self.data_backend.open() as data_backend:
+            meta_backend.get_version(version_uid)  # raise if version not exists
+            blocks = meta_backend.get_blocks_by_version(version_uid)
+            if source:
+                source_file = open(source, 'rb')
+            else:
+                source_file = None
 
-        state = True
-        for block in blocks:
-            if block.uid:
-                if percentile < 100 and random.randint(1, 100) > percentile:
-                    logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                        block.id,
-                        block.uid,
-                        percentile,
-                        ))
-                    continue
-                data = self.data_backend.read(block.uid)
-                assert len(data) == block.size
-                data_checksum = HASH_FUNCTION(data).hexdigest()
-                if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during scrub for block '
-                        '{} (UID {}) (is: {} should-be: {}).'.format(
+            state = True
+            for block in blocks:
+                if block.uid:
+                    if percentile < 100 and random.randint(1, 100) > percentile:
+                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
                             block.id,
                             block.uid,
-                            data_checksum,
-                            block.checksum,
+                            percentile,
                             ))
-                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
+                        continue
+                    data = data_backend.read(block.uid)
+                    assert len(data) == block.size
+                    data_checksum = HASH_FUNCTION(data).hexdigest()
+                    if data_checksum != block.checksum:
+                        logger.error('Checksum mismatch during scrub for block '
+                            '{} (UID {}) (is: {} should-be: {}).'.format(
+                                block.id,
+                                block.uid,
+                                data_checksum,
+                                block.checksum,
+                                ))
+                        meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                        state = False
+                    else:
+                        if source_file:
+                            source_file.seek(block.id * self.block_size)
+                            source_data = source_file.read(block.size)
+                            if source_data != data:
+                                logger.error('Source data has changed for block {} '
+                                    '(UID {}) (is: {} should-be: {}'.format(
+                                        block.id,
+                                        block.uid,
+                                        HASH_FUNCTION(source_data).hexdigest(),
+                                        data_checksum,
+                                        ))
+                                state = False
+                        logger.debug('Scrub of block {} (UID {}) ok.'.format(
+                            block.id,
+                            block.uid,
+                            ))
                 else:
-                    if source_file:
-                        source_file.seek(block.id * self.block_size)
-                        source_data = source_file.read(block.size)
-                        if source_data != data:
-                            logger.error('Source data has changed for block {} '
-                                '(UID {}) (is: {} should-be: {}'.format(
-                                    block.id,
-                                    block.uid,
-                                    HASH_FUNCTION(source_data).hexdigest(),
-                                    data_checksum,
-                                    ))
-                            state = False
-                    logger.debug('Scrub of block {} (UID {}) ok.'.format(
+                    logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
                         block.id,
                         block.uid,
                         ))
-            else:
-                logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
-                    block.id,
-                    block.uid,
-                    ))
-        return state
+            return state
 
 
     def restore(self, version_uid, target, sparse=False):
-        version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        with open(target, 'wb') as f:
-            for block in blocks:
-                f.seek(block.id * self.block_size)
-                if block.uid:
-                    data = self.data_backend.read(block.uid)
-                    assert len(data) == block.size
-                    data_checksum = HASH_FUNCTION(data).hexdigest()
-                    written = f.write(data)
-                    assert written == len(data)
-                    if data_checksum != block.checksum:
-                        logger.error('Checksum mismatch during restore for block '
-                            '{} (is: {} should-be: {}, block-valid: {}). Block '
-                            'restored is invalid. Continuing.'.format(
+        with self.meta_backend.open() as meta_backend, self.data_backend.open() as data_backend:
+            version = meta_backend.get_version(version_uid)  # raise if version not exists
+            blocks = meta_backend.get_blocks_by_version(version_uid)
+            with open(target, 'wb') as f:
+                for block in blocks:
+                    f.seek(block.id * self.block_size)
+                    if block.uid:
+                        data = data_backend.read(block.uid)
+                        assert len(data) == block.size
+                        data_checksum = HASH_FUNCTION(data).hexdigest()
+                        written = f.write(data)
+                        assert written == len(data)
+                        if data_checksum != block.checksum:
+                            logger.error('Checksum mismatch during restore for block '
+                                '{} (is: {} should-be: {}, block-valid: {}). Block '
+                                'restored is invalid. Continuing.'.format(
+                                    block.id,
+                                    data_checksum,
+                                    block.checksum,
+                                    block.valid,
+                                    ))
+                            meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                        else:
+                            logger.debug('Restored block {} successfully ({} bytes).'.format(
                                 block.id,
-                                data_checksum,
-                                block.checksum,
-                                block.valid,
+                                block.size,
                                 ))
-                        self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    else:
-                        logger.debug('Restored block {} successfully ({} bytes).'.format(
+                    elif not sparse:
+                        f.write(b'\0'*block.size)
+                        logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
                             block.id,
                             block.size,
                             ))
-                elif not sparse:
-                    f.write(b'\0'*block.size)
-                    logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
-                        block.id,
-                        block.size,
-                        ))
-                else:
-                    logger.debug('Ignored sparse block {}.'.format(
-                        block.id,
-                        ))
-            if f.tell() != version.size_bytes:
-                # write last byte with \0, because this can only happen when
-                # the last block was left over in sparse mode.
-                last_block = blocks[-1]
-                f.seek(last_block.id * self.block_size + last_block.size - 1)
-                f.write(b'\0')
+                    else:
+                        logger.debug('Ignored sparse block {}.'.format(
+                            block.id,
+                            ))
+                if f.tell() != version.size_bytes:
+                    # write last byte with \0, because this can only happen when
+                    # the last block was left over in sparse mode.
+                    last_block = blocks[-1]
+                    f.seek(last_block.id * self.block_size + last_block.size - 1)
+                    f.write(b'\0')
 
 
     def rm(self, version_uid):
-        self.meta_backend.get_version(version_uid)  # just to raise if not exists
-        num_blocks = self.meta_backend.rm_version(version_uid)
-        logger.info('Removed backup version {} with {} blocks.'.format(
-            version_uid,
-            num_blocks,
-            ))
+        with self.meta_backend.open() as meta_backend:
+            meta_backend.get_version(version_uid)  # just to raise if not exists
+            num_blocks = meta_backend.rm_version(version_uid)
+            logger.info('Removed backup version {} with {} blocks.'.format(
+                version_uid,
+                num_blocks,
+                ))
 
 
     def backup(self, name, source, hints, from_version):
@@ -645,7 +877,7 @@ class Backy():
         Otherwise, the backup reads source and looks if checksums match with
         the target.
         """
-        with open(source, 'rb') as source_file:
+        with open(source, 'rb') as source_file, self.meta_backend.open() as meta_backend, self.data_backend.open() as data_backend:
             # determine source size
             source_file.seek(0, 2)  # to the end
             source_size = source_file.tell()
@@ -674,7 +906,7 @@ class Backy():
                 logger.error('Backy exiting.')
                 # TODO: Don't exit here, exit in Commands
                 exit(1)
-            blocks = self.meta_backend.get_blocks_by_version(version_uid)
+            blocks = meta_backend.get_blocks_by_version(version_uid)
 
             for block in blocks:
                 if block.id in read_blocks or not block.valid:
@@ -690,42 +922,37 @@ class Backy():
                         logger.debug('Read block {} (checksum {})'.format(block.id, data_checksum))
 
                     # dedup
-                    existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
+                    existing_block = meta_backend.get_block_by_checksum(data_checksum)
                     if existing_block and existing_block.size == len(data):
-                        self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1)
+                        meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1)
                         logger.debug('Found existing block for id {} with uid {})'.format
                                 (block.id, existing_block.uid))
                     else:
-                        block_uid = self.data_backend.save(data)
-                        self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1)
+                        block_uid = data_backend.save(data)
+                        meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1)
                         logger.debug('Wrote block {} (checksum {})'.format(block.id, data_checksum))
                 elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
-                    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1)
+                    meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1)
                     logger.debug('Skipping block (sparse) {}'.format(block.id))
                 else:
                     logger.debug('Keeping block {}'.format(block.id))
-        self.meta_backend.set_version_valid(version_uid)
+        meta_backend.set_version_valid(version_uid)
         logger.info('New version: {}'.format(version_uid))
         return version_uid
 
 
     def cleanup(self):
         """ Delete unreferenced blob UIDs """
-        active_block_uids = set(self.meta_backend.get_all_block_uids())
-        active_blob_uids = set(self.data_backend.get_all_blob_uids())
-        remove_candidates = active_blob_uids.difference(active_block_uids)
-        for remove_candidate in remove_candidates:
-            logger.debug('Cleanup: Removing UID {}'.format(remove_candidate))
-            self.data_backend.rm(remove_candidate)
-        logger.info('Cleanup: Removed {} blobs'.format(len(remove_candidates)))
-
-
-    def close(self):
-        self.meta_backend.close()
-        self.data_backend.close()
-
+        with self.meta_backend.open() as meta_backend, self.data_backend.open() as data_backend:
+            active_block_uids = set(meta_backend.get_all_block_uids())
+            active_blob_uids = set(data_backend.get_all_blob_uids())
+            remove_candidates = active_blob_uids.difference(active_block_uids)
+            for remove_candidate in remove_candidates:
+                logger.debug('Cleanup: Removing UID {}'.format(remove_candidate))
+                data_backend.rm(remove_candidate)
+            logger.info('Cleanup: Removed {} blobs'.format(len(remove_candidates)))
 
 
 class Commands():
@@ -745,6 +972,8 @@ class Commands():
         # configure file backend
         if config['DataBackend']['type'] == 'files':
             data_backend = FileBackend(config['DataBackend']['path'])
+        elif config['DataBackend']['type'] == 'largefiles':
+            data_backend = LargeFileBackend(config['DataBackend']['path'], config['DataBackend']['additional_read_paths'])
 
         self.backy = partial(Backy, meta_backend=meta_backend, data_backend=data_backend)
 

@@ -153,7 +153,6 @@ def test_metabackend_blocks_by_version(test_path):
     backend.close()
 
 
-
 def _patch(filename, offset, data=None):
     """ write data into a file at offset """
     if not os.path.exists(filename):
