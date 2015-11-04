@@ -357,7 +357,7 @@ class SQLBackend(MetaBackend):
 
 
     def get_blocks_by_version(self, version_uid):
-        return self.session.query(Block).filter_by(version_uid=version_uid).all()
+        return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all()
 
 
     def rm_version(self, version_uid):
