@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
 import argparse
+import datetime
 import fnmatch
 import fileinput
 import math
@@ -319,6 +320,7 @@ class SQLBackend(MetaBackend):
             block.checksum = checksum
             block.size = size
             block.valid = valid
+            block.date = datetime.datetime.now()
         else:
             block = Block(
                 id=id,
