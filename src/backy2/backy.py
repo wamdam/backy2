@@ -1,27 +1,26 @@
 # -*- encoding: utf-8 -*-
 
-from prettytable import PrettyTable
 from configparser import ConfigParser  # python 3.3
 from functools import partial
+from prettytable import PrettyTable
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
-from sqlalchemy.types import DateTime
-from sqlalchemy.orm import sessionmaker
-import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.types import DateTime
 import argparse
 import datetime
-import fnmatch
 import fileinput
-import math
+import fnmatch
 import hashlib
-import logging
 import json
-import random
-#import shutil
-import uuid
+import logging
+import math
 import os
+import random
+import sqlalchemy
 import sys
+import uuid
 
 
 logger = logging.getLogger(__name__)
