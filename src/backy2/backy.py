@@ -86,6 +86,19 @@ def init_logging(logfile, console_level):  # pragma: no cover
     logger.info('$ ' + ' '.join(sys.argv))
 
 
+if hasattr(os, 'posix_fadvise'):
+    posix_fadvise = os.posix_fadvise
+else:  # pragma: no cover
+    logger.warn('Running without `posix_fadvise`.')
+    os.POSIX_FADV_RANDOM = None
+    os.POSIX_FADV_SEQUENTIAL = None
+    os.POSIX_FADV_WILLNEED = None
+    os.POSIX_FADV_DONTNEED = None
+
+    def posix_fadvise(*args, **kw):
+        return
+
+
 def hints_from_rbd_diff(rbd_diff):
     """ Return the required offset:length tuples from a rbd json diff
     """
@@ -713,6 +726,7 @@ class Backy():
         the target.
         """
         with open(source, 'rb') as source_file:
+            #posix_fadvise(source.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
             # determine source size
             source_file.seek(0, 2)  # to the end
             source_size = source_file.tell()
@@ -745,8 +759,11 @@ class Backy():
 
             for block in blocks:
                 if block.id in read_blocks or not block.valid:
-                    source_file.seek(block.id * self.block_size)
+                    offset = block.id * self.block_size
+                    source_file.seek(offset)
                     data = source_file.read(self.block_size)
+                    # throw away cache
+                    posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
                     if not data:
                         raise RuntimeError('EOF reached on source when there should be data.')
 
