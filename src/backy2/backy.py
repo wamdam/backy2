@@ -2,6 +2,7 @@
 
 from configparser import ConfigParser  # python 3.3
 from functools import partial
+from io import StringIO
 from prettytable import PrettyTable
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
@@ -9,6 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
 import argparse
+import csv
 import datetime
 import fileinput
 import fnmatch
@@ -25,6 +27,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+VERSION = '2.1'
 BLOCK_SIZE = 1024*4096  # 4MB
 HASH_FUNCTION = hashlib.sha512
 
@@ -66,6 +69,7 @@ class Config(dict):
         for key, value in base_config.items():
             self[key] = value
 
+
 def init_logging(logfile, console_level):  # pragma: no cover
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s')),
@@ -80,7 +84,6 @@ def init_logging(logfile, console_level):  # pragma: no cover
     logging.basicConfig(handlers = [console, logfile], level=logging.DEBUG)
 
     logger.info('$ ' + ' '.join(sys.argv))
-
 
 
 def hints_from_rbd_diff(rbd_diff):
@@ -373,6 +376,67 @@ class SQLBackend(MetaBackend):
     def get_all_block_uids(self):
         rows = self.session.query(distinct(Block.uid)).all()
         return [b[0] for b in rows]
+
+
+    def export(self, version_uid, f):
+        blocks = self.get_blocks_by_version(version_uid)
+        _csv = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        _csv.writerow(['backy2 Version {} metadata dump'.format(VERSION)])
+        version = self.get_version(version_uid)
+        _csv.writerow([
+            version.uid,
+            version.date.strftime('%Y-%m-%d %H:%M:%S'),
+            version.name,
+            version.size,
+            version.size_bytes,
+            version.valid,
+            ])
+        for block in blocks:
+            _csv.writerow([
+                block.uid,
+                block.version_uid,
+                block.id,
+                block.date.strftime('%Y-%m-%d %H:%M:%S'),
+                block.checksum,
+                block.size,
+                block.valid,
+                ])
+        return _csv
+
+
+    def import_(self, f):
+        _csv = csv.reader(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        signature = next(_csv)
+        if signature[0] != 'backy2 Version {} metadata dump'.format(VERSION):
+            raise ValueError('Wrong import format.')
+        version_uid, version_date, version_name, version_size, version_size_bytes, version_valid = next(_csv)
+        try:
+            self.get_version(version_uid)
+        except KeyError:
+            pass  # does not exist
+        else:
+            raise KeyError('Version {} already exists and cannot be imported.'.format(version_uid))
+        version = Version(
+            uid=version_uid,
+            date=datetime.datetime.strptime(version_date, '%Y-%m-%d %H:%M:%S'),
+            name=version_name,
+            size=version_size,
+            size_bytes=version_size_bytes,
+            valid=version_valid,
+            )
+        self.session.add(version)
+        for uid, version_uid, id, date, checksum, size, valid in _csv:
+            block = Block(
+                uid=uid,
+                version_uid=version_uid,
+                id=id,
+                date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
+                checksum=checksum,
+                size=size,
+                valid=valid,
+            )
+            self.session.add(block)
+        self.session.commit()
 
 
     def close(self):
@@ -730,6 +794,14 @@ class Backy():
         self.data_backend.close()
 
 
+    def export(self, version_uid, f):
+        self.meta_backend.export(version_uid, f)
+        return f
+
+
+    def import_(self, f):
+        self.meta_backend.import_(f)
+
 
 class Commands():
     """Proxy between CLI calls and actual backup code."""
@@ -857,6 +929,35 @@ class Commands():
         self.backy().cleanup()
 
 
+    def export(self, version_uid, filename='-'):
+        backy = self.backy()
+        if filename == '-':
+            f = StringIO()
+            backy.export(version_uid, f)
+            f.seek(0)
+            print(f.read())
+            f.close()
+        else:
+            with open(filename, 'w') as f:
+                backy.export(version_uid, f)
+
+
+    def import_(self, filename='-'):
+        backy = self.backy()
+        try:
+            if filename=='-':
+                backy.import_(sys.stdin)
+            else:
+                with open(filename, 'r') as f:
+                    backy.import_(f)
+        except KeyError as e:
+            logger.error(str(e))
+            exit(1)
+        except ValueError as e:
+            logger.error(str(e))
+            exit(2)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Backup and restore for block devices.',
@@ -909,6 +1010,21 @@ def main():
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('version_uid')
     p.set_defaults(func='scrub')
+
+    # Export
+    p = subparsers.add_parser(
+        'export',
+        help="Export the metadata of a backup uid into a file.")
+    p.add_argument('version_uid')
+    p.add_argument('filename', help="Export into this filename ('-' is for stdout)")
+    p.set_defaults(func='export')
+
+    # Import
+    p = subparsers.add_parser(
+        'import',
+        help="Import the metadata of a backup from a file.")
+    p.add_argument('filename', help="Read from this file ('-' is for stdin)")
+    p.set_defaults(func='import_')
 
     # CLEANUP
     p = subparsers.add_parser(
