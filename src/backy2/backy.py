@@ -780,8 +780,8 @@ class Backy():
 
     def cleanup(self):
         """ Delete unreferenced blob UIDs """
-        active_block_uids = set(self.meta_backend.get_all_block_uids())
         active_blob_uids = set(self.data_backend.get_all_blob_uids())
+        active_block_uids = set(self.meta_backend.get_all_block_uids())
         remove_candidates = active_blob_uids.difference(active_block_uids)
         for remove_candidate in remove_candidates:
             logger.debug('Cleanup: Removing UID {}'.format(remove_candidate))
