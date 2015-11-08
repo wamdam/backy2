@@ -1,53 +1,58 @@
 # backy
 
-## An open source block based backup utility
+## An open source block based backup utility with sparse features
 
-backy is a **block based backup** for **virtual machines** with no external
-dependencies. It's useful to backup any block based image with or without
-snapshot features to any other location.
+backy is a **block based backup** for **virtual machines**.
+
+It's useful to backup any block based image with or without snapshot features
+to any other location.
 
 backy supports forward differential backups so that a full backup is only
-necessary on the very first backup. All subsequent backups are forward
-incremental, so that only the differences to the last backup are stored.
+necessary on the very first backup (and with ceph, not even that). All
+subsequent backups are forward incremental, so that only the differences to the
+last backup are stored.
 
 That way it requires only very little i/o on the backup volume.
 
 In addition it can fully utilize all features which the underlying block device
-supports. If hints are available, only relevant data sections are read.
+supports. If hints are available (e.g. rbd diff), only relevant data sections
+are read.
 Especially on ceph volumes, the first AND all subsequent backups only require
-changed blocks to be stored.
+changed blocks to be read and stored.
 
 Invalid backups, due to data errors and otherwise broken backups (system crash)
-are probably recognized (for bit rod we recommend scrubs) and you cannot backup
-a diff on them.
+are recognized (for bit rod we recommend scrubs) and backy prevents you from
+backing up from them as a base (i.e. you must do a fresh full backup).
 
-On other volume types, if you can extract blocks used by the filesystem, also
-only those blocks will be read.
+Backy also does deduplication during backup. This means, that equal blocks,
+which are per default 4MB in size, are only stored once on the backup medium.
 
-backy makes heavy usage of rollsums. Each ``block`` is checksummed and the
-checksum is stored with the backup. Whenever a forward increment is created,
-the source data is read and only compared to the stored checksum. That way,
-the backup storage space's i/o is not used at all for determining which blocks
-to read.
+For protection against bitrot or write/read errors, backy supports scrubs.
+We recommend to run scrubs on a regular basis.
 
-Also, scrubbing is available. Scrub can read the whole backup or any random
-percentile and compare read backup data blocks against the stored checksums.
-No bit loss anymore!
+Scrubs support a percentile parameter (-p). When percentile is given, only
+the given part (percentile / 100) of the backup is read and compared against
+the stored checksums.
 
 Scrub can also compare the backup against an existing image, i.g. a snapshot.
-With this ``deep scrub`` also percentile checks are available.
+With this ``deep scrub`` percentile checks are also available.
 
 When scrub finds invalid blocks, it marks the blocks and all versions containing
 this block as invalid (however, restores are still possible with this
 deficiency).
 
-For each backup version, only changed ``blocks`` are stored so forward increments
-are usually very small.
-
 For restore, backy is able to only write existing blocks and sparses out the
 others. This is possible for new image files and on fresh volumes, e.g. on
 ceph. This shouldn't be done on volumes that don't know about block sparses,
 like classic partitions or classic lvm.
+
+For example, with ceph it's possible to have sparse images by regularily calling
+fstrim in the VMs.
+
+In case you don't have a ceph-based storage, backy behaves correctly on other
+images too, for example LVM, image files or partitions. However, the image
+to be backed up shouldn't have any writes during backup. So snapshot
+functionality is necessary if you can't afford downtime during backups.
 
 So backy is, especially in combination with rich featured block storage, a
 very fast and reliable backup and restore tool.
@@ -58,30 +63,11 @@ it mostly behaves like *cp* but with all features.
 
 ## Usage
 
-```
-usage: backy [-h] [-v] [-b BACKUPDIR] {backup,restore,rm,scrub,cleanup,ls} ...
-
-Backup and restore for block devices.
-
-positional arguments:
-  {backup,restore,rm,scrub,cleanup,ls}
-    backup              Perform a backup.
-    restore             Restore a given backup with level to a given target.
-    rm                  Remove a given backup version. This will only remove
-                        meta data and you will have to cleanup after this.
-    scrub               Scrub a given backup and check for consistency.
-    cleanup             Clean unreferenced blobs.
-    ls                  List existing backups.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -v, --verbose         verbose output (default: False)
-  -b BACKUPDIR, --backupdir BACKUPDIR
-```
-
-### backup
+### Backup
 
 ```
+# backy -h backup
+
 usage: backy backup [-h] [-r RBD] [-f FROM_VERSION] source name
 
 positional arguments:
@@ -95,77 +81,207 @@ optional arguments:
                         Use this version-uid as base
 ```
 
-### restore
+### Initial backup
+
+#### ceph
+
+With ceph, you can use a rbd diff even on the first snapshot in order to leave
+out sparse blocks (hint: do a fstrim first!).
 
 ```
-usage: backy restore [-h] [-s] version_uid target
-
-positional arguments:
-  version_uid
-  target
-
-optional arguments:
-  -h, --help    show this help message and exit
-  -s, --sparse  Write restore file sparse (does not work with legacy devices)
+rbd snap create vms/vm1@backup1
+rbd diff vms/vm1@backup1 --format=json > /tmp/vm1@backup1.diff
+rbd map vms/vm1@backup1
+backy backup -r /tmp/vm1@backup1.diff /dev/rbd/vms/vm1@backup1 vm1@backup1
+rbd unmap vms/vm1@backup1
 ```
 
-### scrub
+This creates a snapshot in pool `vms` from the image `vm1` called vm1@backup1.
+Then it creates a json-formatted diff 'from the beginning', that means, the
+diff defines all used areas.
+
+Then the snapshot is mapped (i.e. made available as a block device) and backy
+is called with the rbd diff file as hints to backup the block device into a
+backup called `vm1@backup1`.
+
+
+#### lvm
 
 ```
-usage: backy scrub [-h] [-s SOURCE] [-p PERCENTILE] version_uid
-
-positional arguments:
-  version_uid
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -s SOURCE, --source SOURCE
-                        Source, optional. If given, check if source matches
-                        backup in addition to checksum tests.
-  -p PERCENTILE, --percentile PERCENTILE
-                        Only check PERCENTILE percent of the blocks (value
-                        0..100). Default: 100
-```
-
-### rm
-```
-usage: backy rm [-h] version_uid
-
-positional arguments:
-  version_uid
-
-optional arguments:
-  -h, --help   show this help message and exit
+lvm TODO
 ```
 
 
-### cleanup
-```
-usage: backy cleanup [-h]
+### Incremental backup
 
-optional arguments:
-  -h, --help  show this help message and exit
-```
+#### ceph
 
-## Examples
+An incremental backup with ceph is mostly equal to the initial one, except that
+we will tell backy and ceph to base the new backup on an old one.
 
-### Defaults
+For ceph, the old snapshot name is ok, for backy we need the backup uid::
 
 ```
-TBD
+# backy ls
+    INFO: $ backy ls
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+|            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+| 2015-10-30 16:28:57.262395 |     vm1@backup1     | 62500 | 262144000000 | 90811ff0-83f5-11e5-ad76-003148d6aacc |       1       |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+    INFO: Backy complete.
 ```
 
-### Ceph
+The backup uid can also be grabbed with the machine output::
 
 ```
-rbd --format json diff --from-snap someoldsnap vms/somevm@backup123 > mydiff
-backy backup -r mydiff /vms/somevm@backup123 testbackup
+# backy -m ls | grep 90811ff0-83f5-11e5-ad76-003148d6aacc
+version 2015-10-30 16:28:57.262395 vm1@backup1 62500 262144000000 90811ff0-83f5-11e5-ad76-003148d6aacc 1
 ```
 
-### lvm
+Then we create an incremental backup::
 
 ```
-TBD
+rbd snap create vms/vm1@backup2
+rbd diff vms/vm1@backup2 --from-snap vms/vm1@backup1 --format=json > /tmp/vm1@backup2.diff
+rbd map vms/vm1@backup2
+backy backup -r /tmp/vm1@backup2.diff -f 90811ff0-83f5-11e5-ad76-003148d6aacc /dev/rbd/vms/vm1@backup2 vm1@backup2
+rbd unmap vms/vm1@backup2
+```
+
+Notice the -f (--from) for backy. This tells backy to use all the metadata
+(blocks, checksums, ...) from the old backup and only overwrite the parts given
+in the hints-file (-r).
+You must ensure that the from-backup (-f) matches the snapshot from which the
+diff was created (--from-snap). Otherwise the wrong data sections will be stored
+and the backup is invalid without backy being able to notice this.
+
+
+### Metadata
+
+The metadata from backy is saved in an sql database that can be configured in
+your backy.cfg (usually /etc/backy.cfg). Default is sqlite, but we recommend
+PostgreSQL.
+
+In any case, the metadata database is required to be intact when restoring data.
+You may use several mirrors for the database (e.g. MySQL, PostgreSQL) or, or even
+in addition, you may want to store the metadata for each backup along with the
+backup data.
+
+To do this, export it:
+
+```
+# backy ls
+    INFO: $ backy ls
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+|            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+| 2015-10-30 16:28:57.262395 |     vm1@backup1     | 62500 | 262144000000 | 90811ff0-83f5-11e5-ad76-003148d6aacc |       1       |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+    INFO: Backy complete.
+
+# backy export 90811ff0-83f5-11e5-ad76-003148d6aacc /var/backup/vm1@backup1.metadata
+    INFO: $ backy export 90811ff0-83f5-11e5-ad76-003148d6aacc /var/backup/vm1@backup1.metadata
+    INFO: Backy complete.
+```
+
+The metadata file contains anything that backy requires to be able to restore
+from the data directory (of course, actual data blocks are also required).
+
+Let's try it out (you don't need to do this on live backup systems):
+
+```
+# backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+    INFO: $ backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+    INFO: Backy complete.
+
+# backy ls
+    INFO: $ backy ls
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+|            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+| 2015-10-30 16:28:57.262395 |     vm1@backup1     | 62500 | 262144000000 | 90811ff0-83f5-11e5-ad76-003148d6aacc |       1       |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+    INFO: Backy complete.
+
+# backy import /var/backup/vm1@backup1.metadata
+    INFO: $ backy import /var/backup/vm1@backup1.metadata
+    INFO: Backy complete.
+
+# backy ls
+    INFO: $ backy ls
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+|            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+| 2015-10-30 16:28:57.262395 |     vm1@backup1     | 62500 | 262144000000 | 90811ff0-83f5-11e5-ad76-003148d6aacc |       1       |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+    INFO: Backy complete.
+```
+
+As you can see, original dates, name, sizes and uids are restored, as well as
+information about the validity of the backup.
+
+
+
+### Restore
+
+```
+# backy ls
+    INFO: $ env/bin/backy ls
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+|            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+| 2015-10-30 16:28:57.262395 |     vm1@backup1     | 62500 | 262144000000 | 90811ff0-83f5-11e5-ad76-003148d6aacc |       1       |
++----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
+    INFO: Backy complete.
+
+# backy restore 3117eecc-8369-11e5-ad76-003048d6aadd /tmp/restore.img
+```
+
+That would restore the given uid into a file `tmp/restore.img`.
+However, restore has an additional option '-s'. If your target supports sparse
+writes (which are *fresh* ceph volumes and image files - actually they have to
+fill the sparse blocks with \0), you can use -s to skip over sparse blocks and
+thus speed up the restore process.
+
+If you use -s with an existing block device (partition, old lvm volume, ...),
+blocks that should be \0 only will have random old data in them. This might
+be ok, if nothing of your system depends on having \0 there, but I wouldn't bet
+on this.
+
+
+### Scrub
+
+For production systems, scrubbing is highly recommended in order to prevent
+hidden bitrot, filesystem errors on the backup system and more.
+
+backy can scrub against its own checksums or even against original snapshots.
+
+#### Checksum based scrub
+
+```
+# backy scrub 90811ff0-83f5-11e5-ad76-003148d6aacc
+
+TODO Output
+```
+
+#### deep scrub
+
+```
+rbd map vms/vm1@backup1
+backy scrub -s /dev/rbd/vms/vm1@backup1 90811ff0-83f5-11e5-ad76-003148d6aacc
+rbd unmap vms/vm1@backup1
+
+TODO Output
+```
+
+### Remove old backups
+
+TODO
+
+```
+backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+backy cleanup
 ```
 
 
