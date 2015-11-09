@@ -625,8 +625,22 @@ class Backy():
                         percentile,
                         ))
                     continue
-                data = self.data_backend.read(block.uid)
-                assert len(data) == block.size
+                try:
+                    data = self.data_backend.read(block.uid)
+                except FileNotFoundError as e:
+                    logger.error('Blob not found: {}'.format(str(e)))
+                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    state = False
+                    continue
+                if len(data) != block.size:
+                    logger.error('Blob has wrong size: {} is: {} should be: {}'.format(
+                        block.uid,
+                        len(data),
+                        block.size,
+                        ))
+                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    state = False
+                    continue
                 data_checksum = HASH_FUNCTION(data).hexdigest()
                 if data_checksum != block.checksum:
                     logger.error('Checksum mismatch during scrub for block '
@@ -638,6 +652,7 @@ class Backy():
                             ))
                     self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                     state = False
+                    continue
                 else:
                     if source_file:
                         source_file.seek(block.id * self.block_size)
@@ -660,6 +675,8 @@ class Backy():
                     block.id,
                     block.uid,
                     ))
+        if state == True:
+            self.meta_backend.set_version_valid(version_uid)
         return state
 
 
