@@ -353,7 +353,7 @@ class SQLBackend(MetaBackend):
     def set_blocks_invalid(self, uid, checksum):
         _affected_version_uids = self.session.query(distinct(Block.version_uid)).filter_by(uid=uid, checksum=checksum).all()
         affected_version_uids = [v[0] for v in _affected_version_uids]
-        self.session.query(Block).filter_by(uid=uid, checksum=checksum).update({'valid': False}, synchronize_session='fetch')
+        self.session.query(Block).filter_by(uid=uid, checksum=checksum).update({'valid': 0}, synchronize_session='fetch')
         self.session.commit()
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             uid,
