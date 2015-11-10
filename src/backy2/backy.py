@@ -22,6 +22,7 @@ import os
 import random
 import sqlalchemy
 import sys
+import time
 import uuid
 
 
@@ -777,8 +778,11 @@ class Backy():
             for block in blocks:
                 if block.id in read_blocks or not block.valid:
                     offset = block.id * self.block_size
+                    t1 = time.time()
                     source_file.seek(offset)
+                    t2 = time.time()
                     data = source_file.read(self.block_size)
+                    t3 = time.time()
                     # throw away cache
                     posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
                     if not data:
@@ -788,7 +792,7 @@ class Backy():
                     if not block.valid:
                         logger.debug('Re-read block (bacause it was invalid) {} (checksum {})'.format(block.id, data_checksum))
                     else:
-                        logger.debug('Read block {} (checksum {})'.format(block.id, data_checksum))
+                        logger.debug('Read block {} (checksum {}) in {:.2f}s (seek in {:.2f}s)'.format(block.id, data_checksum, t3-t1, t2-t1))
 
                     # dedup
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
@@ -797,9 +801,12 @@ class Backy():
                         logger.debug('Found existing block for id {} with uid {})'.format
                                 (block.id, existing_block.uid))
                     else:
+                        t1 = time.time()
                         block_uid = self.data_backend.save(data)
+                        t2 = time.time()
                         self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1)
-                        logger.debug('Wrote block {} (checksum {})'.format(block.id, data_checksum))
+                        t3 = time.time()
+                        logger.debug('Wrote block {} (checksum {}) in {:.2f}s (meta in {:.2f}s)'.format(block.id, data_checksum, t3-t1, t3-t2))
                 elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
