@@ -454,6 +454,7 @@ class SQLBackend(MetaBackend):
 
 
     def close(self):
+        self.session.commit()
         self.session.close()
 
 
@@ -797,20 +798,20 @@ class Backy():
                     # dedup
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
                     if existing_block and existing_block.size == len(data):
-                        self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1)
+                        self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
                         logger.debug('Found existing block for id {} with uid {})'.format
                                 (block.id, existing_block.uid))
                     else:
                         t1 = time.time()
                         block_uid = self.data_backend.save(data)
                         t2 = time.time()
-                        self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1)
+                        self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
                         t3 = time.time()
                         logger.debug('Wrote block {} (checksum {}) in {:.2f}s (meta in {:.2f}s)'.format(block.id, data_checksum, t3-t1, t3-t2))
                 elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
-                    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1)
+                    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
                     logger.debug('Skipping block (sparse) {}'.format(block.id))
                 else:
                     logger.debug('Keeping block {}'.format(block.id))
