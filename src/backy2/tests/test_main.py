@@ -79,6 +79,7 @@ def test_FileBackend_path(test_path):
 def test_FileBackend_save_read(test_path):
     backend = backy2.backy.FileBackend(test_path)
     uid = backend.save(b'test')
+    backend.close()
     assert backend.read(uid) == b'test'
     backend.close()
 
