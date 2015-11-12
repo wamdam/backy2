@@ -19,9 +19,11 @@ import json
 import logging
 import math
 import os
+import queue
 import random
 import sqlalchemy
 import sys
+import threading
 import time
 import uuid
 
@@ -466,6 +468,39 @@ class FileBackend(DataBackend):
     DEPTH = 2
     SPLIT = 2
     SUFFIX = '.blob'
+    SIMULTANIOUS_WRITES = 10
+
+
+    def __init__(self, path):
+        self.path = path
+        self._queue = queue.Queue(self.SIMULTANIOUS_WRITES)
+        self._writer_thread = threading.Thread(target=self._writer)
+        self._writer_thread.daemon = True
+        self._writer_thread.start()
+
+
+    def _writer(self):
+        """ A threaded background writer """
+        while True:
+            entry = self._queue.get()
+            if entry is None:
+                break
+            uid, data = entry
+            path = os.path.join(self.path, self._path(uid))
+            filename = self._filename(uid)
+            t1 = time.time()
+            try:
+                with open(filename, 'wb') as f:
+                    r = f.write(data)
+            except FileNotFoundError:
+                makedirs(path)
+                with open(filename, 'wb') as f:
+                    r = f.write(data)
+            t2 = time.time()
+            assert r == len(data)
+            self._queue.task_done()
+            logger.debug('Wrote data asynchronously uid {} in {:.2f}s (Queue size is {})'.format(uid, t2-t1, self._queue.qsize()))
+
 
     def _uid(self):
         # a uuid always starts with the same bytes, so let's widen this
@@ -490,16 +525,7 @@ class FileBackend(DataBackend):
 
     def save(self, data):
         uid = self._uid()
-        path = os.path.join(self.path, self._path(uid))
-        filename = self._filename(uid)
-        try:
-            with open(filename, 'wb') as f:
-                r = f.write(data)
-        except FileNotFoundError:
-            makedirs(path)
-            with open(filename, 'wb') as f:
-                r = f.write(data)
-        assert r == len(data)
+        self._queue.put((uid, data))
         return uid
 
 
@@ -524,6 +550,11 @@ class FileBackend(DataBackend):
                 uid = filename.split('.')[0]
                 matches.append(uid)
         return matches
+
+
+    def close(self):
+        self._queue.put(None)  # ends the thread
+        self._writer_thread.join()
 
 
 
@@ -802,12 +833,9 @@ class Backy():
                         logger.debug('Found existing block for id {} with uid {})'.format
                                 (block.id, existing_block.uid))
                     else:
-                        t1 = time.time()
                         block_uid = self.data_backend.save(data)
-                        t2 = time.time()
                         self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
-                        t3 = time.time()
-                        logger.debug('Wrote block {} (checksum {}) in {:.2f}s (meta in {:.2f}s)'.format(block.id, data_checksum, t3-t1, t3-t2))
+                        logger.debug('Wrote block {} (checksum {})'.format(block.id, data_checksum))
                 elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
@@ -815,6 +843,8 @@ class Backy():
                     logger.debug('Skipping block (sparse) {}'.format(block.id))
                 else:
                     logger.debug('Keeping block {}'.format(block.id))
+        # XXX: close is the wrong word for waiting on the writer thread...
+        self.data_backend.close()
         self.meta_backend.set_version_valid(version_uid)
         logger.info('New version: {}'.format(version_uid))
         return version_uid
@@ -873,16 +903,19 @@ class Commands():
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
         backy.backup(name, source, hints, from_version)
+        backy.close()
 
 
     def restore(self, version_uid, target, sparse):
         backy = self.backy()
         backy.restore(version_uid, target, sparse)
+        backy.close()
 
 
     def rm(self, version_uid):
         backy = self.backy()
         backy.rm(version_uid)
+        backy.close()
 
 
     def scrub(self, version_uid, source, percentile):
@@ -890,6 +923,7 @@ class Commands():
             percentile = int(percentile)
         backy = self.backy()
         state = backy.scrub(version_uid, source, percentile)
+        backy.close()
         if not state:
             exit(1)
 
@@ -954,21 +988,26 @@ class Commands():
 
 
     def ls(self, version_uid):
+        backy = self.backy()
         if version_uid:
-            blocks = self.backy().ls_version(version_uid)
+            blocks = backy.ls_version(version_uid)
             if self.machine_output:
                 self._ls_blocks_machine_output(blocks)
             else:
                 self._ls_blocks_tbl_output(blocks)
         else:
-            versions = self.backy().ls()
+            versions = backy.ls()
             if self.machine_output:
                 self._ls_versions_machine_output(versions)
             else:
                 self._ls_versions_tbl_output(versions)
+        backy.close()
+
 
     def cleanup(self):
-        self.backy().cleanup()
+        backy = self.backy()
+        backy.cleanup()
+        backy.close()
 
 
     def export(self, version_uid, filename='-'):
@@ -982,6 +1021,7 @@ class Commands():
         else:
             with open(filename, 'w') as f:
                 backy.export(version_uid, f)
+        backy.close()
 
 
     def import_(self, filename='-'):
@@ -998,6 +1038,8 @@ class Commands():
         except ValueError as e:
             logger.error(str(e))
             exit(2)
+        finally:
+            backy.close()
 
 
 def main():
