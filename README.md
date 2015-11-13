@@ -60,6 +60,20 @@ very fast and reliable backup and restore tool.
 backy is designed to be as much unix-flavoured as possible. With defaults,
 it mostly behaves like *cp* but with all features.
 
+Other features:
+
+* Threaded writer: writes while data is read
+* Restore during Backup: You can restore any valid version even while backups
+  are running.
+* RAM management: Backy runs on terabyte volumes with <100MB RAM typically
+  (+SQL DB).
+* RAM management: Backy removes all data it has read from the kernel
+  buffers/caches so that influence on cache performance is minimal.
+* Restore of invalid blocks/versions is possible for partial restores, warnings
+  are logged.
+* Metadata from SQL can (and should) be exported and imported along with the
+  backup
+
 
 ## Usage
 
