@@ -271,12 +271,15 @@ class Block(Base):
 class SQLBackend(MetaBackend):
     """ Stores meta data in an sql database """
 
+    FLUSH_EVERY_N_BLOCKS = 1000
+
     def __init__(self, engine):
         MetaBackend.__init__(self)
         engine = sqlalchemy.create_engine(engine)
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         self.session = Session()
+        self._flush_block_counter = 0
 
 
     def _uid(self):
@@ -349,6 +352,12 @@ class SQLBackend(MetaBackend):
                 valid=valid
                 )
             self.session.add(block)
+        self._flush_block_counter += 1
+        if self._flush_block_counter % self.FLUSH_EVERY_N_BLOCKS == 0:
+            t1 = time.time()
+            self.session.flush()  # saves some ram
+            t2 = time.time()
+            logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
         if _commit:
             self.session.commit()
 
