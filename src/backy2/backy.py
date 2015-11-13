@@ -833,7 +833,7 @@ class Backy():
                     if not block.valid:
                         logger.debug('Re-read block (bacause it was invalid) {} (checksum {})'.format(block.id, data_checksum))
                     else:
-                        logger.debug('Read block {} (checksum {}) in {:.2f}s (seek in {:.2f}s)'.format(block.id, data_checksum, t3-t1, t2-t1))
+                        logger.debug('Read block {} (checksum {}...) in {:.2f}s (seek in {:.2f}s)'.format(block.id, data_checksum[:16], t3-t1, t2-t1))
 
                     # dedup
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
@@ -844,7 +844,7 @@ class Backy():
                     else:
                         block_uid = self.data_backend.save(data)
                         self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
-                        logger.debug('Wrote block {} (checksum {})'.format(block.id, data_checksum))
+                        logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
                 elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
