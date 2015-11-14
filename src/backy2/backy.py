@@ -141,6 +141,25 @@ class MetaBackend():
         raise NotImplementedError()
 
 
+    def set_stats(self, version_uid, version_name, version_size_bytes,
+            version_size_blocks, bytes_read, blocks_read, bytes_written,
+            blocks_written, bytes_found_dedup, blocks_found_dedup,
+            bytes_sparse, blocks_sparse, duration_seconds):
+        """ Stores statistics
+        """
+        raise NotImplementedError()
+
+
+    def get_stats(self):
+        """ Get statistics for all versions """
+        raise NotImplementedError()
+
+
+    def get_stats_by_version(self, version_uid):
+        """ Get statistics for a single version """
+        raise NotImplementedError()
+
+
     def set_version_invalid(self, uid):
         """ Mark a version as invalid """
         raise NotImplementedError()
@@ -239,6 +258,25 @@ class DataBackend():
         pass
 
 
+class Stats(Base):
+    __tablename__ = 'stats'
+    date = Column("date", DateTime , default=func.now(), nullable=False)
+    version_uid = Column(String(36), primary_key=True)
+    version_name = Column(String, nullable=False)
+    version_size_bytes = Column(BigInteger, nullable=False)
+    version_size_blocks = Column(BigInteger, nullable=False)
+    bytes_read = Column(BigInteger, nullable=False)
+    blocks_read = Column(BigInteger, nullable=False)
+    bytes_written = Column(BigInteger, nullable=False)
+    blocks_written = Column(BigInteger, nullable=False)
+    bytes_found_dedup = Column(BigInteger, nullable=False)
+    blocks_found_dedup = Column(BigInteger, nullable=False)
+    bytes_sparse = Column(BigInteger, nullable=False)
+    blocks_sparse = Column(BigInteger, nullable=False)
+    duration_seconds = Column(BigInteger, nullable=False)
+
+
+
 class Version(Base):
     __tablename__ = 'versions'
     uid = Column(String(36), primary_key=True)
@@ -302,6 +340,43 @@ class SQLBackend(MetaBackend):
         self.session.add(version)
         self.session.commit()
         return uid
+
+
+    def set_stats(self, version_uid, version_name, version_size_bytes,
+            version_size_blocks, bytes_read, blocks_read, bytes_written,
+            blocks_written, bytes_found_dedup, blocks_found_dedup,
+            bytes_sparse, blocks_sparse, duration_seconds):
+        stats = Stats(
+            version_uid=version_uid,
+            version_name=version_name,
+            version_size_bytes=version_size_bytes,
+            version_size_blocks=version_size_blocks,
+            bytes_read=bytes_read,
+            blocks_read=blocks_read,
+            bytes_written=bytes_written,
+            blocks_written=blocks_written,
+            bytes_found_dedup=bytes_found_dedup,
+            blocks_found_dedup=blocks_found_dedup,
+            bytes_sparse=bytes_sparse,
+            blocks_sparse=blocks_sparse,
+            duration_seconds=duration_seconds,
+            )
+        self.session.add(stats)
+        self.session.commit()
+
+
+    def get_stats(self, version_uid=None):
+        if version_uid:
+            stats = self.session.query(Stats).filter_by(version_uid=version_uid).all()
+            if stats is None:
+                raise KeyError('Statistics for version {} not found.'.format(version_uid))
+            return stats
+        else:
+            return self.session.query(Stats).order_by(Stats.version_name, Stats.date).all()
+
+
+    def get_stats_by_version(self, version_uid):
+        return stats
 
 
     def set_version_invalid(self, uid):
@@ -408,6 +483,7 @@ class SQLBackend(MetaBackend):
         _csv = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         _csv.writerow(['backy2 Version {} metadata dump'.format(VERSION)])
         version = self.get_version(version_uid)
+        # TODO: Should stats be exported?
         _csv.writerow([
             version.uid,
             version.date.strftime('%Y-%m-%d %H:%M:%S'),
@@ -646,6 +722,11 @@ class Backy():
         return blocks
 
 
+    def stats(self, version_uid=None):
+        stats = self.meta_backend.get_stats(version_uid)
+        return stats
+
+
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
@@ -784,6 +865,19 @@ class Backy():
         Otherwise, the backup reads source and looks if checksums match with
         the target.
         """
+        stats = {
+                'version_size_bytes': 0,
+                'version_size_blocks': 0,
+                'bytes_read': 0,
+                'blocks_read': 0,
+                'bytes_written': 0,
+                'blocks_written': 0,
+                'bytes_found_dedup': 0,
+                'blocks_found_dedup': 0,
+                'bytes_sparse': 0,
+                'blocks_sparse': 0,
+                'start_time': time.time(),
+            }
         with open(source, 'rb') as source_file:
             #posix_fadvise(source.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
             # determine source size
@@ -791,6 +885,8 @@ class Backy():
             source_size = source_file.tell()
             source_file.seek(0)
             size = math.ceil(source_size / self.block_size)
+            stats['version_size_bytes'] = source_size
+            stats['version_size_blocks'] = size
 
             # Sanity check: check hints for validity, i.e. too high offsets, ...
             if hints:
@@ -828,6 +924,8 @@ class Backy():
                     posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
                     if not data:
                         raise RuntimeError('EOF reached on source when there should be data.')
+                    stats['blocks_read'] += 1
+                    stats['bytes_read'] += len(data)
 
                     data_checksum = HASH_FUNCTION(data).hexdigest()
                     if not block.valid:
@@ -839,22 +937,43 @@ class Backy():
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
                     if existing_block and existing_block.size == len(data):
                         self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
+                        stats['blocks_found_dedup'] += 1
+                        stats['bytes_found_dedup'] += len(data)
                         logger.debug('Found existing block for id {} with uid {})'.format
                                 (block.id, existing_block.uid))
                     else:
                         block_uid = self.data_backend.save(data)
                         self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
+                        stats['blocks_written'] += 1
+                        stats['bytes_written'] += len(data)
                         logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
                 elif block.id in sparse_blocks:
                     # This "elif" is very important. Because if the block is in read_blocks
                     # AND sparse_blocks, it *must* be read.
                     self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
+                    stats['blocks_sparse'] += 1
+                    stats['bytes_sparse'] += block.size
                     logger.debug('Skipping block (sparse) {}'.format(block.id))
                 else:
                     logger.debug('Keeping block {}'.format(block.id))
         # XXX: close is the wrong word for waiting on the writer thread...
         self.data_backend.close()
         self.meta_backend.set_version_valid(version_uid)
+        self.meta_backend.set_stats(
+            version_uid=version_uid,
+            version_name=name,
+            version_size_bytes=stats['version_size_bytes'],
+            version_size_blocks=stats['version_size_blocks'],
+            bytes_read=stats['bytes_read'],
+            blocks_read=stats['blocks_read'],
+            bytes_written=stats['bytes_written'],
+            blocks_written=stats['blocks_written'],
+            bytes_found_dedup=stats['bytes_found_dedup'],
+            blocks_found_dedup=stats['blocks_found_dedup'],
+            bytes_sparse=stats['bytes_sparse'],
+            blocks_sparse=stats['blocks_sparse'],
+            duration_seconds=int(time.time() - stats['start_time']),
+            )
         logger.info('New version: {}'.format(version_uid))
         return version_uid
 
@@ -952,7 +1071,7 @@ class Commands():
 
 
     def _ls_blocks_machine_output(self, blocks):
-        field_names = ['id', 'date', 'uid', 'size', 'valid']
+        field_names = ['type', 'id', 'date', 'uid', 'size', 'valid']
         print(' '.join(field_names))
         for block in blocks:
             print(' '.join(map(str, [
@@ -982,7 +1101,7 @@ class Commands():
 
 
     def _ls_versions_machine_output(self, versions):
-        field_names = ['date', 'size', 'size_bytes', 'uid', 'version valid', 'name']
+        field_names = ['type', 'date', 'size', 'size_bytes', 'uid', 'version valid', 'name']
         print(' '.join(field_names))
         for version in versions:
             print(' '.join(map(str, [
@@ -993,6 +1112,58 @@ class Commands():
                 version.size_bytes,
                 version.uid,
                 int(version.valid),
+                ])))
+
+
+    def _stats_tbl_output(self, stats):
+        tbl = PrettyTable()
+        tbl.field_names = ['date', 'uid', 'name', 'size bytes', 'size blocks',
+                'bytes read', 'blocks read', 'bytes written', 'blocks written',
+                'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
+                'duration (s)']
+        for stat in stats:
+            tbl.add_row([
+                stat.date,
+                stat.version_uid,
+                stat.version_name,
+                stat.version_size_bytes,
+                stat.version_size_blocks,
+                stat.bytes_read,
+                stat.blocks_read,
+                stat.bytes_written,
+                stat.blocks_written,
+                stat.bytes_found_dedup,
+                stat.blocks_found_dedup,
+                stat.bytes_sparse,
+                stat.blocks_sparse,
+                stat.duration_seconds,
+                ])
+        print(tbl)
+
+
+    def _stats_machine_output(self, stats):
+        field_names = ['type', 'date', 'uid', 'name', 'size bytes', 'size blocks',
+                'bytes read', 'blocks read', 'bytes written', 'blocks written',
+                'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
+                'duration (s)']
+        print(' '.join(field_names))
+        for stat in stats:
+            print(' '.join(map(str, [
+                'statistics',
+                stat.date,
+                stat.version_uid,
+                stat.version_name,
+                stat.version_size_bytes,
+                stat.version_size_blocks,
+                stat.bytes_read,
+                stat.blocks_read,
+                stat.bytes_written,
+                stat.blocks_written,
+                stat.bytes_found_dedup,
+                stat.blocks_found_dedup,
+                stat.bytes_sparse,
+                stat.blocks_sparse,
+                stat.duration_seconds,
                 ])))
 
 
@@ -1010,6 +1181,16 @@ class Commands():
                 self._ls_versions_machine_output(versions)
             else:
                 self._ls_versions_tbl_output(versions)
+        backy.close()
+
+
+    def stats(self, version_uid):
+        backy = self.backy()
+        stats = backy.stats(version_uid)
+        if self.machine_output:
+            self._stats_machine_output(stats)
+        else:
+            self._stats_tbl_output(stats)
         backy.close()
 
 
@@ -1131,6 +1312,13 @@ def main():
         help="List existing backups.")
     p.add_argument('version_uid', nargs='?', default=None, help='Show verbose blocks for this version')
     p.set_defaults(func='ls')
+
+    # STATS
+    p = subparsers.add_parser(
+        'stats',
+        help="Show statistics")
+    p.add_argument('version_uid', nargs='?', default=None, help='Show statistics for this version')
+    p.set_defaults(func='stats')
 
     args = parser.parse_args()
 
