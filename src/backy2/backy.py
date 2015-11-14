@@ -155,11 +155,6 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def get_stats_by_version(self, version_uid):
-        """ Get statistics for a single version """
-        raise NotImplementedError()
-
-
     def set_version_invalid(self, uid):
         """ Mark a version as invalid """
         raise NotImplementedError()
@@ -373,10 +368,6 @@ class SQLBackend(MetaBackend):
             return stats
         else:
             return self.session.query(Stats).order_by(Stats.version_name, Stats.date).all()
-
-
-    def get_stats_by_version(self, version_uid):
-        return stats
 
 
     def set_version_invalid(self, uid):
@@ -1059,6 +1050,8 @@ class Commands():
     def _ls_blocks_tbl_output(self, blocks):
         tbl = PrettyTable()
         tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
+        tbl.align['id'] = 'r'
+        tbl.align['size'] = 'r'
         for block in blocks:
             tbl.add_row([
                 block.id,
@@ -1087,7 +1080,11 @@ class Commands():
     def _ls_versions_tbl_output(self, versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid', 'version valid']
+        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid',
+                'version valid']
+        tbl.align['name'] = 'l'
+        tbl.align['size'] = 'r'
+        tbl.align['size_bytes'] = 'r'
         for version in versions:
             tbl.add_row([
                 version.date,
@@ -1121,6 +1118,18 @@ class Commands():
                 'bytes read', 'blocks read', 'bytes written', 'blocks written',
                 'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
                 'duration (s)']
+        tbl.align['name'] = 'l'
+        tbl.align['size bytes'] = 'r'
+        tbl.align['size blocks'] = 'r'
+        tbl.align['bytes read'] = 'r'
+        tbl.align['blocks read'] = 'r'
+        tbl.align['bytes written'] = 'r'
+        tbl.align['blocks written'] = 'r'
+        tbl.align['bytes dedup'] = 'r'
+        tbl.align['blocks dedup'] = 'r'
+        tbl.align['bytes sparse'] = 'r'
+        tbl.align['blocks sparse'] = 'r'
+        tbl.align['duration (s)'] = 'r'
         for stat in stats:
             tbl.add_row([
                 stat.date,
