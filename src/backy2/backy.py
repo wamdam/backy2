@@ -1103,10 +1103,12 @@ class BackyStore():
             if block is None:
                 continue  # raise? That'd be a write outside the device...
             if block.id in cow:
+                # the block is already copied, so update it.
                 block_uid = cow[block.id]
                 self.backy.data_backend.update(block_uid, dataio.read(length), offset)
                 logger.debug('Updated cow changed block {} into {})'.format(block.id, block_uid))
             else:
+                # read the block from the original, update it and write it back
                 write_data = BytesIO(self.backy.data_backend.read(block.uid))
                 write_data.seek(offset)
                 write_data.write(dataio.read(length))
