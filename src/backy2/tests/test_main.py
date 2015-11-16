@@ -4,7 +4,7 @@ import sys
 import backy2.backy
 import shutil
 #import time
-#import random
+import random
 import uuid
 
 BLOCK_SIZE = 1024*4096
@@ -26,6 +26,29 @@ def test_path(request):
         shutil.rmtree(path)
     request.addfinalizer(fin)
     return path
+
+
+@pytest.fixture(scope="function")
+def backy(request):
+    _test_path = test_path(request)
+    TESTLEN = 10
+    BLOCK_SIZE = 4096
+    meta_backend = backy2.backy.SQLBackend('sqlite:///'+_test_path+'/backy.sqlite')
+    data_backend = backy2.backy.FileBackend(_test_path)
+    backy = backy2.backy.Backy(meta_backend=meta_backend, data_backend=data_backend, block_size=BLOCK_SIZE)
+
+    version_name = 'backup'
+    version_uid = backy.meta_backend.set_version(version_name, TESTLEN, BLOCK_SIZE*TESTLEN, 1)
+    block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
+    checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
+
+    for id in range(TESTLEN):
+        backy.meta_backend.set_block(id, version_uid, block_uids[id], checksums[id], BLOCK_SIZE, 1)
+
+    def fin():
+        backy.close()
+
+    return backy
 
 
 def test_blocks_from_hints():
@@ -162,4 +185,18 @@ def _patch(filename, offset, data=None):
     with open(filename, 'r+b') as f:
         f.seek(offset)
         f.write(data)
+
+
+def test_backystore_readlist(backy):
+    store = backy2.backy.BackyStore(backy)
+    version_uid = backy.ls()[0].uid
+    offset = random.randint(0, 6500)
+    length = random.randint(0, 15000)
+    read_list = store._read_list(version_uid, offset, length)
+    assert read_list[0][1] == offset % backy.block_size
+    read_list_length = 0
+    for entry in read_list:
+        read_list_length += entry[2]
+    assert read_list_length == length
+    print('Trying with offset {} and length {} resulted in {} blocks.'.format(offset, length, len(read_list)))
 

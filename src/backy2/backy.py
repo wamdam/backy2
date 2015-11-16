@@ -3,6 +3,7 @@
 from configparser import ConfigParser  # python 3.3
 from functools import partial
 from io import StringIO
+from .nbdserver import Server as NbdServer
 from prettytable import PrettyTable
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
@@ -234,8 +235,10 @@ class DataBackend():
         raise NotImplementedError()
 
 
-    def read(self, uid):
-        """ Returns b'<data>' or raises FileNotFoundError """
+    def read(self, uid, offset=0, length=None):
+        """ Returns b'<data>' or raises FileNotFoundError.
+        With length==None, all known data is read for this uid.
+        """
         raise NotImplementedError()
 
 
@@ -612,11 +615,21 @@ class FileBackend(DataBackend):
         os.unlink(filename)
 
 
-    def read(self, uid):
+    def read(self, uid, offset=0, length=None):
         filename = self._filename(uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
-        return open(filename, 'rb').read()
+        if offset==0 and length is None:
+            return open(filename, 'rb').read()
+        else:
+            with open(filename, 'rb') as f:
+                if offset:
+                    f.seek(offset)
+                if length:
+                    return f.read(length)
+                else:
+                    return f.read()
+
 
 
     def get_all_blob_uids(self):
@@ -994,6 +1007,69 @@ class Backy():
         self.meta_backend.import_(f)
 
 
+class BackyStore():
+    """ An NBD Server compatible backy store.
+    This has methods to access backup data linearily.
+    """
+
+    def __init__(self, backy):
+        self.backy = backy
+        self.blocks = {}
+
+
+    def get_versions(self):
+        return self.backy.ls()
+
+
+    def get_version(self, uid):
+        return self.backy.meta_backend.get_version(uid)
+
+
+    def _read_list(self, version_uid, offset, length):
+        # get cached blocks data
+        if not self.blocks.get(version_uid):
+            self.blocks[version_uid] = self.backy.meta_backend.get_blocks_by_version(version_uid)
+        blocks = self.blocks[version_uid]
+
+        block_number = offset // self.backy.block_size
+        block_offset = offset % self.backy.block_size
+
+        read_list = []
+        while True:
+            try:
+                block = blocks[block_number]
+            except IndexError:
+                # In case the backup file is not a multiple of 4096 in size,
+                # we need to fake blocks to the end until it matches. That means,
+                # that we return b'\0' until the block size is reached.
+                block = None
+                read_length = length
+                read_list.append((None, 0, length))  # hint: return \0s
+            else:
+                assert block.id == block_number
+                read_length = min(block.size-block_offset, length)
+                read_list.append((block, block_offset, read_length))
+            block_number += 1
+            block_offset = 0
+            length -= read_length
+            assert length >= 0
+            if length == 0:
+                break
+
+        return read_list
+
+
+    def read(self, version_uid, offset, length):
+        read_list = self._read_list(version_uid, offset, length)
+        data = []
+        for block, offset, length in read_list:
+            if block is None:
+                data.append(b'\0'*length)
+            else:
+                data.append(self.backy.data_backend.read(block.uid, offset, length))
+        return b''.join(data)
+
+
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
@@ -1223,6 +1299,15 @@ class Commands():
         backy.close()
 
 
+    def nbd(self, version_uid, bind_address, bind_port):
+        backy = self.backy()
+        store = BackyStore(backy)
+        addr = (bind_address, bind_port)
+        server = NbdServer(addr, store)
+        logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
+        server.serve_forever()
+
+
     def import_(self, filename='-'):
         backy = self.backy()
         try:
@@ -1328,6 +1413,17 @@ def main():
         help="Show statistics")
     p.add_argument('version_uid', nargs='?', default=None, help='Show statistics for this version')
     p.set_defaults(func='stats')
+
+    # NBD
+    p = subparsers.add_parser(
+        'nbd',
+        help="Start an nbd server")
+    p.add_argument('version_uid', nargs='?', default=None, help='Start an nbd server for this version')
+    p.add_argument('-a', '--bind-address', default='127.0.0.1',
+            help="Bind to this ip address (default: 127.0.0.1)")
+    p.add_argument('-p', '--bind-port', default=10809,
+            help="Bind to this port (default: 10809)")
+    p.set_defaults(func='nbd')
 
     args = parser.parse_args()
 
