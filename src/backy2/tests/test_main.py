@@ -192,7 +192,7 @@ def test_backystore_readlist(backy):
     version_uid = backy.ls()[0].uid
     offset = random.randint(0, 6500)
     length = random.randint(0, 15000)
-    read_list = store._read_list(version_uid, offset, length)
+    read_list = store._block_list(version_uid, offset, length)
     assert read_list[0][1] == offset % backy.block_size
     read_list_length = 0
     for entry in read_list:

@@ -2,7 +2,7 @@
 
 from configparser import ConfigParser  # python 3.3
 from functools import partial
-from io import StringIO
+from io import (StringIO, BytesIO)
 from .nbdserver import Server as NbdServer
 from prettytable import PrettyTable
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
@@ -232,6 +232,13 @@ class DataBackend():
 
     def save(self, data):
         """ Saves data, returns unique ID """
+        raise NotImplementedError()
+
+
+    def update(self, uid, data, offset=0):
+        """ Updates data, returns written bytes.
+        This is only available on *some* data backends.
+        """
         raise NotImplementedError()
 
 
@@ -602,10 +609,18 @@ class FileBackend(DataBackend):
         return os.path.join(path, uid + self.SUFFIX)
 
 
-    def save(self, data):
+    def save(self, data, _sync=False):
         uid = self._uid()
         self._queue.put((uid, data))
+        if _sync:
+            self._queue.join()
         return uid
+
+
+    def update(self, uid, data, offset=0):
+        with open(self._filename(uid), 'r+b') as f:
+            f.seek(offset)
+            return f.write(data)
 
 
     def rm(self, uid):
@@ -1014,7 +1029,8 @@ class BackyStore():
 
     def __init__(self, backy):
         self.backy = backy
-        self.blocks = {}
+        self.blocks = {}  # block list cache by version
+        self.cow = {}  # contains version_uid: dict() of block id -> uid
 
 
     def get_versions(self):
@@ -1025,7 +1041,7 @@ class BackyStore():
         return self.backy.meta_backend.get_version(uid)
 
 
-    def _read_list(self, version_uid, offset, length):
+    def _block_list(self, version_uid, offset, length):
         # get cached blocks data
         if not self.blocks.get(version_uid):
             self.blocks[version_uid] = self.backy.meta_backend.get_blocks_by_version(version_uid)
@@ -1060,7 +1076,7 @@ class BackyStore():
 
 
     def read(self, version_uid, offset, length):
-        read_list = self._read_list(version_uid, offset, length)
+        read_list = self._block_list(version_uid, offset, length)
         data = []
         for block, offset, length in read_list:
             if block is None:
@@ -1068,6 +1084,52 @@ class BackyStore():
             else:
                 data.append(self.backy.data_backend.read(block.uid, offset, length))
         return b''.join(data)
+
+
+    def get_cow_version(self, from_version):
+        cow_version_uid = self.backy._prepare_version(
+            'cow from {}'.format(from_version.uid),
+            from_version.size_bytes, from_version.uid)
+        self.cow[cow_version_uid] = {}  # contains version_uid: dict() of block id -> uid
+        return cow_version_uid
+
+
+    def write(self, version_uid, offset, data):
+        """ Copy on write backup writer """
+        dataio = BytesIO(data)
+        cow = self.cow[version_uid]
+        write_list = self._block_list(version_uid, offset, len(data))
+        for block, offset, length in write_list:
+            if block is None:
+                continue  # raise? That'd be a write outside the device...
+            if block.id in cow:
+                block_uid = cow[block.id]
+                self.backy.data_backend.update(block_uid, dataio.read(length), offset)
+                logger.debug('Updated cow changed block {} into {})'.format(block.id, block_uid))
+            else:
+                write_data = BytesIO(self.backy.data_backend.read(block.uid))
+                write_data.seek(offset)
+                write_data.write(dataio.read(length))
+                write_data.seek(0)
+                block_uid = self.backy.data_backend.save(write_data.read())
+                cow[block.id] = block_uid
+                logger.debug('Wrote cow changed block {} into {})'.format(block.id, block_uid))
+
+
+    def flush(self):
+        pass
+
+
+    def fixate(self, cow_version_uid):
+        # save blocks into version
+        logger.info('Fixating version {}'.format(cow_version_uid))
+        for block_id, block_uid in self.cow[cow_version_uid].items():
+            logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
+            data = self.backy.data_backend.read(block_uid)
+            checksum = HASH_FUNCTION(data).hexdigest()
+            self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=1, _commit=False)
+        self.backy.meta_backend.set_version_valid(cow_version_uid)
+        self.backy.meta_backend._commit()
 
 
 class Commands():
@@ -1299,11 +1361,11 @@ class Commands():
         backy.close()
 
 
-    def nbd(self, version_uid, bind_address, bind_port):
+    def nbd(self, version_uid, bind_address, bind_port, read_only):
         backy = self.backy()
         store = BackyStore(backy)
         addr = (bind_address, bind_port)
-        server = NbdServer(addr, store)
+        server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
         server.serve_forever()
 
@@ -1423,6 +1485,9 @@ def main():
             help="Bind to this ip address (default: 127.0.0.1)")
     p.add_argument('-p', '--bind-port', default=10809,
             help="Bind to this port (default: 10809)")
+    p.add_argument(
+        '-r', '--read-only', action='store_true', default=False,
+        help='Read only if set, otherwise a copy on write backup is created.')
     p.set_defaults(func='nbd')
 
     args = parser.parse_args()

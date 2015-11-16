@@ -69,11 +69,12 @@ class Server(object):
     NBD_RO_FLAG = (1 << 1)
 
 
-    def __init__(self, addr, store):
+    def __init__(self, addr, store, read_only=True):
         self.log = logging.getLogger(__package__)
 
         self.address = addr
         self.store = store
+        self.read_only = read_only
 
 
     @asyncio.coroutine
@@ -89,7 +90,7 @@ class Server(object):
         """Handle the connection"""
         try:
             host, port = writer.get_extra_info("peername")
-            version = None
+            version, cow_version_uid = None, None
             self.log.info("Incoming connection from %s:%s" % (host,port))
 
             # initial handshake
@@ -151,9 +152,11 @@ class Server(object):
                     self.log.info("[%s:%s] Negotiated export: %s" % (host, port, version.uid))
 
                     export_flags = self.NBD_EXPORT_FLAGS
-                    #if store.read_only:
-                    export_flags ^= self.NBD_RO_FLAG
-                    #self.log.info("[%s:%s] %s is read only" % (host, port, store.container))
+                    if self.read_only:
+                        export_flags ^= self.NBD_RO_FLAG
+                        self.log.info("nbd is read only.")
+                    else:
+                        self.log.info("nbd is read/write.")
 
                     # in case size_bytes is not %4096, we need to extend it to match
                     # block sizes.
@@ -209,12 +212,12 @@ class Server(object):
                     data = yield from reader.readexactly(length)
                     if(len(data) != length):
                         raise IOError("%s bytes expected, disconnecting" % length)
-
+                    if not cow_version_uid:
+                        cow_version_uid = self.store.get_cow_version(version)
                     try:
-                        # TODO
-                        store.seek(offset)
-                        store.write(data)
-                    except IOError as ex:
+                        self.store.write(cow_version_uid, offset, data)
+                    # TODO: Fix exception
+                    except Exception as ex:
                         self.log.error("[%s:%s] %s" % (host, port, ex))
                         yield from self.nbd_response(writer, handle, error=ex.errno)
                         continue
@@ -223,9 +226,12 @@ class Server(object):
 
                 elif cmd == self.NBD_CMD_READ:
                     try:
-                        data = self.store.read(version.uid, offset, length)
+                        if cow_version_uid:
+                            data = self.store.read(cow_version_uid, offset, length)
+                        else:
+                            data = self.store.read(version.uid, offset, length)
                     # TODO: Fix exception
-                    except IOError as ex:
+                    except Exception as ex:
                         self.log.error("[%s:%s] %s" % (host, port, ex))
                         yield from self.nbd_response(writer, handle, error=ex.errno)
                         continue
@@ -233,7 +239,7 @@ class Server(object):
                     yield from self.nbd_response(writer, handle, data=data)
 
                 elif cmd == self.NBD_CMD_FLUSH:
-                    #store.flush()
+                    self.store.flush()
                     yield from self.nbd_response(writer, handle)
 
                 else:
@@ -247,6 +253,8 @@ class Server(object):
             self.log.error("[%s:%s] %s" % (host, port, ex))
 
         finally:
+            if cow_version_uid:
+                self.store.fixate(cow_version_uid)
             writer.close()
 
 
