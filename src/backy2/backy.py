@@ -367,7 +367,7 @@ class SQLBackend(MetaBackend):
                 raise KeyError('Statistics for version {} not found.'.format(version_uid))
             return stats
         else:
-            return self.session.query(Stats).order_by(Stats.version_name, Stats.date).all()
+            return self.session.query(Stats).order_by(Stats.date).all()
 
 
     def set_version_invalid(self, uid):
