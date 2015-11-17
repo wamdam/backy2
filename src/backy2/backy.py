@@ -1099,23 +1099,24 @@ class BackyStore():
         dataio = BytesIO(data)
         cow = self.cow[version_uid]
         write_list = self._block_list(version_uid, offset, len(data))
-        for block, offset, length in write_list:
+        for block, _offset, length in write_list:
             if block is None:
+                logger.warning('Tried to save data beyond device (offset {})'.format(offset))
                 continue  # raise? That'd be a write outside the device...
             if block.id in cow:
                 # the block is already copied, so update it.
                 block_uid = cow[block.id]
                 # TODO: When s3 storage comes, updates must be against local copies
                 # for s3 storages.
-                self.backy.data_backend.update(block_uid, dataio.read(length), offset)
+                self.backy.data_backend.update(block_uid, dataio.read(length), _offset)
                 logger.debug('Updated cow changed block {} into {})'.format(block.id, block_uid))
             else:
                 # read the block from the original, update it and write it back
                 write_data = BytesIO(self.backy.data_backend.read(block.uid))
-                write_data.seek(offset)
+                write_data.seek(_offset)
                 write_data.write(dataio.read(length))
                 write_data.seek(0)
-                block_uid = self.backy.data_backend.save(write_data.read())
+                block_uid = self.backy.data_backend.save(write_data.read(), _sync=True)
                 cow[block.id] = block_uid
                 logger.debug('Wrote cow changed block {} into {})'.format(block.id, block_uid))
 
