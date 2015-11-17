@@ -1023,8 +1023,8 @@ class Backy():
 
 
 class BackyStore():
-    """ An NBD Server compatible backy store.
-    This has methods to access backup data linearily.
+    """ Makes backy storage look linear.
+    Also has a COW method.
     """
 
     def __init__(self, backy):
@@ -1105,6 +1105,8 @@ class BackyStore():
             if block.id in cow:
                 # the block is already copied, so update it.
                 block_uid = cow[block.id]
+                # TODO: When s3 storage comes, updates must be against local copies
+                # for s3 storages.
                 self.backy.data_backend.update(block_uid, dataio.read(length), offset)
                 logger.debug('Updated cow changed block {} into {})'.format(block.id, block_uid))
             else:
@@ -1119,11 +1121,14 @@ class BackyStore():
 
 
     def flush(self):
+        # TODO: Maybe fixate partly?
         pass
 
 
     def fixate(self, cow_version_uid):
         # save blocks into version
+        # TODO: When s3 storage comes, write cow blocks locally and move them
+        # to s3 when fixating.
         logger.info('Fixating version {}'.format(cow_version_uid))
         for block_id, block_uid in self.cow[cow_version_uid].items():
             logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
@@ -1132,6 +1137,7 @@ class BackyStore():
             self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=1, _commit=False)
         self.backy.meta_backend.set_version_valid(cow_version_uid)
         self.backy.meta_backend._commit()
+        del(self.cow[cow_version_uid])
 
 
 class Commands():
