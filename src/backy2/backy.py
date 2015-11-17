@@ -1375,6 +1375,11 @@ class Commands():
         addr = (bind_address, bind_port)
         server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
+        logger.info("You may now start")
+        logger.info("  nbd-client -l %s -p %s" % (addr[0], addr[1]))
+        logger.info("and then get the backup via")
+        logger.info("  modprobe nbd")
+        logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
         server.serve_forever()
 
 
