@@ -41,6 +41,7 @@ Topic :: System :: Archiving :: Backup
         'PrettyTable==0.7.2',
         'sqlalchemy==1.0.9',
         'psycopg2==2.6.1',
+        'boto',
         ],
     entry_points="""
         [console_scripts]
