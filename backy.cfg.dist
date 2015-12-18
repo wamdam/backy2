@@ -7,5 +7,12 @@ engine: sqlite:////home/dk/develop/backy2/tmp/backy.sqlite
 #engine: postgresql:///dk
 
 [DataBackend]
-type: files
-path: /home/dk/develop/backy2/tmp
+#type: files
+#path: /home/dk/develop/backy2/tmp
+type: s3
+aws_access_key_id: 
+aws_secret_access_key: 
+host: 127.0.0.1
+port: 10001
+is_secure: false
+bucket_name: backy2
