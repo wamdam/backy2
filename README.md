@@ -5,7 +5,8 @@
 backy is a **block based backup** for **virtual machines**.
 
 It's useful to backup any block based image with or without snapshot features
-to any other location.
+to any other location, that is a filesystem (NFS, ...) or any S3 compatible
+storage.
 
 backy supports forward differential backups so that a full backup is only
 necessary on the very first backup (and with ceph, not even that). All
