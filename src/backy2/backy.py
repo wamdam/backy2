@@ -714,13 +714,13 @@ class S3Backend(DataBackend):
 
     def read(self, uid):
         key = self.bucket.get_key(uid)
-        #if not os.path.exists(filename):
-            #raise FileNotFoundError('File {} not found.'.format(filename))
+        if not key:
+            raise FileNotFoundError('UID {} not found.'.format(uid))
         return key.get_contents_as_string()
 
 
     def get_all_blob_uids(self):
-        return self.bucket.list()
+        return [k.name for k in self.bucket.list()]
 
 
     def close(self):
