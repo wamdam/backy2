@@ -55,6 +55,9 @@ CFG = {
         'is_secure': '',
         'bucket_name': '',
         },
+    'NBD': {
+        'cachedir': '/tmp',
+        },
     }
 
 Base = declarative_base()
@@ -233,6 +236,12 @@ class MetaBackend():
 class DataBackend():
     """ Holds BLOBs, never overwrites
     """
+
+    # Does this filestore support partial reads of blocks?
+    #
+    # # Does this filestore support partial reads of blocks?
+    _SUPPORTS_PARTIAL_READS = False
+    _SUPPORTS_PARTIAL_WRITES = False
 
     def __init__(self, path):
         self.path = path
@@ -564,6 +573,9 @@ class FileBackend(DataBackend):
     SUFFIX = '.blob'
     SIMULTANIOUS_WRITES = 10
 
+    _SUPPORTS_PARTIAL_READS = True
+    _SUPPORTS_PARTIAL_WRITES = True
+
 
     def __init__(self, path):
         self.path = path
@@ -676,6 +688,9 @@ class S3Backend(DataBackend):
 
     SIMULTANIOUS_WRITES = 10
 
+    _SUPPORTS_PARTIAL_READS = False
+    _SUPPORTS_PARTIAL_WRITES = False
+
     def __init__(self,
             aws_access_key_id,
             aws_secret_access_key,
@@ -727,9 +742,11 @@ class S3Backend(DataBackend):
         return hashlib.md5(uuid.uuid1().bytes).hexdigest()
 
 
-    def save(self, data):
+    def save(self, data, _sync=False):
         uid = self._uid()
         self._queue.put((uid, data))
+        if _sync:
+            self._queue.join()
         return uid
 
 
@@ -1123,9 +1140,11 @@ class BackyStore():
     Also has a COW method.
     """
 
-    def __init__(self, backy):
+    def __init__(self, backy, cachedir):
         self.backy = backy
+        self.cachedir = cachedir
         self.blocks = {}  # block list cache by version
+        self.block_cache = set()
         self.cow = {}  # contains version_uid: dict() of block id -> uid
 
 
@@ -1154,6 +1173,7 @@ class BackyStore():
                 # In case the backup file is not a multiple of 4096 in size,
                 # we need to fake blocks to the end until it matches. That means,
                 # that we return b'\0' until the block size is reached.
+                # This is a nbd (or even block device) limitation
                 block = None
                 read_length = length
                 read_list.append((None, 0, length))  # hint: return \0s
@@ -1171,6 +1191,22 @@ class BackyStore():
         return read_list
 
 
+    def _read(self, block_uid, offset=0, length=None):
+        if self.backy.data_backend._SUPPORTS_PARTIAL_READS:
+            return self.backy.data_backend.read(block_uid, offset, length)
+        else:
+            if block_uid not in self.block_cache:
+                data = self.backy.data_backend.read(block_uid)
+                open(os.path.join(self.cachedir, block_uid), 'wb').write(data)
+                self.block_cache.add(block_uid)
+            with open(os.path.join(self.cachedir, block_uid), 'rb') as f:
+                f.seek(offset)
+                if length is None:
+                    return f.read()
+                else:
+                    return f.read(length)
+
+
     def read(self, version_uid, offset, length):
         read_list = self._block_list(version_uid, offset, length)
         data = []
@@ -1178,7 +1214,7 @@ class BackyStore():
             if block is None:
                 data.append(b'\0'*length)
             else:
-                data.append(self.backy.data_backend.read(block.uid, offset, length))
+                data.append(self._read(block.uid, offset, length))
         return b''.join(data)
 
 
@@ -1188,6 +1224,29 @@ class BackyStore():
             from_version.size_bytes, from_version.uid)
         self.cow[cow_version_uid] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version_uid
+
+
+    def _update(self, block_uid, data, offset=0):
+        # update a given block_uid
+        if self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+            return self.backy.data_backend.update(block_uid, data, offset)
+        else:
+            # update local copy
+            with open(os.path.join(self.cachedir, block_uid), 'r+b') as f:
+                f.seek(offset)
+                return f.write(data)
+
+
+    def _save(self, data):
+        # update a given block_uid
+        if self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+            return self.backy.data_backend.save(data, _sync=True)  # returns block uid
+        else:
+            new_uid = self.backy.data_backend._uid()
+            with open(os.path.join(self.cachedir, new_uid), 'wb') as f:
+                f.write(data)
+            self.block_cache.add(new_uid)
+            return new_uid
 
 
     def write(self, version_uid, offset, data):
@@ -1202,9 +1261,7 @@ class BackyStore():
             if block.id in cow:
                 # the block is already copied, so update it.
                 block_uid = cow[block.id]
-                # TODO: When s3 storage comes, updates must be against local copies
-                # for s3 storages.
-                self.backy.data_backend.update(block_uid, dataio.read(length), _offset)
+                self._update(block_uid, dataio.read(length), _offset)
                 logger.debug('Updated cow changed block {} into {})'.format(block.id, block_uid))
             else:
                 # read the block from the original, update it and write it back
@@ -1212,7 +1269,7 @@ class BackyStore():
                 write_data.seek(_offset)
                 write_data.write(dataio.read(length))
                 write_data.seek(0)
-                block_uid = self.backy.data_backend.save(write_data.read(), _sync=True)
+                block_uid = self._save(write_data.read())
                 cow[block.id] = block_uid
                 logger.debug('Wrote cow changed block {} into {})'.format(block.id, block_uid))
 
@@ -1224,13 +1281,17 @@ class BackyStore():
 
     def fixate(self, cow_version_uid):
         # save blocks into version
-        # TODO: When s3 storage comes, write cow blocks locally and move them
-        # to s3 when fixating.
         logger.info('Fixating version {}'.format(cow_version_uid))
         for block_id, block_uid in self.cow[cow_version_uid].items():
             logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
-            data = self.backy.data_backend.read(block_uid)
+            data = self._read(block_uid)
             checksum = HASH_FUNCTION(data).hexdigest()
+            if not self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+                # dump changed data
+                new_uid = self.backy.data_backend.save(data, _sync=True)
+                logger.debug('Stored block {} with local uid {} to uid {}'.format(block_id, block_uid, new_uid))
+                block_uid = new_uid
+
             self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=1, _commit=False)
         self.backy.meta_backend.set_version_valid(cow_version_uid)
         self.backy.meta_backend._commit()
@@ -1477,7 +1538,7 @@ class Commands():
 
     def nbd(self, version_uid, bind_address, bind_port, read_only):
         backy = self.backy()
-        store = BackyStore(backy)
+        store = BackyStore(backy, cachedir=self.config['NBD']['cachedir'])
         addr = (bind_address, bind_port)
         server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
