@@ -11,6 +11,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
 import argparse
+import boto.s3.connection
+import boto.exception
 import csv
 import datetime
 import fileinput
@@ -46,6 +48,12 @@ CFG = {
     'DataBackend': {
         'type': 'files',
         'path': '.',
+        'aws_access_key_id': '',
+        'aws_secret_access_key': '',
+        'host': '',
+        'port': '',
+        'is_secure': '',
+        'bucket_name': '',
         },
     }
 
@@ -662,6 +670,94 @@ class FileBackend(DataBackend):
 
 
 
+class S3Backend(DataBackend):
+    """ A DataBackend which stores in S3 compatible storages. The files are
+    stored in a configurable bucket. """
+
+    SIMULTANIOUS_WRITES = 10
+
+    def __init__(self,
+            aws_access_key_id,
+            aws_secret_access_key,
+            host,
+            port,
+            is_secure,
+            calling_format=boto.s3.connection.OrdinaryCallingFormat(),
+            bucket_name='backy2'
+            ):
+        self.conn = boto.connect_s3(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                host=host,
+                port=port,
+                is_secure=is_secure,
+                calling_format=calling_format
+            )
+        # create our bucket
+        try:
+            self.bucket = self.conn.create_bucket(bucket_name)  # TODO: What if exists?
+        except boto.exception.S3CreateError:
+            # exists...
+            pass
+
+        self._queue = queue.Queue(self.SIMULTANIOUS_WRITES)
+        self._writer_thread = threading.Thread(target=self._writer)
+        self._writer_thread.daemon = True
+        self._writer_thread.start()
+
+
+    def _writer(self):
+        """ A threaded background writer """
+        while True:
+            entry = self._queue.get()
+            if entry is None:
+                break
+            uid, data = entry
+            t1 = time.time()
+            key = self.bucket.new_key(uid)
+            r = key.set_contents_from_string(data)
+            t2 = time.time()
+            assert r == len(data)
+            self._queue.task_done()
+            logger.debug('Wrote data asynchronously uid {} in {:.2f}s (Queue size is {})'.format(uid, t2-t1, self._queue.qsize()))
+
+
+    def _uid(self):
+        # a uuid always starts with the same bytes, so let's widen this
+        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
+
+
+    def save(self, data):
+        uid = self._uid()
+        self._queue.put((uid, data))
+        return uid
+
+
+    def rm(self, uid):
+        key = self.bucket.get_key(uid)
+        if not key:  # TODO: Won't this raise?
+            raise FileNotFoundError('UID {} not found.'.format(uid))
+        self.bucket.delete_key(uid)
+
+
+    def read(self, uid):
+        key = self.bucket.get_key(uid)
+        if not key:
+            raise FileNotFoundError('UID {} not found.'.format(uid))
+        return key.get_contents_as_string()
+
+
+    def get_all_blob_uids(self):
+        return [k.name for k in self.bucket.list()]
+
+
+    def close(self):
+        self._queue.put(None)  # ends the thread
+        self._writer_thread.join()
+        self.conn.close()
+
+
+
 class Backy():
     """
     """
@@ -1158,6 +1254,15 @@ class Commands():
         # configure file backend
         if config['DataBackend']['type'] == 'files':
             data_backend = FileBackend(config['DataBackend']['path'])
+        elif config['DataBackend']['type'] == 's3':
+            data_backend = S3Backend(
+                    aws_access_key_id=config['DataBackend']['aws_access_key_id'],
+                    aws_secret_access_key=config['DataBackend']['aws_secret_access_key'],
+                    host=config['DataBackend']['host'],
+                    port=int(config['DataBackend']['port']),
+                    is_secure=True if config['DataBackend']['is_secure'] in ('True', 'true', '1') else False,
+                    bucket_name=config['DataBackend']['bucket_name']
+                )
 
         self.backy = partial(Backy, meta_backend=meta_backend, data_backend=data_backend)
 
