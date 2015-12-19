@@ -1296,6 +1296,7 @@ class BackyStore():
         self.backy.meta_backend.set_version_valid(cow_version_uid)
         self.backy.meta_backend._commit()
         del(self.cow[cow_version_uid])
+        # TODO: Delete COW blocks and also those from block_cache
 
 
 class Commands():
