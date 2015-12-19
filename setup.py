@@ -32,7 +32,7 @@ Topic :: System :: Archiving :: Backup
         '': 'src',
     },
     include_package_data=True,
-    zip_safe=False,
+    zip_safe=True,
     install_requires=[
         'pytest',
         'pytest-cov',

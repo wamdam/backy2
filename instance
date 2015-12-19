@@ -23,6 +23,10 @@ case "$1" in
         fi
         $PYTHON setup.py develop
         ;;
+    build)
+        mkdir build 2>/dev/null
+        pex . -m backy2.backy:main -o build/backy
+        ;;
     test)
         $PYTEST -vv
         ;;
