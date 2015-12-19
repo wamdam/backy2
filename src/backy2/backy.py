@@ -1445,11 +1445,16 @@ def main():
     conffiles = [
         os.path.join('/etc', conffilename),
         os.path.join('/etc', 'backy', conffilename),
+        conffilename,
+        os.path.join('..', conffilename),
+        os.path.join('..', '..', conffilename),
+        os.path.join('..', '..', '..', conffilename),
         os.path.join(here, conffilename),
         os.path.join(here, '..', conffilename),
         os.path.join(here, '..', '..', conffilename),
         os.path.join(here, '..', '..', '..', conffilename),
         ]
+    config = None
     for conffile in conffiles:
         if args.verbose:
             print("Looking for {}... ".format(conffile), end="")
@@ -1461,6 +1466,9 @@ def main():
         else:
             if args.verbose:
                 print("")
+    if not config:
+        logger.warn("Running without conffile. Consider adding one at /etc/backy.cfg")
+        config = Config(CFG)
 
     if args.verbose:
         console_level = logging.DEBUG
