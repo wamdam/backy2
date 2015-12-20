@@ -27,6 +27,10 @@ case "$1" in
         mkdir build 2>/dev/null
         pex . -m backy2.backy:main -o build/backy
         ;;
+    clean)
+        rm build/backy
+        rm -r $HOME/.pex
+        ;;
     test)
         $PYTEST -vv
         ;;
