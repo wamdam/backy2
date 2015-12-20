@@ -1295,8 +1295,21 @@ class BackyStore():
             self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=1, _commit=False)
         self.backy.meta_backend.set_version_valid(cow_version_uid)
         self.backy.meta_backend._commit()
-        del(self.cow[cow_version_uid])
         # TODO: Delete COW blocks and also those from block_cache
+        if self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+            for block_uid in self.block_cache:
+                # TODO if this block is in the current version (and in no other?)
+                # rm this block from cache
+                # rm block uid from self.block_cache
+                pass
+            for block_id, block_uid in self.cow[cow_version_uid].items():
+                # TODO: rm block_uid from cache
+                pass
+        else:
+            # backends that support partial writes will be written to directly.
+            # So there's no need to cleanup.
+            pass
+        del(self.cow[cow_version_uid])
 
 
 class Commands():
