@@ -482,7 +482,6 @@ class SQLBackend(MetaBackend):
         _csv = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         _csv.writerow(['backy2 Version {} metadata dump'.format(VERSION)])
         version = self.get_version(version_uid)
-        # TODO: Should stats be exported?
         _csv.writerow([
             version.uid,
             version.date.strftime('%Y-%m-%d %H:%M:%S'),
@@ -667,7 +666,7 @@ class S3Backend(DataBackend):
             )
         # create our bucket
         try:
-            self.bucket = self.conn.create_bucket(bucket_name)  # TODO: What if exists?
+            self.bucket = self.conn.create_bucket(bucket_name)
         except boto.exception.S3CreateError:
             # exists...
             pass
@@ -707,7 +706,7 @@ class S3Backend(DataBackend):
 
     def rm(self, uid):
         key = self.bucket.get_key(uid)
-        if not key:  # TODO: Won't this raise?
+        if not key:
             raise FileNotFoundError('UID {} not found.'.format(uid))
         self.bucket.delete_key(uid)
 
