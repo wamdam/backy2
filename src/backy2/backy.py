@@ -560,13 +560,13 @@ class FileBackend(DataBackend):
         self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
         self._writer_threads = []
         for i in range(simultaneous_writes):
-            _writer_thread = threading.Thread(target=self._writer)
+            _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
 
 
-    def _writer(self):
+    def _writer(self, id_=0):
         """ A threaded background writer """
         while True:
             entry = self._queue.get()
@@ -586,7 +586,7 @@ class FileBackend(DataBackend):
             t2 = time.time()
             assert r == len(data)
             self._queue.task_done()
-            logger.debug('Wrote data asynchronously uid {} in {:.2f}s (Queue size is {})'.format(uid, t2-t1, self._queue.qsize()))
+            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
 
 
     def _uid(self):
@@ -681,13 +681,13 @@ class S3Backend(DataBackend):
         self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
         self._writer_threads = []
         for i in range(simultaneous_writes):
-            _writer_thread = threading.Thread(target=self._writer)
+            _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
 
 
-    def _writer(self):
+    def _writer(self, id_):
         """ A threaded background writer """
         while True:
             entry = self._queue.get()
@@ -700,7 +700,7 @@ class S3Backend(DataBackend):
             t2 = time.time()
             assert r == len(data)
             self._queue.task_done()
-            logger.debug('Wrote data asynchronously uid {} in {:.2f}s (Queue size is {})'.format(uid, t2-t1, self._queue.qsize()))
+            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
 
 
     def _uid(self):
