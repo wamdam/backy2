@@ -53,6 +53,7 @@ CFG = {
         'port': '',
         'is_secure': '',
         'bucket_name': '',
+        'simultaneous_writes': '1',
         },
     }
 
@@ -551,15 +552,18 @@ class FileBackend(DataBackend):
     DEPTH = 2
     SPLIT = 2
     SUFFIX = '.blob'
-    SIMULTANIOUS_WRITES = 10
+    WRITE_QUEUE_LENGTH = 10
 
 
-    def __init__(self, path):
+    def __init__(self, path, simultaneous_writes=1):
         self.path = path
-        self._queue = queue.Queue(self.SIMULTANIOUS_WRITES)
-        self._writer_thread = threading.Thread(target=self._writer)
-        self._writer_thread.daemon = True
-        self._writer_thread.start()
+        self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
+        self._writer_threads = []
+        for i in range(simultaneous_writes):
+            _writer_thread = threading.Thread(target=self._writer)
+            _writer_thread.daemon = True
+            _writer_thread.start()
+            self._writer_threads.append(_writer_thread)
 
 
     def _writer(self):
@@ -636,8 +640,10 @@ class FileBackend(DataBackend):
 
 
     def close(self):
-        self._queue.put(None)  # ends the thread
-        self._writer_thread.join()
+        for _writer_thread in self._writer_threads:
+            self._queue.put(None)  # ends the thread
+        for _writer_thread in self._writer_threads:
+            _writer_thread.join()
 
 
 
@@ -645,7 +651,7 @@ class S3Backend(DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
-    SIMULTANIOUS_WRITES = 10
+    WRITE_QUEUE_LENGTH = 10
 
     def __init__(self,
             aws_access_key_id,
@@ -654,7 +660,8 @@ class S3Backend(DataBackend):
             port,
             is_secure,
             calling_format=boto.s3.connection.OrdinaryCallingFormat(),
-            bucket_name='backy2'
+            bucket_name='backy2',
+            simultaneous_writes=1,
             ):
         self.conn = boto.connect_s3(
                 aws_access_key_id=aws_access_key_id,
@@ -671,10 +678,13 @@ class S3Backend(DataBackend):
             # exists...
             pass
 
-        self._queue = queue.Queue(self.SIMULTANIOUS_WRITES)
-        self._writer_thread = threading.Thread(target=self._writer)
-        self._writer_thread.daemon = True
-        self._writer_thread.start()
+        self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
+        self._writer_threads = []
+        for i in range(simultaneous_writes):
+            _writer_thread = threading.Thread(target=self._writer)
+            _writer_thread.daemon = True
+            _writer_thread.start()
+            self._writer_threads.append(_writer_thread)
 
 
     def _writer(self):
@@ -723,8 +733,10 @@ class S3Backend(DataBackend):
 
 
     def close(self):
-        self._queue.put(None)  # ends the thread
-        self._writer_thread.join()
+        for _writer_thread in self._writer_threads:
+            self._queue.put(None)  # ends the thread
+        for _writer_thread in self._writer_threads:
+            _writer_thread.join()
         self.conn.close()
 
 
@@ -1105,7 +1117,10 @@ class Commands():
 
         # configure file backend
         if config['DataBackend']['type'] == 'files':
-            data_backend = FileBackend(config['DataBackend']['path'])
+            data_backend = FileBackend(
+                    config['DataBackend']['path'],
+                    simultaneous_writes=int(config['DataBackend']['simultaneous_writes']),
+                    )
         elif config['DataBackend']['type'] == 's3':
             data_backend = S3Backend(
                     aws_access_key_id=config['DataBackend']['aws_access_key_id'],
@@ -1113,8 +1128,9 @@ class Commands():
                     host=config['DataBackend']['host'],
                     port=int(config['DataBackend']['port']),
                     is_secure=True if config['DataBackend']['is_secure'] in ('True', 'true', '1') else False,
-                    bucket_name=config['DataBackend']['bucket_name']
-                )
+                    bucket_name=config['DataBackend']['bucket_name'],
+                    simultaneous_writes=int(config['DataBackend']['simultaneous_writes']),
+                    )
 
         self.backy = partial(Backy, meta_backend=meta_backend, data_backend=data_backend)
 
