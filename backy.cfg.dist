@@ -16,6 +16,7 @@ host: 127.0.0.1
 port: 10001
 is_secure: false
 bucket_name: backy2
+simultaneous_writes: 5
 
 [NBD]
 cachedir: /tmp
