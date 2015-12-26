@@ -42,6 +42,7 @@ Topic :: System :: Archiving :: Backup
         'sqlalchemy==1.0.9',
         'psycopg2==2.6.1',
         'boto',
+        'pex==1.1.0',
         ],
     entry_points="""
         [console_scripts]
