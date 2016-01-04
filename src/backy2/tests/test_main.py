@@ -188,7 +188,7 @@ def _patch(filename, offset, data=None):
 
 
 def test_backystore_readlist(backy):
-    store = backy2.backy.BackyStore(backy)
+    store = backy2.backy.BackyStore(backy, cachedir='/tmp')
     version_uid = backy.ls()[0].uid
     offset = random.randint(0, 6500)
     length = random.randint(0, 15000)
