@@ -691,7 +691,7 @@ class S3Backend(DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
-    WRITE_QUEUE_LENGTH = 10
+    WRITE_QUEUE_LENGTH = 20
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
@@ -721,7 +721,8 @@ class S3Backend(DataBackend):
             # exists...
             pass
 
-        self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
+        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
+        self._queue = queue.Queue(self.write_queue_length)
         self._writer_threads = []
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
