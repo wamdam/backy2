@@ -21,6 +21,7 @@
 .svn
 activate.sh
 tmp
+tmp2
 env
 htmlcov
 report.xml
