@@ -557,7 +557,8 @@ class FileBackend(DataBackend):
 
     def __init__(self, path, simultaneous_writes=1):
         self.path = path
-        self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
+        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
+        self._queue = queue.Queue(self.write_queue_length)
         self._writer_threads = []
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
