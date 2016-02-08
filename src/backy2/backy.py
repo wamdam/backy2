@@ -653,6 +653,7 @@ class S3Backend(DataBackend):
     stored in a configurable bucket. """
 
     WRITE_QUEUE_LENGTH = 10
+    fatal_error = None
 
     def __init__(self,
             aws_access_key_id,
@@ -678,6 +679,11 @@ class S3Backend(DataBackend):
         except boto.exception.S3CreateError:
             # exists...
             pass
+        except OSError as e:
+            # no route to host
+            self.fatal_error = e
+            logger.error('Fatal error, dying: {}'.format(e))
+            exit('Fatal error: {}'.format(e))
 
         self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
         self._writer_threads = []
@@ -692,12 +698,30 @@ class S3Backend(DataBackend):
         """ A threaded background writer """
         while True:
             entry = self._queue.get()
-            if entry is None:
+            if entry is None or self.fatal_error:
                 break
             uid, data = entry
             t1 = time.time()
             key = self.bucket.new_key(uid)
-            r = key.set_contents_from_string(data)
+            try:
+                r = key.set_contents_from_string(data)
+            except (
+                    OSError,
+                    boto.exception.BotoServerError,
+                    boto.exception.S3ResponseError,
+                    ) as e:
+                # OSError happens when the S3 host is gone (i.e. network died,
+                # host down, ...). boto tries hard to recover, however after
+                # several attempts it will give up and raise.
+                # BotoServerError happens, when there is no server.
+                # S3ResponseError sometimes happens, when the cluster is about
+                # to shutdown. Hard to reproduce because the writer must write
+                # in exactly this moment.
+                # We let the backup job die here fataly.
+                self.fatal_error = e
+                logger.error('Fatal error, dying: {}'.format(e))
+                #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
+                os._exit(1)
             t2 = time.time()
             assert r == len(data)
             self._queue.task_done()
@@ -710,6 +734,8 @@ class S3Backend(DataBackend):
 
 
     def save(self, data):
+        if self.fatal_error:
+            raise self.fatal_error
         uid = self._uid()
         self._queue.put((uid, data))
         return uid
