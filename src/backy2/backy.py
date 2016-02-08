@@ -579,7 +579,8 @@ class FileBackend(DataBackend):
 
     def __init__(self, path, simultaneous_writes=1):
         self.path = path
-        self._queue = queue.Queue(self.WRITE_QUEUE_LENGTH)
+        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
+        self._queue = queue.Queue(self.write_queue_length)
         self._writer_threads = []
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
@@ -695,6 +696,7 @@ class S3Backend(DataBackend):
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
+    fatal_error = None
 
     def __init__(self,
             aws_access_key_id,
@@ -720,6 +722,11 @@ class S3Backend(DataBackend):
         except boto.exception.S3CreateError:
             # exists...
             pass
+        except OSError as e:
+            # no route to host
+            self.fatal_error = e
+            logger.error('Fatal error, dying: {}'.format(e))
+            exit('Fatal error: {}'.format(e))
 
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self._queue = queue.Queue(self.write_queue_length)
@@ -735,12 +742,30 @@ class S3Backend(DataBackend):
         """ A threaded background writer """
         while True:
             entry = self._queue.get()
-            if entry is None:
+            if entry is None or self.fatal_error:
                 break
             uid, data = entry
             t1 = time.time()
             key = self.bucket.new_key(uid)
-            r = key.set_contents_from_string(data)
+            try:
+                r = key.set_contents_from_string(data)
+            except (
+                    OSError,
+                    boto.exception.BotoServerError,
+                    boto.exception.S3ResponseError,
+                    ) as e:
+                # OSError happens when the S3 host is gone (i.e. network died,
+                # host down, ...). boto tries hard to recover, however after
+                # several attempts it will give up and raise.
+                # BotoServerError happens, when there is no server.
+                # S3ResponseError sometimes happens, when the cluster is about
+                # to shutdown. Hard to reproduce because the writer must write
+                # in exactly this moment.
+                # We let the backup job die here fataly.
+                self.fatal_error = e
+                logger.error('Fatal error, dying: {}'.format(e))
+                #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
+                os._exit(1)
             t2 = time.time()
             assert r == len(data)
             self._queue.task_done()
@@ -753,6 +778,8 @@ class S3Backend(DataBackend):
 
 
     def save(self, data, _sync=False):
+        if self.fatal_error:
+            raise self.fatal_error
         uid = self._uid()
         self._queue.put((uid, data))
         if _sync:
