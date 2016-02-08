@@ -16,10 +16,8 @@ Backlog:
   space. So find something better.
 * Add tests for anything where scrub marks blocks as invalid (source changed,
   bitrod in backup, ...
-* write LargeFileBackend with 100GB sparse files and store blocks into them.
-  This should work around the nfs many files bottleneck
 
 Next:
 
-* Make writer thread to write while reading
+* Use SEEK_HOLE and SEEK_DATA to find data in backups
 
