@@ -1004,7 +1004,7 @@ class Backy():
                 'start_time': time.time(),
             }
         with open(source, 'rb') as source_file:
-            #posix_fadvise(source.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
+            posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
             # determine source size
             source_file.seek(0, 2)  # to the end
             source_size = source_file.tell()
