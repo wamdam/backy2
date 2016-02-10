@@ -69,7 +69,12 @@ with TestPath() as testpath:
         # create backy
         meta_backend = SQLBackend('sqlite:///'+testpath+'/backy.sqlite')
         data_backend = FileBackend(path=testpath, simultaneous_writes=5)
-        backy = Backy(meta_backend=meta_backend, data_backend=data_backend, block_size=4096)
+        backy = Backy(
+                meta_backend=meta_backend,
+                data_backend=data_backend,
+                simultaneous_reads=5,
+                block_size=4096,
+                )
         version_uid = backy.backup(
             'data-backup',
             os.path.join(testpath, 'data'),

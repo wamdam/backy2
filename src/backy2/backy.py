@@ -55,6 +55,7 @@ CFG = {
         'is_secure': '',
         'bucket_name': '',
         'simultaneous_writes': '1',
+        'simultaneous_reads': '1',
         },
     'NBD': {
         'cachedir': '/tmp',
@@ -594,6 +595,7 @@ class FileBackend(DataBackend):
         while True:
             entry = self._queue.get()
             if entry is None:
+                logger.debug("Writer {} finishing.".format(id_))
                 break
             uid, data = entry
             path = os.path.join(self.path, self._path(uid))
@@ -743,6 +745,7 @@ class S3Backend(DataBackend):
         while True:
             entry = self._queue.get()
             if entry is None or self.fatal_error:
+                logger.debug("Writer {} finishing.".format(id_))
                 break
             uid, data = entry
             t1 = time.time()
@@ -813,15 +816,87 @@ class S3Backend(DataBackend):
         self.conn.close()
 
 
+class Reader():
+    simultaneous_reads = 1
+
+    def __init__(self,
+            simultaneous_reads,
+            block_size,
+            source,
+            ):
+        self.simultaneous_reads = simultaneous_reads
+        self.block_size = block_size
+        self.source = source
+
+        self._reader_threads = []
+        self._inqueue = queue.Queue()  # infinite size for all the blocks
+        self._outqueue = queue.Queue(self.simultaneous_reads)
+        for i in range(self.simultaneous_reads):
+            _reader_thread = threading.Thread(target=self._reader, args=(i,))
+            _reader_thread.daemon = True
+            _reader_thread.start()
+            self._reader_threads.append(_reader_thread)
+
+
+    def _reader(self, id_):
+        """ self._inqueue contains Blocks.
+        self._outqueue contains (block, data, data_checksum)
+        """
+        with open(self.source, 'rb') as source_file:
+            while True:
+                block = self._inqueue.get()
+                if block is None:
+                    logger.debug("Reader {} finishing.".format(id_))
+                    self._outqueue.put(None)  # also let the outqueue end
+                    break
+                offset = block.id * self.block_size
+                t1 = time.time()
+                source_file.seek(offset)
+                t2 = time.time()
+                data = source_file.read(self.block_size)
+                t3 = time.time()
+                # throw away cache
+                posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+                if not data:
+                    raise RuntimeError('EOF reached on source when there should be data.')
+
+                data_checksum = HASH_FUNCTION(data).hexdigest()
+                if not block.valid:
+                    logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
+                else:
+                    logger.debug('Reader {} read block {} (checksum {}...) in {:.2f}s (seek in {:.2f}s)'.format(id_, block.id, data_checksum[:16], t3-t1, t2-t1))
+
+                self._outqueue.put((block, data, data_checksum))
+                self._inqueue.task_done()
+
+
+    def read(self, block_id):
+        """ Adds a read job """
+        self._inqueue.put(block_id)
+
+
+    def get(self):
+        d = self._outqueue.get()
+        self._outqueue.task_done()
+        return d
+
+
+    def close(self):
+        for _reader_thread in self._reader_threads:
+            self._inqueue.put(None)  # ends the threads
+        for _reader_thread in self._reader_threads:
+            _reader_thread.join()
+
 
 class Backy():
     """
     """
 
-    def __init__(self, meta_backend, data_backend, block_size=BLOCK_SIZE):
+    def __init__(self, meta_backend, data_backend, simultaneous_reads=1, block_size=BLOCK_SIZE):
         self.meta_backend = meta_backend
         self.data_backend = data_backend
         self.block_size = block_size
+        self.simultaneous_reads = simultaneous_reads
 
 
     def _prepare_version(self, name, size_bytes, from_version_uid=None):
@@ -1050,85 +1125,84 @@ class Backy():
                 'start_time': time.time(),
             }
         with open(source, 'rb') as source_file:
-            posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
+            #posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
             # determine source size
             source_file.seek(0, 2)  # to the end
             source_size = source_file.tell()
             source_file.seek(0)
-            size = math.ceil(source_size / self.block_size)
-            stats['version_size_bytes'] = source_size
-            stats['version_size_blocks'] = size
 
-            # Sanity check: check hints for validity, i.e. too high offsets, ...
-            if hints:
-                max_offset = max([h[0]+h[1] for h in hints])
-                if max_offset > source_size:
-                    raise ValueError('Hints have higher offsets than source file.')
+        size = math.ceil(source_size / self.block_size)
+        stats['version_size_bytes'] = source_size
+        stats['version_size_blocks'] = size
 
-            if hints:
-                sparse_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
-                read_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
+        # Sanity check: check hints for validity, i.e. too high offsets, ...
+        if hints:
+            max_offset = max([h[0]+h[1] for h in hints])
+            if max_offset > source_size:
+                raise ValueError('Hints have higher offsets than source file.')
+
+        if hints:
+            sparse_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
+            read_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
+        else:
+            sparse_blocks = []
+            read_blocks = range(size)
+        sparse_blocks = set(sparse_blocks)
+        read_blocks = set(read_blocks)
+
+        try:
+            version_uid = self._prepare_version(name, source_size, from_version)
+        except RuntimeError as e:
+            logger.error(str(e))
+            logger.error('Backy exiting.')
+            # TODO: Don't exit here, exit in Commands
+            exit(1)
+        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+
+        reader = Reader(
+                self.simultaneous_reads,
+                self.block_size,
+                source,
+                )
+        read_jobs = 0
+        for block in blocks:
+            if block.id in read_blocks or not block.valid:
+                reader.read(block)  # adds a read job.
+                read_jobs += 1
+            elif block.id in sparse_blocks:
+                # This "elif" is very important. Because if the block is in read_blocks
+                # AND sparse_blocks, it *must* be read.
+                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
+                stats['blocks_sparse'] += 1
+                stats['bytes_sparse'] += block.size
+                logger.debug('Skipping block (sparse) {}'.format(block.id))
             else:
-                sparse_blocks = []
-                read_blocks = range(size)
-            sparse_blocks = set(sparse_blocks)
-            read_blocks = set(read_blocks)
+                logger.debug('Keeping block {}'.format(block.id))
 
-            try:
-                version_uid = self._prepare_version(name, source_size, from_version)
-            except RuntimeError as e:
-                logger.error(str(e))
-                logger.error('Backy exiting.')
-                # TODO: Don't exit here, exit in Commands
-                exit(1)
-            blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        # now use the readers and write
+        for i in range(read_jobs):
+            block, data, data_checksum = reader.get()
 
-            for block in blocks:
-                if block.id in read_blocks or not block.valid:
-                    offset = block.id * self.block_size
-                    t1 = time.time()
-                    source_file.seek(offset)
-                    t2 = time.time()
-                    data = source_file.read(self.block_size)
-                    t3 = time.time()
-                    # throw away cache
-                    posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
-                    if not data:
-                        raise RuntimeError('EOF reached on source when there should be data.')
-                    stats['blocks_read'] += 1
-                    stats['bytes_read'] += len(data)
+            stats['blocks_read'] += 1
+            stats['bytes_read'] += len(data)
 
-                    data_checksum = HASH_FUNCTION(data).hexdigest()
-                    if not block.valid:
-                        logger.debug('Re-read block (bacause it was invalid) {} (checksum {})'.format(block.id, data_checksum))
-                    else:
-                        logger.debug('Read block {} (checksum {}...) in {:.2f}s (seek in {:.2f}s)'.format(block.id, data_checksum[:16], t3-t1, t2-t1))
+            # dedup
+            existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
+            if existing_block and existing_block.size == len(data):
+                self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
+                stats['blocks_found_dedup'] += 1
+                stats['bytes_found_dedup'] += len(data)
+                logger.debug('Found existing block for id {} with uid {})'.format
+                        (block.id, existing_block.uid))
+            else:
+                block_uid = self.data_backend.save(data)
+                self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
+                stats['blocks_written'] += 1
+                stats['bytes_written'] += len(data)
+                logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
 
-                    # dedup
-                    existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
-                    if existing_block and existing_block.size == len(data):
-                        self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
-                        stats['blocks_found_dedup'] += 1
-                        stats['bytes_found_dedup'] += len(data)
-                        logger.debug('Found existing block for id {} with uid {})'.format
-                                (block.id, existing_block.uid))
-                    else:
-                        block_uid = self.data_backend.save(data)
-                        self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
-                        stats['blocks_written'] += 1
-                        stats['bytes_written'] += len(data)
-                        logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
-                elif block.id in sparse_blocks:
-                    # This "elif" is very important. Because if the block is in read_blocks
-                    # AND sparse_blocks, it *must* be read.
-                    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
-                    stats['blocks_sparse'] += 1
-                    stats['bytes_sparse'] += block.size
-                    logger.debug('Skipping block (sparse) {}'.format(block.id))
-                else:
-                    logger.debug('Keeping block {}'.format(block.id))
-        # XXX: close is the wrong word for waiting on the writer thread...
-        self.data_backend.close()
+        reader.close()  # wait for all readers
+        self.data_backend.close()  # wait for all writers
         self.meta_backend.set_version_valid(version_uid)
         self.meta_backend.set_stats(
             version_uid=version_uid,
@@ -1382,7 +1456,11 @@ class Commands():
                     simultaneous_writes=int(config['DataBackend']['simultaneous_writes']),
                     )
 
-        self.backy = partial(Backy, meta_backend=meta_backend, data_backend=data_backend)
+        simultaneous_reads=int(config['DataBackend']['simultaneous_reads'])
+        self.backy = partial(Backy,
+                meta_backend=meta_backend,
+                data_backend=data_backend,
+                simultaneous_reads=simultaneous_reads)
 
 
     def backup(self, name, source, rbd, from_version):
