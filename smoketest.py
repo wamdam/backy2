@@ -4,8 +4,10 @@ import os
 import shutil
 import random
 import json
-from backy2.backy import Backy, SQLBackend, FileBackend
+from backy2.backy import Backy, SQLBackend, FileBackend, FileReader
 from backy2.backy import hints_from_rbd_diff
+from backy2.backy import init_logging
+import logging
 
 kB = 1024
 MB = kB * 1024
@@ -42,8 +44,9 @@ class TestPath():
 
 with TestPath() as testpath:
     from_version = None
-    #init_logging(testpath, logging.DEBUG)
+    init_logging(testpath+'/backy.log', logging.INFO)
 
+    old_size = 0
     for i in range(100):
         size = 32*4*kB + random.randint(-4*kB, 4*kB)
         print('Run {}'.format(i+1))
@@ -63,16 +66,23 @@ with TestPath() as testpath:
             hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
         # truncate?
         open(os.path.join(testpath, 'data'), 'r+b').truncate(size)
+
+        if old_size < size:
+            # add blocks between old_size and size to the hints
+            hints.append({'offset': old_size, 'length': size - old_size, 'exists': True})
+        old_size = size
+
         print('  Applied {} changes, size is {}.'.format(len(hints), size))
         open(os.path.join(testpath, 'hints'), 'w').write(json.dumps(hints))
 
         # create backy
         meta_backend = SQLBackend('sqlite:///'+testpath+'/backy.sqlite')
         data_backend = FileBackend(path=testpath, simultaneous_writes=5)
+        reader = FileReader(simultaneous_reads=5, block_size=4096)
         backy = Backy(
                 meta_backend=meta_backend,
                 data_backend=data_backend,
-                simultaneous_reads=5,
+                reader=reader,
                 block_size=4096,
                 )
         version_uid = backy.backup(
