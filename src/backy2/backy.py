@@ -864,7 +864,7 @@ class Reader():
                 if not block.valid:
                     logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
                 else:
-                    logger.debug('Reader {} read block {} (checksum {}...) in {:.2f}s (seek in {:.2f}s)'.format(id_, block.id, data_checksum[:16], t3-t1, t2-t1))
+                    logger.debug('Reader {} read block {} (checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
 
                 self._outqueue.put((block, data, data_checksum))
                 self._inqueue.task_done()
