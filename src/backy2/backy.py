@@ -55,6 +55,9 @@ CFG = {
         'is_secure': '',
         'bucket_name': '',
         'simultaneous_writes': '1',
+        },
+    'Reader': {
+        'type': 'file',
         'simultaneous_reads': '1',
         },
     'NBD': {
@@ -816,21 +819,19 @@ class S3Backend(DataBackend):
         self.conn.close()
 
 
-class Reader():
+class FileReader():
     simultaneous_reads = 1
 
-    def __init__(self,
-            simultaneous_reads,
-            block_size,
-            source,
-            ):
+    def __init__(self, simultaneous_reads, block_size=BLOCK_SIZE):
         self.simultaneous_reads = simultaneous_reads
         self.block_size = block_size
-        self.source = source
-
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
+
+
+    def open(self, source):
+        self.source = source
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
@@ -892,11 +893,11 @@ class Backy():
     """
     """
 
-    def __init__(self, meta_backend, data_backend, simultaneous_reads=1, block_size=BLOCK_SIZE):
+    def __init__(self, meta_backend, data_backend, reader, block_size=BLOCK_SIZE):
         self.meta_backend = meta_backend
         self.data_backend = data_backend
+        self.reader = reader
         self.block_size = block_size
-        self.simultaneous_reads = simultaneous_reads
 
 
     def _prepare_version(self, name, size_bytes, from_version_uid=None):
@@ -1159,15 +1160,11 @@ class Backy():
             exit(1)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
-        reader = Reader(
-                self.simultaneous_reads,
-                self.block_size,
-                source,
-                )
         read_jobs = 0
+        self.reader.open(source)
         for block in blocks:
             if block.id in read_blocks or not block.valid:
-                reader.read(block)  # adds a read job.
+                self.reader.read(block)  # adds a read job.
                 read_jobs += 1
             elif block.id in sparse_blocks:
                 # This "elif" is very important. Because if the block is in read_blocks
@@ -1181,7 +1178,7 @@ class Backy():
 
         # now use the readers and write
         for i in range(read_jobs):
-            block, data, data_checksum = reader.get()
+            block, data, data_checksum = self.reader.get()
 
             stats['blocks_read'] += 1
             stats['bytes_read'] += len(data)
@@ -1201,7 +1198,7 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
 
-        reader.close()  # wait for all readers
+        self.reader.close()  # wait for all readers
         self.data_backend.close()  # wait for all writers
         self.meta_backend.set_version_valid(version_uid)
         self.meta_backend.set_stats(
@@ -1456,11 +1453,16 @@ class Commands():
                     simultaneous_writes=int(config['DataBackend']['simultaneous_writes']),
                     )
 
-        simultaneous_reads=int(config['DataBackend']['simultaneous_reads'])
+        if config['Reader']['type'] == 'file':
+            reader = FileReader(
+                    simultaneous_reads=int(config['Reader']['simultaneous_reads']),
+                    )
+
         self.backy = partial(Backy,
                 meta_backend=meta_backend,
                 data_backend=data_backend,
-                simultaneous_reads=simultaneous_reads)
+                reader=reader,
+                )
 
 
     def backup(self, name, source, rbd, from_version):
