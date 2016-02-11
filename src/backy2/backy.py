@@ -1061,7 +1061,7 @@ class Backy():
 
             # the last block can differ in size, so let's check
             _offset = id * self.block_size
-            new_block_size = min(block_size, size_bytes - _offset)
+            new_block_size = min(self.block_size, size_bytes - _offset)
             if new_block_size != block_size:
                 # last block changed, so set back all info
                 block_size = new_block_size
