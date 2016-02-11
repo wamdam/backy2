@@ -46,7 +46,6 @@ with TestPath() as testpath:
     from_version = None
     init_logging(testpath+'/backy.log', logging.INFO)
 
-    old_size = 0
     for i in range(100):
         size = 32*4*kB + random.randint(-4*kB, 4*kB)
         print('Run {}'.format(i+1))
@@ -66,11 +65,6 @@ with TestPath() as testpath:
             hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
         # truncate?
         open(os.path.join(testpath, 'data'), 'r+b').truncate(size)
-
-        if old_size < size:
-            # add blocks between old_size and size to the hints
-            hints.append({'offset': old_size, 'length': size - old_size, 'exists': True})
-        old_size = size
 
         print('  Applied {} changes, size is {}.'.format(len(hints), size))
         open(os.path.join(testpath, 'hints'), 'w').write(json.dumps(hints))
