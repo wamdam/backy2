@@ -929,7 +929,7 @@ class RBDReader():
 
     def open(self, source):
         self.source = source  # pool/imagename@snapshotname or pool/imagename
-        img_name = re.match('^(\w+)/(\w+)@?(\w+)?$', source)
+        img_name = re.match('^(\w+)/(\w+)@?(.+)?$', source)
         if not img_name:
             raise RuntimeError('Not a source: {} . Need pool/imagename or pool/imagename@snapshotname'.format(source))
         self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
