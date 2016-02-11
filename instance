@@ -25,6 +25,8 @@ case "$1" in
         ;;
     build)
         mkdir build 2>/dev/null
+        rm build/backy
+        rm -r $HOME/.pex
         $HERE/env/bin/pex . -m backy2.backy:main -o build/backy
         ;;
     clean)
