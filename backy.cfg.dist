@@ -20,3 +20,12 @@ simultaneous_writes: 5
 
 [NBD]
 cachedir: /tmp
+
+[Reader]
+#type: file
+#simultaneous_reads: 1
+# ---
+type: librbd
+ceph_conffile: /etc/ceph/ceph.conf
+simultaneous_reads: 10
+
