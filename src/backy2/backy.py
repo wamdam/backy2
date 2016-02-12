@@ -34,7 +34,10 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-VERSION = '2.1'
+VERSION = '2.2'
+import pkg_resources
+__version__ = pkg_resources.get_distribution('backy2').version
+METADATA_VERSION = '2.1'
 BLOCK_SIZE = 1024*4096  # 4MB
 HASH_FUNCTION = hashlib.sha512
 
@@ -506,7 +509,7 @@ class SQLBackend(MetaBackend):
     def export(self, version_uid, f):
         blocks = self.get_blocks_by_version(version_uid)
         _csv = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        _csv.writerow(['backy2 Version {} metadata dump'.format(VERSION)])
+        _csv.writerow(['backy2 Version {} metadata dump'.format(METADATA_VERSION)])
         version = self.get_version(version_uid)
         _csv.writerow([
             version.uid,
@@ -532,7 +535,7 @@ class SQLBackend(MetaBackend):
     def import_(self, f):
         _csv = csv.reader(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         signature = next(_csv)
-        if signature[0] != 'backy2 Version {} metadata dump'.format(VERSION):
+        if signature[0] != 'backy2 Version {} metadata dump'.format(METADATA_VERSION):
             raise ValueError('Wrong import format.')
         version_uid, version_date, version_name, version_size, version_size_bytes, version_valid = next(_csv)
         try:
@@ -1837,6 +1840,8 @@ def main():
         '-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument(
         '-m', '--machine-output', action='store_true', default=False)
+    parser.add_argument(
+        '-V', '--version', action='store_true', help='Show version')
 
     subparsers = parser.add_subparsers()
 
@@ -1932,6 +1937,10 @@ def main():
 
     args = parser.parse_args()
 
+    if args.version:
+        print(__version__)
+        exit(0)
+
     if not hasattr(args, 'func'):
         parser.print_usage()
         sys.exit(0)
@@ -1951,6 +1960,7 @@ def main():
         os.path.join(here, '..', '..', '..', conffilename),
         ]
     config = None
+
     for conffile in conffiles:
         if args.verbose:
             print("Looking for {}... ".format(conffile), end="")
