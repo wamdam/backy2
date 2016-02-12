@@ -86,7 +86,7 @@ with TestPath() as testpath:
         engine: sqlite:///{testpath}/backy.sqlite
 
         [DataBackend]
-        type: backy2.data_backends.file
+        type: backy2.enterprise.data_backends.file
         path: {testpath}
         simultaneous_writes: 5
 
@@ -94,7 +94,7 @@ with TestPath() as testpath:
         cachedir: /tmp
 
         [Reader]
-        type: backy2.readers.file
+        type: backy2.enterprise.readers.file
         simultaneous_reads: 5
         """.format(testpath=testpath)
         Config = partial(_Config, cfg=config)
