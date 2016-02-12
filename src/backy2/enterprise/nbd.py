@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-import os
-from io import BytesIO
 from backy2.logging import logger
+from io import BytesIO
+import os
 
 
 class BackyStore():

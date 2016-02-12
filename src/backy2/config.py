@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-# Credits: scrapy.
-
-import glob
-from io import StringIO
 from configparser import SafeConfigParser, NoSectionError, NoOptionError
+from io import StringIO
 from os.path import expanduser
+import glob
+
 
 default_config = """
 [DEFAULTS]

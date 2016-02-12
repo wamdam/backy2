@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-import sys
+from backy2.config import Config as _Config
 from backy2.logging import logger, init_logging
+from backy2.utils import hints_from_rbd_diff, backy_from_config
 from functools import partial
 from io import StringIO
 from prettytable import PrettyTable
@@ -10,8 +11,7 @@ import argparse
 import fileinput
 import hashlib
 import logging
-from backy2.config import Config as _Config
-from backy2.utils import hints_from_rbd_diff, backy_from_config
+import sys
 
 
 import pkg_resources

@@ -2,7 +2,7 @@
 """
 swiftnbd. server module
 
-Slightly changed to support backy2 blocks instead of swift in 2015 by
+Changed to support backy2 blocks instead of swift in 2015 by
 Daniel Kraft <daniel.kraft@d9t.de>
 
 Copyright (C) 2013-2015 by Juan J. Martinez <jjm@usebox.net>
