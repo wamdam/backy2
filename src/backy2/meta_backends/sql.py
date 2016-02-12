@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from backy2.logging import logger
+from backy2.meta_backends import MetaBackend
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -9,9 +10,8 @@ from sqlalchemy.types import DateTime
 import csv
 import datetime
 import sqlalchemy
-import uuid
 import time
-from backy2.meta_backends import MetaBackend
+import uuid
 
 
 METADATA_VERSION = '2.1'
