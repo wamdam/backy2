@@ -20,7 +20,12 @@ class Backy():
     """
     """
 
-    def __init__(self, meta_backend, data_backend, reader, block_size, hash_function):
+    def __init__(self, meta_backend, data_backend, reader, block_size=None, hash_function=None):
+        if block_size is None:
+            block_size = 1024*4096  # 4MB
+        if hash_function is None:
+            import hashlib
+            hash_function = hashlib.sha512
         self.meta_backend = meta_backend
         self.data_backend = data_backend
         self.reader = reader
