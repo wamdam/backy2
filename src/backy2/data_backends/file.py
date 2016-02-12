@@ -68,6 +68,7 @@ class DataBackend(_DataBackend):
         t2 = time.time()
         assert r == len(data)
         logger.debug('Wrote data uid {} in {:.2f}s'.format(uid, t2-t1))
+        return uid
 
 
     def rm(self, uid):
