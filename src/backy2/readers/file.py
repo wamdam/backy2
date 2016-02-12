@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
+from backy2.logging import logger
 import os
 import queue
 import threading
 import time
-from backy2.logging import logger
 
 if hasattr(os, 'posix_fadvise'):
     posix_fadvise = os.posix_fadvise

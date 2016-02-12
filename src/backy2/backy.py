@@ -23,14 +23,14 @@ import math
 import os
 import queue
 import random
-import re
 import sqlalchemy
 import sys
 import threading
 import time
 import uuid
 
-from backy2.readers.file_reader import FileReader
+from backy2.readers.file import FileReader
+from backy2.readers.rbd import RBDReader
 from backy2.logging import logger, init_logging
 
 import pkg_resources
@@ -791,107 +791,6 @@ class S3Backend(DataBackend):
         for _writer_thread in self._writer_threads:
             _writer_thread.join()
         self.conn.close()
-
-
-class RBDReader():
-    simultaneous_reads = 10
-    pool_name = None
-    image_name = None
-    snapshot_name = None
-
-    def __init__(self, simultaneous_reads, ceph_conffile, block_size=BLOCK_SIZE):
-        from backy2.enterprise import rados
-        self.simultaneous_reads = simultaneous_reads
-        self.block_size = block_size
-        self._reader_threads = []
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads)
-        self.cluster = rados.Rados(conffile=ceph_conffile)
-        self.cluster.connect()
-
-
-    def open(self, source):
-        self.source = source  # pool/imagename@snapshotname or pool/imagename
-        img_name = re.match('^([^/]+)/([^@]+)@?(.+)?$', source)
-        if not img_name:
-            raise RuntimeError('Not a source: {} . Need pool/imagename or pool/imagename@snapshotname'.format(source))
-        self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
-        for i in range(self.simultaneous_reads):
-            _reader_thread = threading.Thread(target=self._reader, args=(i,))
-            _reader_thread.daemon = True
-            _reader_thread.start()
-            self._reader_threads.append(_reader_thread)
-
-
-    def size(self):
-        from backy2.enterprise import rbd
-        ioctx = self.cluster.open_ioctx(self.pool_name)
-        with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
-            size = image.size()
-        return size
-
-
-    def _reader(self, id_):
-        """ self._inqueue contains Blocks.
-        self._outqueue contains (block, data, data_checksum)
-        """
-        from backy2.enterprise import rados
-        from backy2.enterprise import rbd
-        ioctx = self.cluster.open_ioctx(self.pool_name)
-        with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
-            while True:
-                block = self._inqueue.get()
-                if block is None:
-                    logger.debug("Reader {} finishing.".format(id_))
-                    self._outqueue.put(None)  # also let the outqueue end
-                    break
-                offset = block.id * self.block_size
-                t1 = time.time()
-                data = image.read(offset, self.block_size, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
-                t2 = time.time()
-                # throw away cache
-                if not data:
-                    raise RuntimeError('EOF reached on source when there should be data.')
-
-                data_checksum = HASH_FUNCTION(data).hexdigest()
-                if not block.valid:
-                    logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
-                else:
-                    logger.debug('Reader {} read block {} (checksum {}...) in {:.2f}s) '
-                        '(Inqueue size: {}, Outqueue size: {})'.format(
-                            id_,
-                            block.id,
-                            data_checksum[:16],
-                            t2-t1,
-                            self._inqueue.qsize(),
-                            self._outqueue.qsize()
-                            ))
-
-                self._outqueue.put((block, data, data_checksum))
-                self._inqueue.task_done()
-
-
-    def read(self, block, sync=False):
-        """ Adds a read job """
-        self._inqueue.put(block)
-        if sync:
-            rblock, data, data_checksum = self.get()
-            if rblock.id != block.id:
-                raise RuntimeError('Do not mix threaded reading with sync reading!')
-            return data
-
-
-    def get(self):
-        d = self._outqueue.get()
-        self._outqueue.task_done()
-        return d
-
-
-    def close(self):
-        for _reader_thread in self._reader_threads:
-            self._inqueue.put(None)  # ends the threads
-        for _reader_thread in self._reader_threads:
-            _reader_thread.join()
 
 
 class Backy():
