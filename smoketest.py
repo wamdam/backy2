@@ -5,12 +5,11 @@ import shutil
 import random
 import json
 import hashlib
-from backy2.backy import Backy
-from backy2.meta_backends.sql import SQLBackend
-from backy2.data_backends.file import FileBackend
-from backy2.readers.file import FileReader
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.logging import init_logging
+from backy2.utils import backy_from_config
+from backy2.config import Config as _Config
+from functools import partial
 import logging
 
 kB = 1024
@@ -76,16 +75,30 @@ with TestPath() as testpath:
         open(os.path.join(testpath, 'hints'), 'w').write(json.dumps(hints))
 
         # create backy
-        meta_backend = SQLBackend('sqlite:///'+testpath+'/backy.sqlite')
-        data_backend = FileBackend(path=testpath, simultaneous_writes=5)
-        reader = FileReader(simultaneous_reads=5, block_size=4096, hash_function=HASH_FUNCTION)
-        backy = Backy(
-                meta_backend=meta_backend,
-                data_backend=data_backend,
-                reader=reader,
-                block_size=4096,
-                hash_function=HASH_FUNCTION,
-                )
+        config = """
+        [DEFAULTS]
+        logfile: /var/log/backy.log
+        block_size: 4096
+        hash_function: sha512
+
+        [MetaBackend]
+        type: backy2.meta_backends.sql
+        engine: sqlite:///{testpath}/backy.sqlite
+
+        [DataBackend]
+        type: backy2.data_backends.file
+        path: {testpath}
+        simultaneous_writes: 5
+
+        [NBD]
+        cachedir: /tmp
+
+        [Reader]
+        type: backy2.readers.file
+        simultaneous_reads: 5
+        """.format(testpath=testpath)
+        Config = partial(_Config, cfg=config)
+        backy = backy_from_config(Config)()
         version_uid = backy.backup(
             'data-backup',
             os.path.join(testpath, 'data'),

@@ -37,10 +37,10 @@ class Config(object):
 
     SECTION = 'DEFAULTS'
 
-    def __init__(self, values=None, extra_sources=(), section=None, conf_name=None):
+    def __init__(self, cfg=None, extra_sources=(), section=None, conf_name=None):
         if section is not None:
             self.SECTION = section
-        if values is None:
+        if cfg is None:
             self.cp = SafeConfigParser()
             self.cp.readfp(StringIO(default_config))
             if conf_name:
@@ -49,8 +49,8 @@ class Config(object):
             for fp in extra_sources:
                 self.cp.readfp(fp)
         else:
-            self.cp = SafeConfigParser(values)
-            self.cp.add_section(self.SECTION)
+            self.cp = SafeConfigParser()
+            self.cp.readfp(StringIO(cfg))
 
     def _getsources(self, conf_name):
         sources = ['/etc/{name}.cfg'.format(name=conf_name)]
