@@ -10,28 +10,25 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
 import argparse
-import boto.s3.connection
-import boto.exception
 import csv
 import datetime
 import fileinput
-import fnmatch
 import hashlib
 import json
 import logging
 import math
 import os
-import queue
 import random
 import sqlalchemy
 import sys
-import threading
 import time
 import uuid
 
 from backy2.readers.file import FileReader
 from backy2.readers.rbd import RBDReader
 from backy2.logging import logger, init_logging
+from backy2.data_backends.file import FileBackend
+from backy2.data_backends.s3 import S3Backend
 
 import pkg_resources
 __version__ = pkg_resources.get_distribution('backy2').version
@@ -109,13 +106,6 @@ def blocks_from_hints(hints, block_size):
         for i in range(start_block, end_block):
             blocks.add(i)
     return blocks
-
-
-def makedirs(path):
-    try:
-        os.makedirs(path)
-    except FileExistsError:
-        pass
 
 
 class MetaBackend():
@@ -205,53 +195,6 @@ class MetaBackend():
 
     def get_all_block_uids(self):
         """ Get all block uids existing in the meta data store """
-        raise NotImplementedError()
-
-
-    def close(self):
-        pass
-
-
-class DataBackend():
-    """ Holds BLOBs, never overwrites
-    """
-
-    # Does this filestore support partial reads of blocks?
-    #
-    # # Does this filestore support partial reads of blocks?
-    _SUPPORTS_PARTIAL_READS = False
-    _SUPPORTS_PARTIAL_WRITES = False
-
-    def __init__(self, path):
-        self.path = path
-
-
-    def save(self, data):
-        """ Saves data, returns unique ID """
-        raise NotImplementedError()
-
-
-    def update(self, uid, data, offset=0):
-        """ Updates data, returns written bytes.
-        This is only available on *some* data backends.
-        """
-        raise NotImplementedError()
-
-
-    def read(self, uid, offset=0, length=None):
-        """ Returns b'<data>' or raises FileNotFoundError.
-        With length==None, all known data is read for this uid.
-        """
-        raise NotImplementedError()
-
-
-    def rm(self, uid):
-        """ Deletes a block """
-        raise NotImplementedError()
-
-
-    def get_all_blob_uids(self):
-        """ Get all existing blob uids """
         raise NotImplementedError()
 
 
@@ -539,258 +482,6 @@ class SQLBackend(MetaBackend):
     def close(self):
         self.session.commit()
         self.session.close()
-
-
-class FileBackend(DataBackend):
-    """ A DataBackend which stores in files. The files are stored in directories
-    starting with the bytes of the generated uid. The depth of this structure
-    is configurable via the DEPTH parameter, which defaults to 2. """
-
-    DEPTH = 2
-    SPLIT = 2
-    SUFFIX = '.blob'
-    WRITE_QUEUE_LENGTH = 10
-
-    _SUPPORTS_PARTIAL_READS = True
-    _SUPPORTS_PARTIAL_WRITES = True
-
-
-    def __init__(self, path, simultaneous_writes=1):
-        self.path = path
-        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
-        self._queue = queue.Queue(self.write_queue_length)
-        self._writer_threads = []
-        for i in range(simultaneous_writes):
-            _writer_thread = threading.Thread(target=self._writer, args=(i,))
-            _writer_thread.daemon = True
-            _writer_thread.start()
-            self._writer_threads.append(_writer_thread)
-
-
-    def _writer(self, id_=0):
-        """ A threaded background writer """
-        while True:
-            entry = self._queue.get()
-            if entry is None:
-                logger.debug("Writer {} finishing.".format(id_))
-                break
-            uid, data = entry
-            path = os.path.join(self.path, self._path(uid))
-            filename = self._filename(uid)
-            t1 = time.time()
-            try:
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-            except FileNotFoundError:
-                makedirs(path)
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-            t2 = time.time()
-            assert r == len(data)
-            self._queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
-
-
-    def _uid(self):
-        # a uuid always starts with the same bytes, so let's widen this
-        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
-
-
-    def _path(self, uid):
-        """ Returns a generated path (depth = self.DEPTH) from a uid.
-        Example uid=831bde887afc11e5b45aa44e314f9270 and depth=2, then
-        it returns "83/1b".
-        If depth is larger than available bytes, then available bytes
-        are returned only as path."""
-
-        parts = [uid[i:i+self.SPLIT] for i in range(0, len(uid), self.SPLIT)]
-        return os.path.join(*parts[:self.DEPTH])
-
-
-    def _filename(self, uid):
-        path = os.path.join(self.path, self._path(uid))
-        return os.path.join(path, uid + self.SUFFIX)
-
-
-    def save(self, data, _sync=False):
-        uid = self._uid()
-        self._queue.put((uid, data))
-        if _sync:
-            self._queue.join()
-        return uid
-
-
-    def update(self, uid, data, offset=0):
-        with open(self._filename(uid), 'r+b') as f:
-            f.seek(offset)
-            return f.write(data)
-
-
-    def rm(self, uid):
-        filename = self._filename(uid)
-        if not os.path.exists(filename):
-            raise FileNotFoundError('File {} not found.'.format(filename))
-        os.unlink(filename)
-
-
-    def read(self, uid, offset=0, length=None):
-        filename = self._filename(uid)
-        if not os.path.exists(filename):
-            raise FileNotFoundError('File {} not found.'.format(filename))
-        if offset==0 and length is None:
-            return open(filename, 'rb').read()
-        else:
-            with open(filename, 'rb') as f:
-                if offset:
-                    f.seek(offset)
-                if length:
-                    return f.read(length)
-                else:
-                    return f.read()
-
-
-
-    def get_all_blob_uids(self):
-        matches = []
-        for root, dirnames, filenames in os.walk(self.path):
-            for filename in fnmatch.filter(filenames, '*.blob'):
-                uid = filename.split('.')[0]
-                matches.append(uid)
-        return matches
-
-
-    def close(self):
-        for _writer_thread in self._writer_threads:
-            self._queue.put(None)  # ends the thread
-        for _writer_thread in self._writer_threads:
-            _writer_thread.join()
-
-
-
-class S3Backend(DataBackend):
-    """ A DataBackend which stores in S3 compatible storages. The files are
-    stored in a configurable bucket. """
-
-    WRITE_QUEUE_LENGTH = 20
-
-    _SUPPORTS_PARTIAL_READS = False
-    _SUPPORTS_PARTIAL_WRITES = False
-    fatal_error = None
-
-    def __init__(self,
-            aws_access_key_id,
-            aws_secret_access_key,
-            host,
-            port,
-            is_secure,
-            calling_format=boto.s3.connection.OrdinaryCallingFormat(),
-            bucket_name='backy2',
-            simultaneous_writes=1,
-            ):
-        self.conn = boto.connect_s3(
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                host=host,
-                port=port,
-                is_secure=is_secure,
-                calling_format=calling_format
-            )
-        # create our bucket
-        try:
-            self.bucket = self.conn.create_bucket(bucket_name)
-        except boto.exception.S3CreateError:
-            # exists...
-            pass
-        except OSError as e:
-            # no route to host
-            self.fatal_error = e
-            logger.error('Fatal error, dying: {}'.format(e))
-            exit('Fatal error: {}'.format(e))
-
-        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
-        self._queue = queue.Queue(self.write_queue_length)
-        self._writer_threads = []
-        for i in range(simultaneous_writes):
-            _writer_thread = threading.Thread(target=self._writer, args=(i,))
-            _writer_thread.daemon = True
-            _writer_thread.start()
-            self._writer_threads.append(_writer_thread)
-
-
-    def _writer(self, id_):
-        """ A threaded background writer """
-        while True:
-            entry = self._queue.get()
-            if entry is None or self.fatal_error:
-                logger.debug("Writer {} finishing.".format(id_))
-                break
-            uid, data = entry
-            t1 = time.time()
-            key = self.bucket.new_key(uid)
-            try:
-                r = key.set_contents_from_string(data)
-            except (
-                    OSError,
-                    boto.exception.BotoServerError,
-                    boto.exception.S3ResponseError,
-                    ) as e:
-                # OSError happens when the S3 host is gone (i.e. network died,
-                # host down, ...). boto tries hard to recover, however after
-                # several attempts it will give up and raise.
-                # BotoServerError happens, when there is no server.
-                # S3ResponseError sometimes happens, when the cluster is about
-                # to shutdown. Hard to reproduce because the writer must write
-                # in exactly this moment.
-                # We let the backup job die here fataly.
-                self.fatal_error = e
-                logger.error('Fatal error, dying: {}'.format(e))
-                #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
-                os._exit(1)
-            t2 = time.time()
-            assert r == len(data)
-            self._queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
-
-
-    def _uid(self):
-        # a uuid always starts with the same bytes, so let's widen this
-        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
-
-
-    def save(self, data, _sync=False):
-        if self.fatal_error:
-            raise self.fatal_error
-        uid = self._uid()
-        self._queue.put((uid, data))
-        if _sync:
-            self._queue.join()
-        return uid
-
-
-    def rm(self, uid):
-        key = self.bucket.get_key(uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(uid))
-        self.bucket.delete_key(uid)
-
-
-    def read(self, uid):
-        key = self.bucket.get_key(uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(uid))
-        return key.get_contents_as_string()
-
-
-    def get_all_blob_uids(self):
-        return [k.name for k in self.bucket.list()]
-
-
-    def close(self):
-        for _writer_thread in self._writer_threads:
-            self._queue.put(None)  # ends the thread
-        for _writer_thread in self._writer_threads:
-            _writer_thread.join()
-        self.conn.close()
 
 
 class Backy():
