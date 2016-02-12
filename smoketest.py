@@ -4,12 +4,19 @@ import os
 import shutil
 import random
 import json
-from backy2.backy import Backy, SQLBackend, FileBackend
-from backy2.backy import hints_from_rbd_diff
+import hashlib
+from backy2.scripts.backy import hints_from_rbd_diff
+from backy2.logging import init_logging
+from backy2.utils import backy_from_config
+from backy2.config import Config as _Config
+from functools import partial
+import logging
 
 kB = 1024
 MB = kB * 1024
 GB = MB * 1024
+
+HASH_FUNCTION = hashlib.sha512
 
 def patch(path, filename, offset, data=None):
     """ write data into a file at offset """
@@ -42,7 +49,7 @@ class TestPath():
 
 with TestPath() as testpath:
     from_version = None
-    #init_logging(testpath, logging.DEBUG)
+    init_logging(testpath+'/backy.log', logging.INFO)
 
     for i in range(100):
         size = 32*4*kB + random.randint(-4*kB, 4*kB)
@@ -63,13 +70,35 @@ with TestPath() as testpath:
             hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
         # truncate?
         open(os.path.join(testpath, 'data'), 'r+b').truncate(size)
+
         print('  Applied {} changes, size is {}.'.format(len(hints), size))
         open(os.path.join(testpath, 'hints'), 'w').write(json.dumps(hints))
 
         # create backy
-        meta_backend = SQLBackend('sqlite:///'+testpath+'/backy.sqlite')
-        data_backend = FileBackend(path=testpath, simultaneous_writes=5)
-        backy = Backy(meta_backend=meta_backend, data_backend=data_backend, block_size=4096)
+        config = """
+        [DEFAULTS]
+        logfile: /var/log/backy.log
+        block_size: 4096
+        hash_function: sha512
+
+        [MetaBackend]
+        type: backy2.meta_backends.sql
+        engine: sqlite:///{testpath}/backy.sqlite
+
+        [DataBackend]
+        type: backy2.data_backends.file
+        path: {testpath}
+        simultaneous_writes: 5
+
+        [NBD]
+        cachedir: /tmp
+
+        [Reader]
+        type: backy2.readers.file
+        simultaneous_reads: 5
+        """.format(testpath=testpath)
+        Config = partial(_Config, cfg=config)
+        backy = backy_from_config(Config)()
         version_uid = backy.backup(
             'data-backup',
             os.path.join(testpath, 'data'),

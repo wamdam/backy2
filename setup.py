@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 from setuptools import setup, find_packages
 
-version = '2.2'
+version = '2.2e'
 
 setup(name='backy2',
     version=version,
@@ -46,6 +46,6 @@ Topic :: System :: Archiving :: Backup
         ],
     entry_points="""
         [console_scripts]
-            backy = backy2.backy:main
+            backy = backy2.scripts.backy:main
     """,
     )

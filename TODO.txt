@@ -19,5 +19,5 @@ Backlog:
 
 Next:
 
-* Use SEEK_HOLE and SEEK_DATA to find data in backups
-
+* Plausibility check when backing up from a parent with a diff (i.g. 1% block
+    checks)
