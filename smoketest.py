@@ -4,14 +4,20 @@ import os
 import shutil
 import random
 import json
-from backy2.backy import Backy, SQLBackend, FileBackend, FileReader
-from backy2.backy import hints_from_rbd_diff
-from backy2.backy import init_logging
+import hashlib
+from backy2.backy import Backy
+from backy2.meta_backends.sql import SQLBackend
+from backy2.data_backends.file import FileBackend
+from backy2.readers.file import FileReader
+from backy2.scripts.backy import hints_from_rbd_diff
+from backy2.logging import init_logging
 import logging
 
 kB = 1024
 MB = kB * 1024
 GB = MB * 1024
+
+HASH_FUNCTION = hashlib.sha512
 
 def patch(path, filename, offset, data=None):
     """ write data into a file at offset """
@@ -72,12 +78,13 @@ with TestPath() as testpath:
         # create backy
         meta_backend = SQLBackend('sqlite:///'+testpath+'/backy.sqlite')
         data_backend = FileBackend(path=testpath, simultaneous_writes=5)
-        reader = FileReader(simultaneous_reads=5, block_size=4096)
+        reader = FileReader(simultaneous_reads=5, block_size=4096, hash_function=HASH_FUNCTION)
         backy = Backy(
                 meta_backend=meta_backend,
                 data_backend=data_backend,
                 reader=reader,
                 block_size=4096,
+                hash_function=HASH_FUNCTION,
                 )
         version_uid = backy.backup(
             'data-backup',
