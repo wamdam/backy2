@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.data_backends import DataBackend as _DataBackend
+from backy2.enterprise.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 import boto.exception
 import boto.s3.connection

@@ -4,7 +4,7 @@
 from backy2.enterprise import rados
 from backy2.enterprise import rbd
 from backy2.logging import logger
-from backy2.readers import Reader as _Reader
+from backy2.enterprise.readers import Reader as _Reader
 import queue
 import re
 import threading

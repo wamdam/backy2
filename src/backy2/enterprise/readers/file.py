@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 from backy2.logging import logger
-from backy2.readers import Reader as _Reader
+from backy2.enterprise.readers import Reader as _Reader
 import os
 import queue
 import threading
