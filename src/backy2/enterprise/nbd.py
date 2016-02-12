@@ -153,7 +153,10 @@ class BackyStore():
 
     def fixate(self, cow_version_uid):
         # save blocks into version
-        logger.info('Fixating version {} (PLEASE WAIT)'.format(cow_version_uid))
+        logger.info('Fixating version {} with {} blocks (PLEASE WAIT)'.format(
+            cow_version_uid,
+            len(self.cow[cow_version_uid].items())
+            ))
         for block_id, block_uid in self.cow[cow_version_uid].items():
             logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
             data = self._read(block_uid)

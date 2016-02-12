@@ -46,6 +46,6 @@ Topic :: System :: Archiving :: Backup
         ],
     entry_points="""
         [console_scripts]
-            backy = backy2.backy:main
+            backy = backy2.scripts.backy:main
     """,
     )
