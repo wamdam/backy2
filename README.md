@@ -35,7 +35,7 @@ Scrubs support a percentile parameter (-p). When percentile is given, only
 the given part (percentile / 100) of the backup is read and compared against
 the stored checksums.
 
-Scrub can also compare the backup against an existing image, i.g. a snapshot.
+Scrub can also compare the backup against an existing image, e.g. a snapshot.
 With this ``deep scrub`` percentile checks are also available.
 
 When scrub finds invalid blocks, it marks the blocks and all versions containing
@@ -63,7 +63,6 @@ it mostly behaves like *cp* but with all features.
 
 Other features:
 
-* Threaded writer: writes while data is read
 * Restore during Backup: You can restore any valid version even while backups
   are running.
 * RAM management: Backy runs on terabyte volumes with <350MB RAM typically
