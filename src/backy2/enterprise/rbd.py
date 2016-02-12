@@ -22,7 +22,7 @@ import ctypes
 import errno
 import sys
 
-from backy2.rados import cstr, decode_cstr
+from backy2.enterprise.rados import cstr, decode_cstr
 
 ANONYMOUS_AUID = 0xffffffffffffffff
 ADMIN_AUID = 0

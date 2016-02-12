@@ -3,7 +3,6 @@
 from configparser import ConfigParser  # python 3.3
 from functools import partial
 from io import (StringIO, BytesIO)
-from .nbdserver import Server as NbdServer
 from prettytable import PrettyTable
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
@@ -31,10 +30,9 @@ import threading
 import time
 import uuid
 
+from backy2.readers.file_reader import FileReader
+from backy2.logging import logger, init_logging
 
-logger = logging.getLogger(__name__)
-
-VERSION = '2.2'
 import pkg_resources
 __version__ = pkg_resources.get_distribution('backy2').version
 METADATA_VERSION = '2.1'
@@ -93,35 +91,6 @@ class Config(dict):
                     _cfg[item[0]] = item[1]
         for key, value in base_config.items():
             self[key] = value
-
-
-def init_logging(logfile, console_level):  # pragma: no cover
-    console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s')),
-    console.setLevel(console_level)
-    #logger.addHandler(console)
-
-    logfile = logging.FileHandler(logfile)
-    logfile.setLevel(logging.INFO)
-    logfile.setFormatter(logging.Formatter('%(asctime)s [%(process)d] %(message)s')),
-    #logger.addHandler(logfile)
-
-    logging.basicConfig(handlers = [console, logfile], level=logging.DEBUG)
-
-    logger.info('$ ' + ' '.join(sys.argv))
-
-
-if hasattr(os, 'posix_fadvise'):
-    posix_fadvise = os.posix_fadvise
-else:  # pragma: no cover
-    logger.warn('Running without `posix_fadvise`.')
-    os.POSIX_FADV_RANDOM = None
-    os.POSIX_FADV_SEQUENTIAL = None
-    os.POSIX_FADV_WILLNEED = None
-    os.POSIX_FADV_DONTNEED = None
-
-    def posix_fadvise(*args, **kw):
-        return
 
 
 def hints_from_rbd_diff(rbd_diff):
@@ -824,95 +793,6 @@ class S3Backend(DataBackend):
         self.conn.close()
 
 
-class FileReader():
-    simultaneous_reads = 1
-
-    def __init__(self, simultaneous_reads, block_size=BLOCK_SIZE):
-        self.simultaneous_reads = simultaneous_reads
-        self.block_size = block_size
-        #self._reader_threads = []
-        #self._inqueue = queue.Queue()  # infinite size for all the blocks
-        #self._outqueue = queue.Queue(self.simultaneous_reads)
-
-
-    def open(self, source):
-        self.source = source
-        self._reader_threads = []
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads)
-        for i in range(self.simultaneous_reads):
-            _reader_thread = threading.Thread(target=self._reader, args=(i,))
-            _reader_thread.daemon = True
-            _reader_thread.start()
-            self._reader_threads.append(_reader_thread)
-
-
-    def size(self):
-        source_size = 0
-        with open(self.source, 'rb') as source_file:
-            #posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
-            # determine source size
-            source_file.seek(0, 2)  # to the end
-            source_size = source_file.tell()
-            source_file.seek(0)
-        return source_size
-
-
-    def _reader(self, id_):
-        """ self._inqueue contains Blocks.
-        self._outqueue contains (block, data, data_checksum)
-        """
-        with open(self.source, 'rb') as source_file:
-            while True:
-                block = self._inqueue.get()
-                if block is None:
-                    logger.debug("Reader {} finishing.".format(id_))
-                    self._outqueue.put(None)  # also let the outqueue end
-                    break
-                offset = block.id * self.block_size
-                t1 = time.time()
-                source_file.seek(offset)
-                t2 = time.time()
-                data = source_file.read(self.block_size)
-                t3 = time.time()
-                # throw away cache
-                posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
-                if not data:
-                    raise RuntimeError('EOF reached on source when there should be data.')
-
-                data_checksum = HASH_FUNCTION(data).hexdigest()
-                if not block.valid:
-                    logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
-                else:
-                    logger.debug('Reader {} read block {} (len {}, checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
-
-                self._outqueue.put((block, data, data_checksum))
-                self._inqueue.task_done()
-
-
-    def read(self, block, sync=False):
-        """ Adds a read job """
-        self._inqueue.put(block)
-        if sync:
-            rblock, data, data_checksum = self.get()
-            if rblock.id != block.id:
-                raise RuntimeError('Do not mix threaded reading with sync reading!')
-            return data
-
-
-    def get(self):
-        d = self._outqueue.get()
-        self._outqueue.task_done()
-        return d
-
-
-    def close(self):
-        for _reader_thread in self._reader_threads:
-            self._inqueue.put(None)  # ends the threads
-        for _reader_thread in self._reader_threads:
-            _reader_thread.join()
-
-
 class RBDReader():
     simultaneous_reads = 10
     pool_name = None
@@ -920,7 +800,7 @@ class RBDReader():
     snapshot_name = None
 
     def __init__(self, simultaneous_reads, ceph_conffile, block_size=BLOCK_SIZE):
-        from backy2 import rados
+        from backy2.enterprise import rados
         self.simultaneous_reads = simultaneous_reads
         self.block_size = block_size
         self._reader_threads = []
@@ -944,7 +824,7 @@ class RBDReader():
 
 
     def size(self):
-        from backy2 import rbd
+        from backy2.enterprise import rbd
         ioctx = self.cluster.open_ioctx(self.pool_name)
         with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
             size = image.size()
@@ -955,8 +835,8 @@ class RBDReader():
         """ self._inqueue contains Blocks.
         self._outqueue contains (block, data, data_checksum)
         """
-        from backy2 import rados
-        from backy2 import rbd
+        from backy2.enterprise import rados
+        from backy2.enterprise import rbd
         ioctx = self.cluster.open_ioctx(self.pool_name)
         with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
             while True:
@@ -1577,11 +1457,15 @@ class Commands():
         if config['Reader']['type'] == 'file':
             reader = FileReader(
                     simultaneous_reads=int(config['Reader']['simultaneous_reads']),
+                    block_size=BLOCK_SIZE,
+                    hash_function=HASH_FUNCTION,
                     )
         elif config['Reader']['type'] == 'librbd':
             reader = RBDReader(
                     simultaneous_reads=int(config['Reader']['simultaneous_reads']),
                     ceph_conffile=config['Reader']['ceph_conffile'],
+                    block_size=BLOCK_SIZE,
+                    hash_function=HASH_FUNCTION,
                     )
 
         self.backy = partial(Backy,
@@ -1800,6 +1684,7 @@ class Commands():
 
 
     def nbd(self, version_uid, bind_address, bind_port, read_only):
+        from .enterprise.nbdserver import Server as NbdServer
         backy = self.backy()
         store = BackyStore(backy, cachedir=self.config['NBD']['cachedir'])
         addr = (bind_address, bind_port)
@@ -1991,6 +1876,7 @@ def main():
     func_args = dict(args._get_kwargs())
     del func_args['func']
     del func_args['verbose']
+    del func_args['version']
     del func_args['machine_output']
 
     try:
