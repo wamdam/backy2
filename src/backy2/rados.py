@@ -2,6 +2,8 @@
 This module is a thin wrapper around librados.
 
 Copyright 2011, Hannu Valtonen <hannu.valtonen@ormod.com>
+
+licensed under the LGPL version 2.1, source: https://github.com/dcoles/ceph
 """
 from ctypes import CDLL, c_char_p, c_size_t, c_void_p, c_char, c_int, c_long, \
     c_ulong, create_string_buffer, byref, Structure, c_uint64, c_ubyte, \

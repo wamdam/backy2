@@ -9,6 +9,8 @@ Error codes from librbd are turned into exceptions that subclass
 (the base class of all rbd exceptions), :class:`PermissionError`
 and :class:`IOError`, in addition to those documented for the
 method.
+
+licensed under the LGPL version 2.1, source: https://github.com/dcoles/ceph
 """
 # Copyright 2011 Josh Durgin
 from collections import Iterable
