@@ -27,7 +27,7 @@ case "$1" in
         mkdir build 2>/dev/null
         rm build/backy
         rm -r $HOME/.pex
-        $HERE/env/bin/pex . -m backy2.backy:main -o build/backy
+        $HERE/env/bin/pex . -m backy2.scripts.backy:main -o build/backy
         ;;
     clean)
         rm build/backy

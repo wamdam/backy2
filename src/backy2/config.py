@@ -27,7 +27,7 @@ simultaneous_writes: 1
 cachedir: /tmp
 
 [Reader]
-type: file
+type: backy2.readers.file
 simultaneous_reads: 1
 """
 
