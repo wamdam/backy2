@@ -20,6 +20,13 @@ class DataBackend():
         raise NotImplementedError()
 
 
+    def update(self, uid, data, offset=0):
+        """ Updates data, returns written bytes.
+        This is only available on *some* data backends.
+        """
+        raise NotImplementedError()
+
+
     def read(self, uid, offset=0, length=None):
         """ Returns b'<data>' or raises FileNotFoundError.
         With length==None, all known data is read for this uid.
