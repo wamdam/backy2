@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.data_backends import DataBackend
+from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 import fnmatch
 import hashlib
@@ -20,7 +20,7 @@ def makedirs(path):
 
 
 
-class FileBackend(DataBackend):
+class DataBackend(_DataBackend):
     """ A DataBackend which stores in files. The files are stored in directories
     starting with the bytes of the generated uid. The depth of this structure
     is configurable via the DEPTH parameter, which defaults to 2. """
@@ -34,8 +34,9 @@ class FileBackend(DataBackend):
     _SUPPORTS_PARTIAL_WRITES = True
 
 
-    def __init__(self, path, simultaneous_writes=1):
-        self.path = path
+    def __init__(self, config):
+        self.path = config.get('path')
+        simultaneous_writes = config.getint('simultaneous_writes')
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self._queue = queue.Queue(self.write_queue_length)
         self._writer_threads = []

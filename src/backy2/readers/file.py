@@ -20,11 +20,11 @@ else:  # pragma: no cover
         return
 
 
-class FileReader():
+class Reader():
     simultaneous_reads = 1
 
-    def __init__(self, simultaneous_reads, block_size, hash_function):
-        self.simultaneous_reads = simultaneous_reads
+    def __init__(self, config, block_size, hash_function):
+        self.simultaneous_reads = config.getint('simultaneous_reads')
         self.block_size = block_size
         self.hash_function = hash_function
 

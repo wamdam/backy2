@@ -1,9 +1,10 @@
 # -*- encoding: utf-8 -*-
 
-import math
 from backy2.logging import logger
+import math
 import random
 import time
+
 
 def blocks_from_hints(hints, block_size):
     """ Helper method """

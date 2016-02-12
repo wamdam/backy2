@@ -1,146 +1,30 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from configparser import ConfigParser  # python 3.3
-import os
 import sys
-from backy2.readers.file import FileReader
-from backy2.readers.rbd import RBDReader
 from backy2.logging import logger, init_logging
-from backy2.data_backends.file import FileBackend
-from backy2.data_backends.s3 import S3Backend
-from backy2.meta_backends.sql import SQLBackend
-from backy2.enterprise.nbd import BackyStore
-from backy2.backy import Backy
-
 from functools import partial
 from io import StringIO
 from prettytable import PrettyTable
 import argparse
 import fileinput
 import hashlib
-import json
 import logging
+from backy2.config import Config as _Config
+from backy2.utils import hints_from_rbd_diff, backy_from_config
+
 
 import pkg_resources
 __version__ = pkg_resources.get_distribution('backy2').version
 
 
-BLOCK_SIZE = 1024*4096  # 4MB
-HASH_FUNCTION = hashlib.sha512
-
-CFG = {
-    'DEFAULTS': {
-        'logfile': './backy.log',
-        },
-    'MetaBackend': {
-        'type': 'sql',
-        'engine': 'sqlite:////tmp/backy.sqlite',
-        },
-    'DataBackend': {
-        'type': 'files',
-        'path': '.',
-        'aws_access_key_id': '',
-        'aws_secret_access_key': '',
-        'host': '',
-        'port': '',
-        'is_secure': '',
-        'bucket_name': '',
-        'simultaneous_writes': '1',
-        },
-    'Reader': {
-        'type': 'file',
-        'simultaneous_reads': '1',
-        'ceph_conffile': '',
-        },
-    'NBD': {
-        'cachedir': '/tmp',
-        },
-    }
-
-
-class ConfigException(Exception):
-    pass
-
-class Config(dict):
-    def __init__(self, base_config, conffile=None):
-        if conffile:
-            config = ConfigParser()
-            config.read(conffile)
-            sections = config.sections()
-            difference = set(sections).difference(base_config.keys())
-            if difference:
-                raise ConfigException('Unknown config section(s): {}'.format(', '.join(difference)))
-            for section in sections:
-                items = config.items(section)
-                _cfg = base_config[section]
-                for item in items:
-                    if item[0] not in _cfg:
-                        raise ConfigException('Unknown setting "{}" in section "{}".'.format(item[0], section))
-                    _cfg[item[0]] = item[1]
-        for key, value in base_config.items():
-            self[key] = value
-
-
-def hints_from_rbd_diff(rbd_diff):
-    """ Return the required offset:length tuples from a rbd json diff
-    """
-    data = json.loads(rbd_diff)
-    return [(l['offset'], l['length'], True if l['exists']=='true' else False) for l in data]
-
-
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, machine_output, config):
+    def __init__(self, machine_output, Config):
         self.machine_output = machine_output
-        self.config = config
-
-        # configure meta backend
-        if config['MetaBackend']['type'] == 'sql':
-            engine = config['MetaBackend']['engine']
-            meta_backend = SQLBackend(engine)
-        else:
-            raise NotImplementedError('MetaBackend type {} unsupported.'.format(config['MetaBackend']['type']))
-
-        # configure file backend
-        if config['DataBackend']['type'] == 'files':
-            data_backend = FileBackend(
-                    config['DataBackend']['path'],
-                    simultaneous_writes=int(config['DataBackend']['simultaneous_writes']),
-                    )
-        elif config['DataBackend']['type'] == 's3':
-            data_backend = S3Backend(
-                    aws_access_key_id=config['DataBackend']['aws_access_key_id'],
-                    aws_secret_access_key=config['DataBackend']['aws_secret_access_key'],
-                    host=config['DataBackend']['host'],
-                    port=int(config['DataBackend']['port']),
-                    is_secure=True if config['DataBackend']['is_secure'] in ('True', 'true', '1') else False,
-                    bucket_name=config['DataBackend']['bucket_name'],
-                    simultaneous_writes=int(config['DataBackend']['simultaneous_writes']),
-                    )
-
-        if config['Reader']['type'] == 'file':
-            reader = FileReader(
-                    simultaneous_reads=int(config['Reader']['simultaneous_reads']),
-                    block_size=BLOCK_SIZE,
-                    hash_function=HASH_FUNCTION,
-                    )
-        elif config['Reader']['type'] == 'librbd':
-            reader = RBDReader(
-                    simultaneous_reads=int(config['Reader']['simultaneous_reads']),
-                    ceph_conffile=config['Reader']['ceph_conffile'],
-                    block_size=BLOCK_SIZE,
-                    hash_function=HASH_FUNCTION,
-                    )
-
-        self.backy = partial(Backy,
-                meta_backend=meta_backend,
-                data_backend=data_backend,
-                reader=reader,
-                block_size=BLOCK_SIZE,
-                hash_function=HASH_FUNCTION,
-                )
+        self.Config = Config
+        self.backy = backy_from_config(Config)
 
 
     def backup(self, name, source, rbd, from_version):
@@ -352,9 +236,20 @@ class Commands():
 
 
     def nbd(self, version_uid, bind_address, bind_port, read_only):
-        from .enterprise.nbdserver import Server as NbdServer
+        try:
+            from backy2.enterprise.nbdserver import Server as NbdServer
+            from backy2.enterprise.nbd import BackyStore
+        except ImportError:
+            logger.error('NBD is available in the Enterprise Version only.')
+            sys.exit(1)
         backy = self.backy()
-        store = BackyStore(backy, cachedir=self.config['NBD']['cachedir'], hash_function=HASH_FUNCTION)
+        config_NBD = self.Config(section='NBD')
+        config_DEFAULTS = self.Config(section='DEFAULTS')
+        hash_function = getattr(hashlib, config_DEFAULTS.get('hash_function', 'sha512'))
+        store = BackyStore(
+                backy, cachedir=config_NBD.get('cachedir'),
+                hash_function=hash_function,
+                )
         addr = (bind_address, bind_port)
         server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
@@ -492,42 +387,11 @@ def main():
 
     if args.version:
         print(__version__)
-        exit(0)
+        sys.exit(0)
 
     if not hasattr(args, 'func'):
         parser.print_usage()
-        sys.exit(0)
-
-    here = os.path.dirname(os.path.abspath(__file__))
-    conffilename = 'backy.cfg'
-    conffiles = [
-        os.path.join('/etc', conffilename),
-        os.path.join('/etc', 'backy', conffilename),
-        conffilename,
-        os.path.join('..', conffilename),
-        os.path.join('..', '..', conffilename),
-        os.path.join('..', '..', '..', conffilename),
-        os.path.join(here, conffilename),
-        os.path.join(here, '..', conffilename),
-        os.path.join(here, '..', '..', conffilename),
-        os.path.join(here, '..', '..', '..', conffilename),
-        ]
-    config = None
-
-    for conffile in conffiles:
-        if args.verbose:
-            print("Looking for {}... ".format(conffile), end="")
-        if os.path.exists(conffile):
-            if args.verbose:
-                print("Found.")
-            config = Config(CFG, conffile)
-            break
-        else:
-            if args.verbose:
-                print("")
-    if not config:
-        logger.warn("Running without conffile. Consider adding one at /etc/backy.cfg")
-        config = Config(CFG)
+        sys.exit(1)
 
     if args.verbose:
         console_level = logging.DEBUG
@@ -535,9 +399,12 @@ def main():
         #console_level = logging.INFO
     else:
         console_level = logging.INFO
-    init_logging(config['DEFAULTS']['logfile'], console_level)
 
-    commands = Commands(args.machine_output, config)
+    Config = partial(_Config, conf_name='backy')
+    config = Config(section='DEFAULTS')
+    init_logging(config.get('logfile'), console_level)
+
+    commands = Commands(args.machine_output, Config)
     func = getattr(commands, args.func)
 
     # Pass over to function

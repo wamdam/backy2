@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 from backy2.logging import logger
-from backy2.meta_backends import MetaBackend
+from backy2.meta_backends import MetaBackend as _MetaBackend
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct
 from sqlalchemy.ext.declarative import declarative_base
@@ -66,14 +66,14 @@ class Block(Base):
                             self.id, self.uid, self.version_uid)
 
 
-class SQLBackend(MetaBackend):
+class MetaBackend(_MetaBackend):
     """ Stores meta data in an sql database """
 
     FLUSH_EVERY_N_BLOCKS = 1000
 
-    def __init__(self, engine):
-        MetaBackend.__init__(self)
-        engine = sqlalchemy.create_engine(engine)
+    def __init__(self, config):
+        _MetaBackend.__init__(self)
+        engine = sqlalchemy.create_engine(config.get('engine'))
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         self.session = Session()

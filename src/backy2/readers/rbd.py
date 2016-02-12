@@ -9,14 +9,15 @@ import queue
 import threading
 import time
 
-class RBDReader():
+class Reader():
     simultaneous_reads = 10
     pool_name = None
     image_name = None
     snapshot_name = None
 
-    def __init__(self, simultaneous_reads, ceph_conffile, block_size, hash_function):
-        self.simultaneous_reads = simultaneous_reads
+    def __init__(self, config, block_size, hash_function):
+        self.simultaneous_reads = config.getint('simultaneous_reads')
+        ceph_conffile = config.get('ceph_conffile')
         self.block_size = block_size
         self.hash_function = hash_function
         self._reader_threads = []

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.data_backends import DataBackend
+from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 import boto.exception
 import boto.s3.connection
@@ -13,7 +13,7 @@ import time
 import uuid
 
 
-class S3Backend(DataBackend):
+class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
@@ -23,16 +23,16 @@ class S3Backend(DataBackend):
     _SUPPORTS_PARTIAL_WRITES = False
     fatal_error = None
 
-    def __init__(self,
-            aws_access_key_id,
-            aws_secret_access_key,
-            host,
-            port,
-            is_secure,
-            calling_format=boto.s3.connection.OrdinaryCallingFormat(),
-            bucket_name='backy2',
-            simultaneous_writes=1,
-            ):
+    def __init__(self, config):
+        aws_access_key_id = config.get('aws_access_key_id')
+        aws_secret_access_key = config.get('aws_secret_access_key')
+        host = config.get('host')
+        port = config.getint('port')
+        is_secure = config.getboolean('is_secure')
+        bucket_name = config.get('bucket_name', 'backy2')
+        simultaneous_writes = config.getint('simultaneous_writes', 1)
+        calling_format=boto.s3.connection.OrdinaryCallingFormat()
+
         self.conn = boto.connect_s3(
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
