@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-import re
-from backy2.logging import logger
 from backy2.enterprise import rados
 from backy2.enterprise import rbd
+from backy2.logging import logger
+from backy2.readers import Reader as _Reader
 import queue
+import re
 import threading
 import time
 
-class Reader():
+class Reader(_Reader):
     simultaneous_reads = 10
     pool_name = None
     image_name = None

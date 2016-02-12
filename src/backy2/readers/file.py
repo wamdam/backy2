@@ -2,6 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 from backy2.logging import logger
+from backy2.readers import Reader as _Reader
 import os
 import queue
 import threading
@@ -20,7 +21,7 @@ else:  # pragma: no cover
         return
 
 
-class Reader():
+class Reader(_Reader):
     simultaneous_reads = 1
 
     def __init__(self, config, block_size, hash_function):
