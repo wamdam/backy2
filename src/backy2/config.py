@@ -17,30 +17,18 @@ hash_function: sha512
 [MetaBackend]
 type: backy2.meta_backends.sql
 engine: sqlite:////tmp/backy.sqlite
-#engine: postgresql:///dk
 
 [DataBackend]
-#type: backy2.data_backends.file
-#path: /home/dk/develop/backy2/tmp
-type: backy2.data_backends.s3
-aws_access_key_id:
-aws_secret_access_key:
-host: 127.0.0.1
-port: 10001
-is_secure: false
-bucket_name: backy2
-simultaneous_writes: 5
+type: backy2.data_backends.file
+path: /tmp
+simultaneous_writes: 1
 
 [NBD]
 cachedir: /tmp
 
 [Reader]
-#type: file
-#simultaneous_reads: 1
-# ---
-type: librbd
-ceph_conffile: /etc/ceph/ceph.conf
-simultaneous_reads: 10
+type: file
+simultaneous_reads: 1
 """
 
 class Config(object):
