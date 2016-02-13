@@ -12,7 +12,7 @@ def hints_from_rbd_diff(rbd_diff):
     """ Return the required offset:length tuples from a rbd json diff
     """
     data = json.loads(rbd_diff)
-    return [(l['offset'], l['length'], True if l['exists']=='true' else False) for l in data]
+    return [(l['offset'], l['length'], False if l['exists']=='false' or not l['exists'] else True) for l in data]
 
 
 def backy_from_config(Config):

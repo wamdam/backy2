@@ -59,11 +59,13 @@ with TestPath() as testpath:
             if random.randint(0, 1):
                 patch_size = random.randint(0, 4*kB)
                 data = os.urandom(patch_size)
-                exists = True
+                #exists = True
+                exists = "true"
             else:
                 patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
                 data = b'\0' * patch_size
-                exists = False
+                #exists = False
+                exists = "false"
             offset = random.randint(0, size-1-patch_size)
             print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
             patch(testpath, 'data', offset, data)
