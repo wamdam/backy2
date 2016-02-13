@@ -4,6 +4,7 @@ from backy2.logging import logger
 import math
 import random
 import time
+import sys
 
 
 def blocks_from_hints(hints, block_size):
@@ -290,6 +291,40 @@ class Backy():
             # TODO: Don't exit here, exit in Commands
             exit(1)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
+
+        if from_version and hints:
+            # SANITY CHECK:
+            # Check some blocks outside of hints if they are the same in the
+            # from_version backup and in the current backup. If they
+            # don't, either hints are wrong (e.g. from a wrong snapshot diff)
+            # or source doesn't match. In any case, the resulting backup won't
+            # be good.
+            logger.info('Starting sanity check with 1% of the blocks. Reading...')
+            ignore_blocks = list(set(range(size)) - read_blocks - sparse_blocks)
+            random.shuffle(ignore_blocks)
+            num_check_blocks = max(10, len(ignore_blocks) // 100)  # 1%, but at least 10
+            check_block_ids = ignore_blocks[:num_check_blocks]
+            num_reading = 0
+            for block in blocks:
+                if block.id in check_block_ids and block.uid:  # no uid = sparse block in backup. Can't check.
+                    self.reader.read(block)
+                    num_reading += 1
+            for i in range(num_reading):
+                # this is source file data
+                source_block, source_data, source_data_checksum = self.reader.get()
+                # check metadata checksum with the newly read one
+                if source_block.checksum != source_data_checksum:
+                    logger.error("Source and backup don't match in regions outside of the hints.")
+                    logger.error("Looks like the hints don't match or the source is different.")
+                    logger.error("Found wrong source data at block {}: offset {} with max. length {}".format(
+                        source_block.id,
+                        source_block.id * self.block_size,
+                        self.block_size
+                        ))
+                    # remove version
+                    self.meta_backend.rm_version(version_uid)
+                    sys.exit(1)
+            logger.info('Finished sanity check. Checked {} blocks.'.format(num_reading))
 
         read_jobs = 0
         for block in blocks:
