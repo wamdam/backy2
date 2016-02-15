@@ -160,7 +160,6 @@ class Backy():
                     if source:
                         source_data = self.reader.read(block, sync=True)
                         if source_data != data:
-                            import pdb; pdb.set_trace()
                             logger.error('Source data has changed for block {} '
                                 '(UID {}) (is: {} should-be: {}'.format(
                                     block.id,
@@ -180,6 +179,8 @@ class Backy():
                     ))
         if state == True:
             self.meta_backend.set_version_valid(version_uid)
+        else:
+            logger.error('Marked version invalid because it has errors: {}'.format(version_uid))
         if source:
             self.reader.close()  # wait for all readers
 
@@ -339,9 +340,11 @@ class Backy():
                 stats['bytes_sparse'] += block.size
                 logger.debug('Skipping block (sparse) {}'.format(block.id))
             else:
+                #self.meta_backend.set_block(block.id, version_uid, block.uid, block.checksum, block.size, valid=1, _commit=False)
                 logger.debug('Keeping block {}'.format(block.id))
 
         # now use the readers and write
+        done_jobs = 0
         for i in range(read_jobs):
             block, data, data_checksum = self.reader.get()
 
@@ -362,9 +365,14 @@ class Backy():
                 stats['blocks_written'] += 1
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
+            done_jobs += 1
 
         self.reader.close()  # wait for all readers
         self.data_backend.close()  # wait for all writers
+        if read_jobs != done_jobs:
+            logger.error('backy broke somewhere. Backup is invalid.')
+            sys.exit(1)
+
         self.meta_backend.set_version_valid(version_uid)
         self.meta_backend.set_stats(
             version_uid=version_uid,
