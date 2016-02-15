@@ -205,6 +205,37 @@ class Commands():
         backy.close()
 
 
+    def diff_meta(self, version_uid1, version_uid2):
+        """ Output difference between two version in blocks.
+        """
+        # TODO: Feel free to create a default diff format.
+        backy = self.backy()
+        blocks1 = backy.ls_version(version_uid1)
+        blocks2 = backy.ls_version(version_uid2)
+        max_len = max(len(blocks1), len(blocks2))
+        for i in range(max_len):
+            b1 = b2 = None
+            try:
+                b1 = blocks1.pop(0)
+            except IndexError:
+                pass
+            try:
+                b2 = blocks2.pop(0)
+            except IndexError:
+                pass
+            if b1 and b2:
+                assert b1.id == b2.id
+            if b1.uid == b2.uid:
+                print('SAME      {}'.format(b1.id))
+            elif b1 is None and b2:
+                print('NEW RIGHT {}'.format(b2.id))
+            elif b1 and b2 is None:
+                print('NEW LEFT  {}'.format(b1.id))
+            else:
+                print('DIFF      {}'.format(b1.id))
+        backy.close()
+
+
     def stats(self, version_uid):
         backy = self.backy()
         stats = backy.stats(version_uid)
@@ -368,6 +399,14 @@ def main():
         help="Show statistics")
     p.add_argument('version_uid', nargs='?', default=None, help='Show statistics for this version')
     p.set_defaults(func='stats')
+
+    # diff-meta
+    p = subparsers.add_parser(
+        'diff-meta',
+        help="Output a diff between two versions")
+    p.add_argument('version_uid1', help='Left version')
+    p.add_argument('version_uid2', help='Right version')
+    p.set_defaults(func='diff_meta')
 
     # NBD
     p = subparsers.add_parser(
