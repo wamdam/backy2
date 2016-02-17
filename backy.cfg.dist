@@ -151,7 +151,7 @@ type: backy2.readers.file
 # backy2.enterprise.readers.rbd
 #######################################
 # This reader accepts rbd images in the form pool/image@snapshot or pool/image
-#type: backy2.readers.rbd
+#type: backy2.enterprise.readers.rbd
 
 # Where to look for the ceph configfile to read keys and hosts from it
 #ceph_conffile: /etc/ceph/ceph.conf
