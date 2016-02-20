@@ -225,14 +225,17 @@ class Commands():
                 pass
             if b1 and b2:
                 assert b1.id == b2.id
-            if b1.uid == b2.uid:
-                print('SAME      {}'.format(b1.id))
-            elif b1 is None and b2:
-                print('NEW RIGHT {}'.format(b2.id))
-            elif b1 and b2 is None:
-                print('NEW LEFT  {}'.format(b1.id))
-            else:
-                print('DIFF      {}'.format(b1.id))
+            try:
+                if b1.uid == b2.uid:
+                    print('SAME      {}'.format(b1.id))
+                elif b1 is None and b2:
+                    print('NEW RIGHT {}'.format(b2.id))
+                elif b1 and b2 is None:
+                    print('NEW LEFT  {}'.format(b1.id))
+                else:
+                    print('DIFF      {}'.format(b1.id))
+            except BrokenPipeError:
+                pass
         backy.close()
 
 
