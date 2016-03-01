@@ -41,7 +41,8 @@ class DataBackend(_DataBackend):
         except OSError as e:
             # no route to host
             logger.error('Fatal error, dying: {}'.format(e))
-            exit('Fatal error: {}'.format(e))
+            print('Fatal error: {}'.format(e))
+            exit(12)
 
 
     def _uid(self):
@@ -70,7 +71,7 @@ class DataBackend(_DataBackend):
             # We let the backup job die here fataly.
             logger.error('Fatal error, dying: {}'.format(e))
             #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
-            os._exit(1)
+            os._exit(13)
         t2 = time.time()
         assert r == len(data)
         logger.debug('Wrote data uid {} in {:.2f}s'.format(uid, t2-t1))
