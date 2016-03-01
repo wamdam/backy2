@@ -56,7 +56,7 @@ class Commands():
         state = backy.scrub(version_uid, source, percentile)
         backy.close()
         if not state:
-            exit(1)
+            exit(20)
 
 
     def _ls_blocks_tbl_output(self, blocks):
@@ -275,7 +275,7 @@ class Commands():
             from backy2.enterprise.nbd import BackyStore
         except ImportError:
             logger.error('NBD is available in the Enterprise Version only.')
-            sys.exit(1)
+            sys.exit(21)
         backy = self.backy()
         config_NBD = self.Config(section='NBD')
         config_DEFAULTS = self.Config(section='DEFAULTS')
@@ -305,10 +305,10 @@ class Commands():
                     backy.import_(f)
         except KeyError as e:
             logger.error(str(e))
-            exit(1)
+            exit(22)
         except ValueError as e:
             logger.error(str(e))
-            exit(2)
+            exit(23)
         finally:
             backy.close()
 
@@ -465,7 +465,7 @@ def main():
         logger.error('Unexpected exception')
         logger.exception(e)
         logger.info('Backy failed.\n')
-        sys.exit(1)
+        sys.exit(100)
 
 
 if __name__ == '__main__':

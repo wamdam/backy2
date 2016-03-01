@@ -290,7 +290,7 @@ class Backy():
             logger.error(str(e))
             logger.error('Backy exiting.')
             # TODO: Don't exit here, exit in Commands
-            exit(1)
+            exit(4)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
         if from_version and hints:
@@ -324,7 +324,7 @@ class Backy():
                         ))
                     # remove version
                     self.meta_backend.rm_version(version_uid)
-                    sys.exit(1)
+                    sys.exit(5)
             logger.info('Finished sanity check. Checked {} blocks.'.format(num_reading))
 
         read_jobs = 0
@@ -371,7 +371,7 @@ class Backy():
         self.data_backend.close()  # wait for all writers
         if read_jobs != done_jobs:
             logger.error('backy broke somewhere. Backup is invalid.')
-            sys.exit(1)
+            sys.exit(3)
 
         self.meta_backend.set_version_valid(version_uid)
         self.meta_backend.set_stats(
