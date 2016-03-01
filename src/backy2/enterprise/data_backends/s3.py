@@ -51,7 +51,8 @@ class DataBackend(_DataBackend):
             # no route to host
             self.fatal_error = e
             logger.error('Fatal error, dying: {}'.format(e))
-            exit('Fatal error: {}'.format(e))
+            print('Fatal error: {}'.format(e))
+            exit(10)
 
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self._queue = queue.Queue(self.write_queue_length)
@@ -91,7 +92,7 @@ class DataBackend(_DataBackend):
                 self.fatal_error = e
                 logger.error('Fatal error, dying: {}'.format(e))
                 #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
-                os._exit(1)
+                os._exit(11)
             t2 = time.time()
             assert r == len(data)
             self._queue.task_done()
