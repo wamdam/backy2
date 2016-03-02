@@ -239,9 +239,11 @@ class Commands():
         backy.close()
 
 
-    def stats(self, version_uid):
+    def stats(self, version_uid, limit=None):
         backy = self.backy()
-        stats = backy.stats(version_uid)
+        if limit is not None:
+            limit = int(limit)
+        stats = backy.stats(version_uid, limit)
         if self.machine_output:
             self._stats_machine_output(stats)
         else:
@@ -401,6 +403,8 @@ def main():
         'stats',
         help="Show statistics")
     p.add_argument('version_uid', nargs='?', default=None, help='Show statistics for this version')
+    p.add_argument('-l', '--limit', default=None,
+            help="Limit output to this number (default: unlimited)")
     p.set_defaults(func='stats')
 
     # diff-meta
