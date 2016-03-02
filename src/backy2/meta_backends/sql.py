@@ -3,7 +3,7 @@
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
@@ -125,14 +125,22 @@ class MetaBackend(_MetaBackend):
         self.session.commit()
 
 
-    def get_stats(self, version_uid=None):
+    def get_stats(self, version_uid=None, limit=None):
+        """ gets the <limit> newest entries """
         if version_uid:
+            if limit is not None and limit < 1:
+                return []
             stats = self.session.query(Stats).filter_by(version_uid=version_uid).all()
             if stats is None:
                 raise KeyError('Statistics for version {} not found.'.format(version_uid))
             return stats
         else:
-            return self.session.query(Stats).order_by(Stats.date).all()
+            if limit == 0:
+                return []
+            _stats = self.session.query(Stats).order_by(desc(Stats.date))
+            if limit:
+                _stats = _stats.limit(limit)
+            return reversed(_stats.all())
 
 
     def set_version_invalid(self, uid):

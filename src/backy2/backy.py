@@ -104,8 +104,8 @@ class Backy():
         return blocks
 
 
-    def stats(self, version_uid=None):
-        stats = self.meta_backend.get_stats(version_uid)
+    def stats(self, version_uid=None, limit=None):
+        stats = self.meta_backend.get_stats(version_uid, limit)
         return stats
 
 
