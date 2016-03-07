@@ -20,18 +20,20 @@ info:
 	@pip --version
 	@pip list
 
-build: clean-build env
+build: build/backy
+
+build/backy: env
 	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m backy2.scripts.backy:main -o build/backy
 
 .PHONY : clean-build
 clean-build:
 	mkdir -p build
-	rm build/backy 2>/dev/null || true
-	rm -r $(PEXCACHE) 2>/dev/null || true
+	rm build/backy || true
+	rm -r $(PEXCACHE) || true
 
 .PHONY : clean
 clean: clean-build
-	rm -r env 2>/dev/null || true
+	rm -r env || true
 
 .PHONY : test
 test: info

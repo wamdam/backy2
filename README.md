@@ -75,6 +75,18 @@ Other features:
   backup
 
 
+## Installation
+
+  ```
+   git clone https://github.com/wamdam/backy2.git
+   cd backy2
+   make
+   sudo make install
+  ```
+
+  Tested under ubuntu.
+
+
 ## Usage
 
 ### Backup
