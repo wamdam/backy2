@@ -43,4 +43,7 @@ smoketest:
 
 .PHONY : install
 install: build
-	cp build/backy /usr/local/bin/backy
+	cp build/backy /usr/local/sbin/backy
+	mkdir -p /var/lib/backy
+	if [ -f /etc/backy.cfg ]; then cp backy.cfg.dist /etc/backy.cfg.dist; fi
+	if [ ! -f /etc/backy.cfg ]; then cp backy.cfg.dist /etc/backy.cfg; fi
