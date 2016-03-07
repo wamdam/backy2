@@ -34,7 +34,6 @@ Topic :: System :: Archiving :: Backup
     include_package_data=True,
     zip_safe=True,
     install_requires=[
-        'pytest',
         'pytest-cov',
         'pytest-capturelog',
         'pytest-timeout',
@@ -43,6 +42,7 @@ Topic :: System :: Archiving :: Backup
         'psycopg2==2.6.1',
         'boto',
         'pex==1.1.0',
+        'pytest',
         ],
     entry_points="""
         [console_scripts]
