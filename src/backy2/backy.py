@@ -393,15 +393,39 @@ class Backy():
         return version_uid
 
 
-    def cleanup(self):
+    def cleanup_fast(self, dt=3600):
         """ Delete unreferenced blob UIDs """
+        delete_candidates = self.meta_backend.get_delete_candidates(dt=dt)
+        try:
+            for delete_candidate in delete_candidates:
+                logger.debug('Cleanup: Removing UID {}'.format(delete_candidate))
+                try:
+                    self.data_backend.rm(delete_candidate)
+                except FileNotFoundError:
+                    continue
+        except:
+            logger.error('Error during cleanup. Reverting metadata changes.')
+            self.meta_backend.revert_delete_candidates(delete_candidates)
+            raise
+        else:
+            self.meta_backend.remove_delete_candidates(delete_candidates)
+        logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
+
+
+    def cleanup_full(self):
+        """ Delete unreferenced blob UIDs """
+        # TODO: lock all other backy calls during full cleanup
+        # in this mode, we compare all existing uids in data and meta.
         active_blob_uids = set(self.data_backend.get_all_blob_uids())
         active_block_uids = set(self.meta_backend.get_all_block_uids())
-        remove_candidates = active_blob_uids.difference(active_block_uids)
-        for remove_candidate in remove_candidates:
-            logger.debug('Cleanup: Removing UID {}'.format(remove_candidate))
-            self.data_backend.rm(remove_candidate)
-        logger.info('Cleanup: Removed {} blobs'.format(len(remove_candidates)))
+        delete_candidates = active_blob_uids.difference(active_block_uids)
+        for delete_candidate in delete_candidates:
+            logger.debug('Cleanup: Removing UID {}'.format(delete_candidate))
+            try:
+                self.data_backend.rm(delete_candidate)
+            except FileNotFoundError:
+                continue
+        logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
 
 
     def close(self):

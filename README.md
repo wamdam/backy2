@@ -306,6 +306,7 @@ TODO
 
 ```
 backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+# wait 1 hour, because cleanup will only run old delete jobs
 backy cleanup
 ```
 
