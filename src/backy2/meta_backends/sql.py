@@ -36,7 +36,6 @@ class Stats(Base):
     duration_seconds = Column(BigInteger, nullable=False)
 
 
-
 class Version(Base):
     __tablename__ = 'versions'
     uid = Column(String(36), primary_key=True)
