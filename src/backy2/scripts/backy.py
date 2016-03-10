@@ -251,9 +251,12 @@ class Commands():
         backy.close()
 
 
-    def cleanup(self):
+    def cleanup(self, full):
         backy = self.backy()
-        backy.cleanup()
+        if full:
+            backy.cleanup_full()
+        else:
+            backy.cleanup_fast()
         backy.close()
 
 
@@ -389,6 +392,12 @@ def main():
     p = subparsers.add_parser(
         'cleanup',
         help="Clean unreferenced blobs.")
+    p.add_argument(
+        '-f', '--full', action='store_true', default=False,
+        help='Do a full cleanup. This will read the full metadata from the data backend (i.e. backup storage) '
+             'and compare it to the metadata in the meta backend. Unused data will then be deleted. '
+             'This is a slow, but complete process. A full cleanup must not be run parallel to ANY other backy '
+             'jobs.')
     p.set_defaults(func='cleanup')
 
     # LS

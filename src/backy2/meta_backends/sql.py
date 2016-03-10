@@ -16,6 +16,11 @@ import uuid
 
 METADATA_VERSION = '2.1'
 
+DELETE_CANDIDATE_MAYBE = 0
+DELETE_CANDIDATE_SURE = 1
+DELETE_CANDIDATE_DELETED = 2
+
+
 Base = declarative_base()
 
 class Stats(Base):
@@ -62,6 +67,25 @@ class Block(Base):
 
     def __repr__(self):
        return "<Block(id='%s', uid='%s', version_uid='%s')>" % (
+                            self.id, self.uid, self.version_uid)
+
+
+def inttime():
+    return int(time.time())
+
+
+class DeletedBlock(Base):
+    __tablename__ = 'deleted_blocks'
+    uid = Column(String(32), nullable=True, index=True)
+    version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, nullable=False)
+    size = Column(BigInteger, nullable=True)
+    delete_candidate = Column(Integer, nullable=False)
+    # we need a date in order to find only delete candidates that are older than 1 hour.
+    time = Column(BigInteger, default=inttime, nullable=False)
+
+    def __repr__(self):
+       return "<DeletedBlock(id='%s', uid='%s', version_uid='%s')>" % (
                             self.id, self.uid, self.version_uid)
 
 
@@ -230,10 +254,115 @@ class MetaBackend(_MetaBackend):
     def rm_version(self, version_uid):
         affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
         num_blocks = affected_blocks.count()
+        for affected_block in affected_blocks:
+            if affected_block.uid:  # uid == None means sparse
+                deleted_block = DeletedBlock(
+                    uid=affected_block.uid,
+                    version_uid=affected_block.version_uid,
+                    id=affected_block.id,
+                    size=affected_block.size,
+                    delete_candidate=DELETE_CANDIDATE_MAYBE,
+                )
+                self.session.add(deleted_block)
         affected_blocks.delete()
         self.session.query(Version).filter_by(uid=version_uid).delete()
         self.session.commit()
         return num_blocks
+
+
+    def mark_delete_candidates(self, dt=3600):
+        """
+        Marks delete candidates when their uid does not exist in the block
+        table and their entry in the delete candidates list is older than
+        <dt> seconds.
+        We need the delay in order to not interfere with lazy inserts from the
+        backup process.
+        """
+        # Now check which block uids we have to keep. We keep those uids
+        # that are still referenced in the block table.
+
+        # This routine has double safety. First we look or the entries in
+        # delete candidates that we may not delete and remove them from the
+        # list:
+        no_delete_candidates = self.session.query(
+            DeletedBlock
+        ).outerjoin(
+            (Block, DeletedBlock.uid == Block.uid)
+        ).filter(
+            DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
+            Block.uid != None,  # i.e. it HAS a block in the block table with this uid
+        )
+        no_delete_uids = [dc.uid for dc in no_delete_candidates]
+        if no_delete_uids:
+            q = self.session.query(DeletedBlock).filter(DeletedBlock.uid.in_(no_delete_uids))
+            q.delete(synchronize_session='fetch')
+
+        self.session.commit()
+
+        # Then we select again those entries that have no matching block uid
+        # in the blocks table.
+        delete_candidates = self.session.query(
+            DeletedBlock
+        ).outerjoin(
+            (Block, DeletedBlock.uid == Block.uid)
+        ).filter(
+            DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
+            #DeletedBlock.date < func.now() - datetime.timedelta(seconds=dt),
+            DeletedBlock.time < (inttime() - dt),
+            Block.uid == None,
+        )
+        for delete_candidate in delete_candidates:
+            delete_candidate.delete_candidate = DELETE_CANDIDATE_SURE
+        self.session.commit()
+
+
+    def get_delete_candidates(self, dt=3600):
+        self.mark_delete_candidates(dt)
+        delete_candidates = self.session.query(
+            DeletedBlock
+        ).filter(
+            DeletedBlock.delete_candidate == DELETE_CANDIDATE_SURE
+        )
+        uids = [d.uid for d in delete_candidates]
+        delete_candidates.update({'delete_candidate': DELETE_CANDIDATE_DELETED})
+        self.session.commit()
+        return set(uids)
+
+
+    def remove_delete_candidates(self, uids):
+        """
+        Finally removes delete candidates after they have been deleted on the
+        data store.
+        """
+        logger.info('Deleting {} delete candidates.'.format(len(uids)))
+        if len(uids) == 0:
+            return
+        delete_candidates = self.session.query(
+            DeletedBlock
+        ).filter(
+            DeletedBlock.delete_candidate == DELETE_CANDIDATE_DELETED,
+            DeletedBlock.uid.in_(uids),
+        )
+        delete_candidates.delete(synchronize_session='fetch')
+        self.session.commit()
+
+
+    def revert_delete_candidates(self, uids):
+        """
+        Re-marks uids as deletable in case an exception occured during cleanup.
+        """
+        logger.warning('Reverting {} delete candidates.'.format(len(uids)))
+        if len(uids) == 0:
+            return
+        delete_candidates = self.session.query(
+            DeletedBlock
+        ).filter(
+            DeletedBlock.delete_candidate == DELETE_CANDIDATE_DELETED,
+            DeletedBlock.uid.in_(uids),
+        )
+        delete_candidates.update({'delete_candidate': DELETE_CANDIDATE_SURE},
+                                 synchronize_session='fetch')
+        self.session.commit()
 
 
     def get_all_block_uids(self):

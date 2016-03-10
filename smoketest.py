@@ -51,11 +51,12 @@ with TestPath() as testpath:
     from_version = None
     init_logging(testpath+'/backy.log', logging.INFO)
 
+    version_uids = []
     for i in range(100):
         size = 32*4*kB + random.randint(-4*kB, 4*kB)
         print('Run {}'.format(i+1))
         hints = []
-        for i in range(random.randint(0, 10)):  # up to 10 changes
+        for j in range(random.randint(0, 10)):  # up to 10 changes
             if random.randint(0, 1):
                 patch_size = random.randint(0, 4*kB)
                 data = os.urandom(patch_size)
@@ -107,6 +108,7 @@ with TestPath() as testpath:
             hints_from_rbd_diff(open(os.path.join(testpath, 'hints')).read()),
             from_version
             )
+        version_uids.append(version_uid)
 
         try:
             assert backy.scrub(version_uid) == True
@@ -120,5 +122,12 @@ with TestPath() as testpath:
             import pdb; pdb.set_trace()
 
         from_version = version_uid
+
+        # delete old versions
+        if len(version_uids) > 10:
+            backy.rm(version_uids.pop(0))
+
+        if (i%7) == 0:
+            backy.cleanup_fast(dt=0)
         backy.close()
     #import pdb; pdb.set_trace()
