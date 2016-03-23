@@ -14,7 +14,7 @@ hash_function: sha512
 
 # for some operations, full backy or single versions need to be locked for
 # simulatanous access. In the lock_dir we will create backy_*.lock files.
-lock_dir: /home/dk/tmp
+lock_dir: /run
 
 # To be able to find other backys running, we need a system-wide unique name
 # for all backy processes.
