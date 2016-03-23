@@ -42,6 +42,7 @@ Topic :: System :: Archiving :: Backup
         'psycopg2==2.6.1',
         'boto',
         'pex==1.1.0',
+        'psutil',
         'pytest',
         ],
     entry_points="""

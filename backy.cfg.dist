@@ -12,6 +12,15 @@ block_size: 4194304
 # Hash function to use. Use a large one to avoid collisions.
 hash_function: sha512
 
+# for some operations, full backy or single versions need to be locked for
+# simulatanous access. In the lock_dir we will create backy_*.lock files.
+lock_dir: /home/dk/tmp
+
+# To be able to find other backys running, we need a system-wide unique name
+# for all backy processes.
+process_name: backy2
+
+
 
 [MetaBackend]
 # Of which type is the Metadata Backend Engine?

@@ -83,6 +83,8 @@ with TestPath() as testpath:
         logfile: /var/log/backy.log
         block_size: 4096
         hash_function: sha512
+        lock_dir: /tmp
+        process_name: backy2
 
         [MetaBackend]
         type: backy2.meta_backends.sql

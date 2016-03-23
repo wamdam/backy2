@@ -4,6 +4,8 @@ Backlog:
 * Add more statistics
 * Add tests for anything where scrub marks blocks as invalid (source changed,
   bitrod in backup, ...
+* Make restore multi-threaded
+* Make restore accept rbd volumes as target
 
 Next:
 
