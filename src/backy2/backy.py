@@ -462,8 +462,8 @@ class Backy():
         logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
 
 
-    def cleanup_full(self):
-        """ Delete unreferenced blob UIDs """
+    def cleanup_full(self, prefix=None):
+        """ Delete unreferenced blob UIDs starting with <prefix> """
         # in this mode, we compare all existing uids in data and meta.
         # make sure, no other backy will start
         if not self.locking.lock('backy'):
@@ -472,8 +472,8 @@ class Backy():
         # make sure, no other backy is running
         if len(find_other_procs(self.process_name)) > 1:
             raise LockError('Other backy instances are running.')
-        active_blob_uids = set(self.data_backend.get_all_blob_uids())
-        active_block_uids = set(self.meta_backend.get_all_block_uids())
+        active_blob_uids = set(self.data_backend.get_all_blob_uids(prefix))
+        active_block_uids = set(self.meta_backend.get_all_block_uids(prefix))
         delete_candidates = active_blob_uids.difference(active_block_uids)
         for delete_candidate in delete_candidates:
             logger.debug('Cleanup: Removing UID {}'.format(delete_candidate))

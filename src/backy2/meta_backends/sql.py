@@ -362,8 +362,11 @@ class MetaBackend(_MetaBackend):
         self.session.commit()
 
 
-    def get_all_block_uids(self):
-        rows = self.session.query(distinct(Block.uid)).all()
+    def get_all_block_uids(self, prefix=None):
+        if prefix:
+            rows = self.session.query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
+        else:
+            rows = self.session.query(distinct(Block.uid)).all()
         return [b[0] for b in rows]
 
 

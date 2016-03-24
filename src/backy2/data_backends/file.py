@@ -95,7 +95,9 @@ class DataBackend(_DataBackend):
 
 
 
-    def get_all_blob_uids(self):
+    def get_all_blob_uids(self, prefix=None):
+        if prefix:
+            raise RuntimeError('prefix is not supported on file backends.')
         matches = []
         for root, dirnames, filenames in os.walk(self.path):
             for filename in fnmatch.filter(filenames, '*.blob'):
