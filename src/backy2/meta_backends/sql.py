@@ -76,9 +76,8 @@ def inttime():
 
 class DeletedBlock(Base):
     __tablename__ = 'deleted_blocks'
+    id = Column(Integer, primary_key=True)
     uid = Column(String(32), nullable=True, index=True)
-    version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
-    id = Column(Integer, primary_key=True, nullable=False)
     size = Column(BigInteger, nullable=True)
     delete_candidate = Column(Integer, nullable=False)
     # we need a date in order to find only delete candidates that are older than 1 hour.
@@ -258,8 +257,6 @@ class MetaBackend(_MetaBackend):
             if affected_block.uid:  # uid == None means sparse
                 deleted_block = DeletedBlock(
                     uid=affected_block.uid,
-                    version_uid=affected_block.version_uid,
-                    id=affected_block.id,
                     size=affected_block.size,
                     delete_candidate=DELETE_CANDIDATE_MAYBE,
                 )
