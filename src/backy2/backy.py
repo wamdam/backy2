@@ -470,7 +470,7 @@ class Backy():
             self.locking.unlock('backy')
             raise LockError('Other backy instances are running.')
         # make sure, no other backy is running
-        if find_other_procs(self.process_name):
+        if len(find_other_procs(self.process_name)) > 1:
             raise LockError('Other backy instances are running.')
         active_blob_uids = set(self.data_backend.get_all_blob_uids())
         active_block_uids = set(self.meta_backend.get_all_block_uids())
