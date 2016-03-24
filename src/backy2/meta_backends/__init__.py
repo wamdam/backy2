@@ -86,7 +86,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def get_all_block_uids(self):
+    def get_all_block_uids(self, prefix=None):
         """ Get all block uids existing in the meta data store """
         raise NotImplementedError()
 

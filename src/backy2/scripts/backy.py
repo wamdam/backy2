@@ -251,10 +251,10 @@ class Commands():
         backy.close()
 
 
-    def cleanup(self, full):
+    def cleanup(self, full, prefix=None):
         backy = self.backy()
         if full:
-            backy.cleanup_full()
+            backy.cleanup_full(prefix)
         else:
             backy.cleanup_fast()
         backy.close()
@@ -398,6 +398,11 @@ def main():
              'and compare it to the metadata in the meta backend. Unused data will then be deleted. '
              'This is a slow, but complete process. A full cleanup must not be run parallel to ANY other backy '
              'jobs.')
+    p.add_argument(
+        '-p', '--prefix', default=None,
+        help='If you perform a full cleanup, you may add --prefix to only cleanup block uids starting '
+             'with this prefix. This is for iterative cleanups. Example: '
+             'cleanup --full --prefix=a')
     p.set_defaults(func='cleanup')
 
     # LS
