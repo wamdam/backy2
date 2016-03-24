@@ -38,3 +38,5 @@ build
 tmp2
 tags
 .cache
+backy.cfg.enterprise
+backy.cfg.master
