@@ -3,15 +3,15 @@ PEX=env/bin/pex
 PYTEST=env/bin/py.test
 PEXCACHE=build/.pex
 
-all: build
+all: build/backy
 
-env:
+env: setup.py
 	virtualenv -p python3 env
 	$(PYTHON) setup.py develop
 
-.PHONY : fastenv
-fastenv:
-	$(PYTHON) setup.py develop
+#.PHONY : fastenv
+#fastenv: setup.py
+#	$(PYTHON) setup.py develop
 
 .PHONY : info
 info:
@@ -20,19 +20,17 @@ info:
 	@pip --version
 	@pip list
 
-build: build/backy
-
-build/backy: env
-	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m backy2.scripts.backy:main -o build/backy
-
-.PHONY : clean-build
-clean-build:
+build/backy: env $(wildcard src/backy2/*.py) $(wildcard src/backy2/**/*.py)
 	mkdir -p build
 	rm build/backy || true
 	rm -r $(PEXCACHE) || true
+	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m backy2.scripts.backy:main -o build/backy
 
 .PHONY : clean
-clean: clean-build
+clean:
+	mkdir -p build
+	rm build/backy || true
+	rm -r $(PEXCACHE) || true
 	rm -r env || true
 
 .PHONY : test
@@ -40,7 +38,7 @@ test: info
 	$(PYTEST) -vv
 
 .PHONY : smoketest
-smoketest:
+smoketest: env
 	$(PYTHON) smoketest.py
 
 .PHONY : install
