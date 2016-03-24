@@ -128,8 +128,8 @@ class DataBackend(_DataBackend):
         return key.get_contents_as_string()
 
 
-    def get_all_blob_uids(self):
-        return [k.name for k in self.bucket.list()]
+    def get_all_blob_uids(self, prefix=None):
+        return [k.name for k in self.bucket.list(prefix)]
 
 
     def close(self):
