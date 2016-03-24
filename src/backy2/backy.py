@@ -2,7 +2,7 @@
 
 from backy2.logging import logger
 from backy2.locking import Locking
-from backy2 import utils
+from backy2.locking import setprocname, find_other_procs
 import math
 import random
 import time
@@ -46,7 +46,7 @@ class Backy():
         self.locking = Locking(lock_dir)
         self.process_name = process_name
 
-        if utils.setprocname(process_name) != 0:
+        if setprocname(process_name) != 0:
             raise RuntimeError('Unable to set process name')
 
         if not self.locking.lock('backy'):
@@ -470,7 +470,7 @@ class Backy():
             self.locking.unlock('backy')
             raise LockError('Other backy instances are running.')
         # make sure, no other backy is running
-        if utils.find_other_procs(self.process_name):
+        if find_other_procs(self.process_name):
             raise LockError('Other backy instances are running.')
         active_blob_uids = set(self.data_backend.get_all_blob_uids())
         active_block_uids = set(self.meta_backend.get_all_block_uids())
