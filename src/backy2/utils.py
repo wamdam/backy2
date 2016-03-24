@@ -3,12 +3,9 @@
 
 from backy2.backy import Backy
 from functools import partial
-import ctypes
 import hashlib
 import importlib
 import json
-import psutil
-import sys
 
 
 def hints_from_rbd_diff(rbd_diff):
@@ -69,24 +66,4 @@ def backy_from_config(Config):
             )
     return backy
 
-
-def setprocname(name):
-    """ Set own process name """
-    if sys.platform not in ('linux', 'linux2'):
-        # XXX: Would this work in bsd or so too similarly?
-        raise RuntimeError("Unable to set procname when not in linux.")
-    if type(name) is not bytes:
-        name = str(name)
-        name = bytes(name.encode("utf-8"))
-    libc = ctypes.cdll.LoadLibrary('libc.so.6')
-    return libc.prctl(15, name, 0, 0, 0)  # 15 = PR_SET_NAME, returns 0 on success.
-
-
-def getprocname():
-    return sys.argv[0]
-
-
-def find_other_procs(name):
-    """ returns other processes by given name """
-    return [p for p in psutil.process_iter() if p.name() == name]
 
