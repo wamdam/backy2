@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.backy import Backy
 from functools import partial
+import itertools
 import hashlib
 import importlib
 import json
@@ -55,6 +55,7 @@ def backy_from_config(Config):
                 hash_function=hash_function,
                 )
 
+    from backy2.backy import Backy
     backy = partial(Backy,
             meta_backend=meta_backend,
             data_backend=data_backend,
@@ -66,4 +67,12 @@ def backy_from_config(Config):
             )
     return backy
 
+
+def grouper(n, iterable):
+    it = iter(iterable)
+    while True:
+       chunk = tuple(itertools.islice(it, n))
+       if not chunk:
+           return
+       yield chunk
 

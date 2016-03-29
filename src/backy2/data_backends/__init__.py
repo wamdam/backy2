@@ -32,6 +32,11 @@ class DataBackend():
         raise NotImplementedError()
 
 
+    def rm_many(self, uids):
+        """ Deletes a list of blocks """
+        raise NotImplementedError()
+
+
     def get_all_blob_uids(self, prefix=None):
         """ Get all existing blob uids """
         raise NotImplementedError()
