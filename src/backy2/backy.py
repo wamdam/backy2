@@ -448,7 +448,11 @@ class Backy():
         """ Delete unreferenced blob UIDs """
         delete_candidates = self.meta_backend.get_delete_candidates(dt=dt)
         try:
-            for candidates in grouper(1000, delete_candidates):
+            for candidates in grouper(100, delete_candidates):
+                # 100 is the number that works here smoothly within about 10-30s
+                # per batch. With more than 70s there's a timeout and the job
+                # is re-sent. Maybe we must either learn the best amount here
+                # or we make this configurable...
                 logger.debug('Cleanup: Removing UIDs {}'.format(', '.join(candidates)))
                 try:
                     self.data_backend.rm_many(candidates)
