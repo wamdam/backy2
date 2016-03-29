@@ -278,38 +278,56 @@ class MetaBackend(_MetaBackend):
         # Now check which block uids we have to keep. We keep those uids
         # that are still referenced in the block table.
 
-        # This routine has double safety. First we look or the entries in
+        # This routine has double safety. First we look for the entries in
         # delete candidates that we may not delete and remove them from the
         # list:
-        no_delete_candidates = self.session.query(
-            DeletedBlock
-        ).outerjoin(
-            (Block, DeletedBlock.uid == Block.uid)
-        ).filter(
-            DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
-            Block.uid != None,  # i.e. it HAS a block in the block table with this uid
-        )
-        no_delete_uids = [dc.uid for dc in no_delete_candidates]
-        if no_delete_uids:
-            q = self.session.query(DeletedBlock).filter(DeletedBlock.uid.in_(no_delete_uids))
-            q.delete(synchronize_session='fetch')
+        # iterate, or else RAM kills you.
+        while True:
+            logger.debug('Looking for 1000 entries that may not be deleted...')
+            no_delete_candidates = self.session.query(
+                DeletedBlock
+            ).outerjoin(
+                (Block, DeletedBlock.uid == Block.uid)
+            ).filter(
+                DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
+                Block.uid != None,  # i.e. it HAS a block in the block table with this uid
+            ).limit(1000)
+            no_delete_uids = set([dc.uid for dc in no_delete_candidates])
+            if no_delete_uids:
+                logger.debug('Found {}. Removing them from delete list.'.format(len(no_delete_uids)))
+                q = self.session.query(DeletedBlock).filter(DeletedBlock.uid.in_(no_delete_uids))
+                q.delete(synchronize_session='fetch')
+            else:
+                break
 
         self.session.commit()
 
         # Then we select again those entries that have no matching block uid
         # in the blocks table.
-        delete_candidates = self.session.query(
-            DeletedBlock
-        ).outerjoin(
-            (Block, DeletedBlock.uid == Block.uid)
-        ).filter(
-            DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
-            #DeletedBlock.date < func.now() - datetime.timedelta(seconds=dt),
-            DeletedBlock.time < (inttime() - dt),
-            Block.uid == None,
-        )
-        for delete_candidate in delete_candidates:
-            delete_candidate.delete_candidate = DELETE_CANDIDATE_SURE
+        # iterate, or else RAM kills you.
+        while True:
+            logger.debug('Looking for 1000 entries that MAY be deleted...')
+            delete_candidates = self.session.query(
+                DeletedBlock
+            ).outerjoin(
+                (Block, DeletedBlock.uid == Block.uid)
+            ).filter(
+                DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
+                #DeletedBlock.date < func.now() - datetime.timedelta(seconds=dt),
+                DeletedBlock.time < (inttime() - dt),
+                Block.uid == None,
+            ).limit(1000)
+            delete_uids = set([dc.uid for dc in delete_candidates])
+            if delete_uids:
+                logger.debug('Found {}. Marking them for deletion.'.format(len(delete_uids)))
+                self.session.query(
+                    DeletedBlock
+                ).filter(
+                    DeletedBlock.uid.in_(delete_uids)
+                ).update({'delete_candidate': DELETE_CANDIDATE_SURE}, synchronize_session='fetch')
+            else:
+                break
+
         self.session.commit()
 
 
