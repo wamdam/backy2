@@ -38,4 +38,5 @@ tmp2
 tags
 .cache
 backy.cfg.enterprise
+backy.cfg.enterprise-s3
 backy.cfg.master
