@@ -113,6 +113,11 @@ class DataBackend(_DataBackend):
         os.unlink(filename)
 
 
+    def rm_many(self, uids):
+        for uid in uids:
+            self.rm(uid)
+
+
     def read(self, uid, offset=0, length=None):
         filename = self._filename(uid)
         if not os.path.exists(filename):

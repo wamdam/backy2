@@ -114,11 +114,18 @@ class DataBackend(_DataBackend):
         return uid
 
 
-    def rm(self, uid):
+    def rm(self, uids):
         key = self.bucket.get_key(uid)
         if not key:
             raise FileNotFoundError('UID {} not found.'.format(uid))
         self.bucket.delete_key(uid)
+
+
+    def rm_many(self, uids):
+        errors = self.bucket.delete_keys(uids, quiet=True)
+        if errors.errors:
+            # unable to test this. ceph object gateway doesn't return errors.
+            raise FileNotFoundError('UIDS {} not found.'.format(errors.errors))
 
 
     def read(self, uid):
