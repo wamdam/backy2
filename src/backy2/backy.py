@@ -3,6 +3,7 @@
 from backy2.logging import logger
 from backy2.locking import Locking
 from backy2.locking import setprocname, find_other_procs
+from backy2.utils import grouper
 import math
 import random
 import time
@@ -447,10 +448,10 @@ class Backy():
         """ Delete unreferenced blob UIDs """
         delete_candidates = self.meta_backend.get_delete_candidates(dt=dt)
         try:
-            for delete_candidate in delete_candidates:
-                logger.debug('Cleanup: Removing UID {}'.format(delete_candidate))
+            for candidates in grouper(1000, delete_candidates):
+                logger.debug('Cleanup: Removing UIDs {}'.format(', '.join(candidates)))
                 try:
-                    self.data_backend.rm(delete_candidate)
+                    self.data_backend.rm_many(candidates)
                 except FileNotFoundError:
                     continue
         except:
