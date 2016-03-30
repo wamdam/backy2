@@ -114,7 +114,7 @@ class DataBackend(_DataBackend):
         return uid
 
 
-    def rm(self, uids):
+    def rm(self, uid):
         key = self.bucket.get_key(uid)
         if not key:
             raise FileNotFoundError('UID {} not found.'.format(uid))

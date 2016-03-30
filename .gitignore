@@ -41,3 +41,10 @@ tags
 backy.cfg.enterprise
 backy.cfg.enterprise-s3
 backy.cfg.master
+.pybuild
+debian/backy2.postinst.debhelper
+debian/backy2.prerm.debhelper
+debian/backy2.substvars
+debian/backy2/
+debian/files
+
