@@ -51,7 +51,7 @@ class Backy():
             raise RuntimeError('Unable to set process name')
 
         if not self.locking.lock('backy'):
-            raise LockError('An backy is running which requires exclusive access.')
+            raise LockError('A backy is running which requires exclusive access.')
         self.locking.unlock('backy')
 
 
@@ -446,6 +446,8 @@ class Backy():
 
     def cleanup_fast(self, dt=3600):
         """ Delete unreferenced blob UIDs """
+        if not self.locking.lock('backy-cleanup-fast'):
+            raise LockError('Another backy cleanup is running.')
         delete_candidates = self.meta_backend.get_delete_candidates(dt=dt)
         try:
             for candidates in grouper(100, delete_candidates):
@@ -461,10 +463,12 @@ class Backy():
         except:
             logger.error('Error during cleanup. Reverting metadata changes.')
             self.meta_backend.revert_delete_candidates(delete_candidates)
+            self.locking.unlock('backy-cleanup-fast')
             raise
         else:
             self.meta_backend.remove_delete_candidates(delete_candidates)
         logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
+        self.locking.unlock('backy-cleanup-fast')
 
 
     def cleanup_full(self, prefix=None):
