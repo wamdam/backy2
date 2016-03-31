@@ -1,7 +1,10 @@
 PYTHON=env/bin/python3
+PIP=env/bin/pip
 PYTEST=env/bin/py.test
+PEX=env/bin/pex
+PEXCACHE=build/.pex
 
-all: deb
+all: build/backy2.pex deb
 
 .PHONY : deb
 deb:
@@ -10,6 +13,8 @@ deb:
 env: setup.py
 	virtualenv -p python3 env
 	$(PYTHON) setup.py develop
+	$(PIP) install pex==1.1.0
+	$(PIP) install -r requirements_tests.txt
 
 .PHONY : info
 info:
@@ -18,14 +23,15 @@ info:
 	@pip --version
 	@pip list
 
-build/backy: env $(wildcard src/backy2/*.py) $(wildcard src/backy2/**/*.py)
+build/backy2.pex: env $(wildcard src/backy2/*.py) $(wildcard src/backy2/**/*.py)
 	mkdir -p build
 	rm build/backy || true
 	rm -r $(PEXCACHE) || true
-	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m backy2.scripts.backy:main -o build/backy
+	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m backy2.scripts.backy:main -o build/backy2.pex 'boto>=2.38.0' 'psycopg2>=2.6.1'
 
 .PHONY : clean
 clean:
+	rm build/backy2.pex || true
 	fakeroot make -f debian/rules clean
 	rm -r env || true
 

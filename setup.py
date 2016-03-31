@@ -43,12 +43,12 @@ Topic :: System :: Archiving :: Backup
         #'psycopg2>=2.6.1',
         #'pex==1.1.0',
         ],
-    test_requires=[
-        'pytest-cov',
-        'pytest-capturelog',
-        'pytest-timeout',
-        'pytest',
-        ],
+    # tests_require=[
+        # 'pytest-cov',
+        # 'pytest-capturelog',
+        # 'pytest-timeout',
+        # 'pytest',
+        # ],
     entry_points="""
         [console_scripts]
             backy2 = backy2.scripts.backy:main
