@@ -7,8 +7,8 @@ import boto.exception
 import boto.s3.connection
 import hashlib
 import os
+import shortuuid
 import time
-import uuid
 
 
 class DataBackend(_DataBackend):
@@ -46,8 +46,13 @@ class DataBackend(_DataBackend):
 
 
     def _uid(self):
-        # a uuid always starts with the same bytes, so let's widen this
-        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
+        # 32 chars are allowed and we need to spread the first few chars so
+        # that blobs are distributed nicely. And want to avoid hash collisions.
+        # So we create a real base57-encoded uuid (22 chars) and prefix it with
+        # its own md5 hash[:10].
+        suuid = shortuuid.uuid()
+        hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
+        return hash[:10] + suuid
 
 
     def save(self, data):

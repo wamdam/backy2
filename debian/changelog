@@ -1,5 +1,5 @@
-backy2 (2.7.0-1) unstable; urgency=low
+backy2 (2.7.1-1) unstable; urgency=low
 
-  * Created a debian build system
+  * Fixed possible hash collision scenario in block uuids
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Wed, 30 Mar 2016 15:29:44 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Wed, 07 Apr 2016 10:05:44 +0200

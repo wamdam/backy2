@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 from setuptools import setup, find_packages
 
-version = '2.7.0'
+version = '2.7.1'
 
 setup(name='backy2',
     version=version,
@@ -39,6 +39,7 @@ Topic :: System :: Archiving :: Backup
         'PrettyTable>=0.7.2',
         'sqlalchemy>=1.0.8',
         'psutil>=2.2.1',
+        'shortuuid>=0.4.2',
         #'boto>=2.38.0',
         #'psycopg2>=2.6.1',
         #'pex==1.1.0',
