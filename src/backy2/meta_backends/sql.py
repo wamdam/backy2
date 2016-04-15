@@ -243,7 +243,7 @@ class MetaBackend(_MetaBackend):
 
 
     def get_block_by_checksum(self, checksum):
-        return self.session.query(Block).filter_by(checksum=checksum).first()
+        return self.session.query(Block).filter_by(checksum=checksum, valid=1).first()
 
 
     def get_blocks_by_version(self, version_uid):

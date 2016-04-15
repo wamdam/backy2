@@ -43,52 +43,8 @@ engine: sqlite:////var/lib/backy/backy.sqlite
 [DataBackend]
 # Which data backend to use?
 # Available types:
-#   backy2.enterprise.data_backends.file (Enterprise version only)
-#   backy2.enterprise.data_backends.s3 (Enterprise version only)
 #   backy2.data_backends.file
 #   backy2.data_backends.s3
-
-
-#######################################
-# backy2.enterprise.data_backends.file
-#######################################
-#type: backy2.enterprise.data_backends.file
-
-# Store data to this path. A structure of 2 folders depth will be created
-# in this path (e.g. '0a/33'). Blocks of DEFAULTS.block_size will be stored
-# there. This is your backup storage!
-#path: /var/lib/backy/data
-
-# How many writes to perform in parallel. This is useful if your backup space
-# can perform parallel writes faster than serial ones.
-#simultaneous_writes: 5
-
-
-#######################################
-# backy2.enterprise.data_backends.s3
-#######################################
-#type: backy2.enterprise.data_backends.s3
-
-# Your s3 access key
-#aws_access_key_id: key
-
-# Your s3 secret access key
-#aws_secret_access_key: secretkey
-
-# Your aws host (IP or name)
-#host: 127.0.0.1
-
-# The port to connect to (usually 80 if not secure or 443 if secure)
-#port: 10001
-
-# Use HTTPS?
-#is_secure: false
-
-# Store to this bucket name:
-#bucket_name: backy2
-
-# How many s3 puts to perform in parallel
-#simultaneous_writes: 5
 
 
 #######################################
@@ -100,6 +56,10 @@ type: backy2.data_backends.file
 # in this path (e.g. '0a/33'). Blocks of DEFAULTS.block_size will be stored
 # there. This is your backup storage!
 path: /var/lib/backy/data
+
+# How many writes to perform in parallel. This is useful if your backup space
+# can perform parallel writes faster than serial ones.
+simultaneous_writes: 5
 
 
 #######################################
@@ -125,6 +85,9 @@ path: /var/lib/backy/data
 # Store to this bucket name:
 #bucket_name: backy2
 
+# How many s3 puts to perform in parallel
+#simultaneous_writes: 5
+
 
 [NBD]
 # Where to cache backy blocks when NBD Server is used
@@ -135,9 +98,8 @@ cachedir: /tmp
 [Reader]
 # Where to read blocks from
 # Available Readers:
-#   backy2.enterprise.readers.file (Enterprise version only)
-#   backy2.enterprise.readers.rbd (Enterprise version only)
 #   backy2.readers.file
+#   backy2.readers.rbd
 
 #######################################
 # backy2.readers.file
@@ -145,19 +107,12 @@ cachedir: /tmp
 # This reader reads from a file or a blockdevice (e.g. /dev/sda)
 type: backy2.readers.file
 
-
-#######################################
-# backy2.enterprise.readers.file
-#######################################
-# This reader reads from a file or a blockdevice (e.g. /dev/sda)
-#type: backy2.enterprise.readers.file
-
 # How many parallel reads are permitted? (also affects the queue length)
-#simultaneous_reads: 5
+simultaneous_reads: 5
 
 
 #######################################
-# backy2.enterprise.readers.rbd
+# backy2.readers.rbd
 #######################################
 # This reader accepts rbd images in the form pool/image@snapshot or pool/image
 #type: backy2.readers.rbd

@@ -1,40 +1,51 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
+from backy2.readers.lib import rados  # XXX use default rados lib?
+from backy2.readers.lib import rbd    # XXX use default rbd lib?
 from backy2.logging import logger
 from backy2.readers import Reader as _Reader
-import os
 import queue
+import re
 import threading
 import time
 
-if hasattr(os, 'posix_fadvise'):
-    posix_fadvise = os.posix_fadvise
-else:  # pragma: no cover
-    logger.warn('Running without `posix_fadvise`.')
-    os.POSIX_FADV_RANDOM = None
-    os.POSIX_FADV_SEQUENTIAL = None
-    os.POSIX_FADV_WILLNEED = None
-    os.POSIX_FADV_DONTNEED = None
-
-    def posix_fadvise(*args, **kw):
-        return
-
-
 class Reader(_Reader):
-    simultaneous_reads = 1
+    simultaneous_reads = 10
+    pool_name = None
+    image_name = None
+    snapshot_name = None
 
     def __init__(self, config, block_size, hash_function):
         self.simultaneous_reads = config.getint('simultaneous_reads')
+        ceph_conffile = config.get('ceph_conffile')
         self.block_size = block_size
         self.hash_function = hash_function
-
-
-    def open(self, source):
-        self.source = source
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
+        self.cluster = rados.Rados(conffile=ceph_conffile)
+        self.cluster.connect()
+
+
+    def open(self, source):
+        self.source = source  # pool/imagename@snapshotname or pool/imagename
+        img_name = re.match('^([^/]+)/([^@]+)@?(.+)?$', source)
+        if not img_name:
+            raise RuntimeError('Not a source: {} . Need pool/imagename or pool/imagename@snapshotname'.format(source))
+        self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
+        # try opening it and quit if that's not possible.
+        try:
+            ioctx = self.cluster.open_ioctx(self.pool_name)
+        except rados.ObjectNotFound:
+            logger.error('Pool not found: {}'.format(self.pool_name))
+            exit('Error opening backup source.')
+        try:
+            rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True)
+        except rbd.ImageNotFound:
+            logger.error('Image/Snapshot not found: {}@{}'.format(self.image_name, self.snapshot_name))
+            exit('Error opening backup source.')
+
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
@@ -43,21 +54,18 @@ class Reader(_Reader):
 
 
     def size(self):
-        source_size = 0
-        with open(self.source, 'rb') as source_file:
-            #posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
-            # determine source size
-            source_file.seek(0, 2)  # to the end
-            source_size = source_file.tell()
-            source_file.seek(0)
-        return source_size
+        ioctx = self.cluster.open_ioctx(self.pool_name)
+        with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
+            size = image.size()
+        return size
 
 
     def _reader(self, id_):
         """ self._inqueue contains Blocks.
         self._outqueue contains (block, data, data_checksum)
         """
-        with open(self.source, 'rb') as source_file:
+        ioctx = self.cluster.open_ioctx(self.pool_name)
+        with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
             while True:
                 block = self._inqueue.get()
                 if block is None:
@@ -66,12 +74,9 @@ class Reader(_Reader):
                     break
                 offset = block.id * self.block_size
                 t1 = time.time()
-                source_file.seek(offset)
+                data = image.read(offset, self.block_size, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
                 t2 = time.time()
-                data = source_file.read(self.block_size)
-                t3 = time.time()
                 # throw away cache
-                posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
                 if not data:
                     raise RuntimeError('EOF reached on source when there should be data.')
 
@@ -79,7 +84,15 @@ class Reader(_Reader):
                 if not block.valid:
                     logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
                 else:
-                    logger.debug('Reader {} read block {} (len {}, checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
+                    logger.debug('Reader {} read block {} (checksum {}...) in {:.2f}s) '
+                        '(Inqueue size: {}, Outqueue size: {})'.format(
+                            id_,
+                            block.id,
+                            data_checksum[:16],
+                            t2-t1,
+                            self._inqueue.qsize(),
+                            self._outqueue.qsize()
+                            ))
 
                 self._outqueue.put((block, data, data_checksum))
                 self._inqueue.task_done()

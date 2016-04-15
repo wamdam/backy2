@@ -6,10 +6,8 @@ from backy2.logging import logger
 import fnmatch
 import hashlib
 import os
-import queue
-import shortuuid
-import threading
 import time
+import uuid
 
 
 def makedirs(path):
@@ -28,57 +26,15 @@ class DataBackend(_DataBackend):
     DEPTH = 2
     SPLIT = 2
     SUFFIX = '.blob'
-    WRITE_QUEUE_LENGTH = 10
-
-    _SUPPORTS_PARTIAL_READS = True
-    _SUPPORTS_PARTIAL_WRITES = True
 
 
     def __init__(self, config):
         self.path = config.get('path')
-        simultaneous_writes = config.getint('simultaneous_writes')
-        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
-        self._queue = queue.Queue(self.write_queue_length)
-        self._writer_threads = []
-        for i in range(simultaneous_writes):
-            _writer_thread = threading.Thread(target=self._writer, args=(i,))
-            _writer_thread.daemon = True
-            _writer_thread.start()
-            self._writer_threads.append(_writer_thread)
-
-
-    def _writer(self, id_=0):
-        """ A threaded background writer """
-        while True:
-            entry = self._queue.get()
-            if entry is None:
-                logger.debug("Writer {} finishing.".format(id_))
-                break
-            uid, data = entry
-            path = os.path.join(self.path, self._path(uid))
-            filename = self._filename(uid)
-            t1 = time.time()
-            try:
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-            except FileNotFoundError:
-                makedirs(path)
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-            t2 = time.time()
-            assert r == len(data)
-            self._queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
 
 
     def _uid(self):
-        # 32 chars are allowed and we need to spread the first few chars so
-        # that blobs are distributed nicely. And want to avoid hash collisions.
-        # So we create a real base57-encoded uuid (22 chars) and prefix it with
-        # its own md5 hash[:10].
-        suuid = shortuuid.uuid()
-        hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
-        return hash[:10] + suuid
+        # a uuid always starts with the same bytes, so let's widen this
+        return hashlib.md5(uuid.uuid1().bytes).hexdigest()
 
 
     def _path(self, uid):
@@ -97,18 +53,22 @@ class DataBackend(_DataBackend):
         return os.path.join(path, uid + self.SUFFIX)
 
 
-    def save(self, data, _sync=False):
+    def save(self, data):
         uid = self._uid()
-        self._queue.put((uid, data))
-        if _sync:
-            self._queue.join()
+        path = os.path.join(self.path, self._path(uid))
+        filename = self._filename(uid)
+        t1 = time.time()
+        try:
+            with open(filename, 'wb') as f:
+                r = f.write(data)
+        except FileNotFoundError:
+            makedirs(path)
+            with open(filename, 'wb') as f:
+                r = f.write(data)
+        t2 = time.time()
+        assert r == len(data)
+        logger.debug('Wrote data uid {} in {:.2f}s'.format(uid, t2-t1))
         return uid
-
-
-    def update(self, uid, data, offset=0):
-        with open(self._filename(uid), 'r+b') as f:
-            f.seek(offset)
-            return f.write(data)
 
 
     def rm(self, uid):
@@ -152,10 +112,7 @@ class DataBackend(_DataBackend):
 
 
     def close(self):
-        for _writer_thread in self._writer_threads:
-            self._queue.put(None)  # ends the thread
-        for _writer_thread in self._writer_threads:
-            _writer_thread.join()
+        pass
 
 
 

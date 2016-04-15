@@ -8,5 +8,3 @@ Backlog:
 * Make restore accept rbd volumes as target
 
 Next:
-
-* Add a backy-wide lock to prevent other backys running during full cleanup

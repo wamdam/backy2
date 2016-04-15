@@ -1,0 +1,4 @@
+pytest-cov
+pytest-capturelog
+pytest-timeout
+pytest
