@@ -38,8 +38,8 @@ build
 tmp2
 tags
 .cache
-backy.cfg.enterprise
-backy.cfg.enterprise-s3
+backy.cfg.file
+backy.cfg.s3
 backy.cfg.master
 .pybuild
 debian/backy2.postinst.debhelper
