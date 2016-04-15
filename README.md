@@ -2,9 +2,26 @@
 
 ## An open source block based backup utility with sparse features
 
-backy is a **block based backup** for **virtual machines**.
+backy is a **block based backup** for **virtual machines**, runs in linux and is
+LGPL v3 licensed.
 
-It's useful to backup any block based image with or without snapshot features
+backy backs up from
+
+* rbd images or snapshots (ceph)
+* lvm images or snapshots
+* partitions
+* virtual machine image files
+* any block-device file
+
+backy stores backups to
+
+* s3 compatible storage
+* any filesystem (nfs, ext2/3/4, zfs, ...)
+
+Readers and writers are written as plugins and are configurable, so extension
+is *very* easy.
+
+backy is useful to backup any block based image with or without snapshot features
 to any other location, that is a filesystem (NFS, ...) or any S3 compatible
 storage.
 
@@ -22,8 +39,8 @@ Especially on ceph volumes, the first AND all subsequent backups only require
 changed blocks to be read and stored.
 
 Invalid backups, due to data errors and otherwise broken backups (system crash)
-are recognized (for bit rod we recommend scrubs) and backy prevents you from
-backing up from them as a base (i.e. you must do a fresh full backup).
+are recognized (for bitrot we recommend `backy scrub`) and backy prevents you
+from backing up from them as a base (i.e. you must do a fresh full backup).
 
 Backy also does deduplication during backup. This means, that equal blocks,
 which are per default 4MB in size, are only stored once on the backup medium.
@@ -36,7 +53,8 @@ the given part (percentile / 100) of the backup is read and compared against
 the stored checksums.
 
 Scrub can also compare the backup against an existing image, e.g. a snapshot.
-With this ``deep scrub`` percentile checks are also available.
+With this ``deep scrub`` percentile checks are also available. Deep scrubs find
+especially when the source has changed.
 
 When scrub finds invalid blocks, it marks the blocks and all versions containing
 this block as invalid (however, restores are still possible with this
@@ -73,6 +91,11 @@ Other features:
   are logged.
 * Metadata from SQL can (and should) be exported and imported along with the
   backup
+* Any backup version can be mapped with nbd and so directly mounted
+* Mapped backup versions can be read-only or read-write
+* Read-write mapped backup versions create a new backup version on writes (copy
+  on write). So you can test if your backed up e.g. database server starts
+  smoothly without restoring it first.
 
 
 ## Installation
