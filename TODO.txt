@@ -8,3 +8,7 @@ Backlog:
 * Make restore accept rbd volumes as target
 
 Next:
+
+* Change lock lib to be a wrapper, possibly with a context manager
+* Add shell scripting to exports so that a shell script can restore any backup
+
