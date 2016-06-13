@@ -47,3 +47,4 @@ debian/backy2.prerm.debhelper
 debian/backy2.substvars
 debian/backy2/
 debian/files
+debian/debhelper-build-stamp

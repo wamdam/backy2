@@ -1,3 +1,10 @@
+backy2 (2.7.4) unstable; urgency=low
+
+  * Added safetyguard so that no too young backups can be deleted.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 13 Jun 2016 11:20:05 +0200
+
+
 backy2 (2.7.3-1) unstable; urgency=low
 
   * Merged enterprise features
