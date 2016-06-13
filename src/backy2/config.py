@@ -12,6 +12,7 @@ default_config = """
 logfile: /tmp/backy.log
 block_size: 4194304
 hash_function: sha512
+disallow_rm_when_younger_than_days: 0
 
 [MetaBackend]
 type: backy2.meta_backends.sql

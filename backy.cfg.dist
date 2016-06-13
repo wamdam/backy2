@@ -20,6 +20,9 @@ lock_dir: /run
 # for all backy processes.
 process_name: backy2
 
+# Allow rm of backup versions after n days (set to 0 to disable, i.e. to be
+# able to delete any version)
+disallow_rm_when_younger_than_days: 6
 
 
 [MetaBackend]

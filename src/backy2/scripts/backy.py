@@ -43,9 +43,11 @@ class Commands():
         backy.close()
 
 
-    def rm(self, version_uid):
+    def rm(self, version_uid, force):
+        config_DEFAULTS = self.Config(section='DEFAULTS')
+        disallow_rm_when_younger_than_days = int(config_DEFAULTS.get('disallow_rm_when_younger_than_days', '0'))
         backy = self.backy()
-        backy.rm(version_uid)
+        backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
         backy.close()
 
 
@@ -359,6 +361,7 @@ def main():
     p = subparsers.add_parser(
         'rm',
         help="Remove a given backup version. This will only remove meta data and you will have to cleanup after this.")
+    p.add_argument('-f', '--force', action='store_true', help="Force removal of version, even if it's younger than the configured disallow_rm_when_younger_than_days.")
     p.add_argument('version_uid')
     p.set_defaults(func='rm')
 

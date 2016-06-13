@@ -4,6 +4,7 @@ from backy2.logging import logger
 from backy2.locking import Locking
 from backy2.locking import setprocname, find_other_procs
 from backy2.utils import grouper
+import datetime
 import math
 import random
 import time
@@ -268,10 +269,16 @@ class Backy():
         self.locking.unlock(version_uid)
 
 
-    def rm(self, version_uid):
+    def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
-        self.meta_backend.get_version(version_uid)  # just to raise if not exists
+        version = self.meta_backend.get_version(version_uid)
+        if not force:
+            # check if disallow_rm_when_younger_than_days allows deletion
+            age_days = (datetime.datetime.now() - version.date).days
+            if disallow_rm_when_younger_than_days > age_days:
+                raise LockError('Version {} is too young. Will not delete.'.format(version_uid))
+
         num_blocks = self.meta_backend.rm_version(version_uid)
         logger.info('Removed backup version {} with {} blocks.'.format(
             version_uid,
