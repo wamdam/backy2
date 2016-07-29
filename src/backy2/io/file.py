@@ -24,6 +24,7 @@ else:  # pragma: no cover
 
 class IO(_IO):
     simultaneous_reads = 1
+    mode = None
 
     def __init__(self, config, block_size, hash_function):
         self.simultaneous_reads = config.getint('simultaneous_reads')
@@ -31,11 +32,13 @@ class IO(_IO):
         self.hash_function = hash_function
 
 
-    def open(self, source):
-        _s = re.match('^file://(.+)$', source)
+    def open_r(self, io_name):
+        self.mode = 'r'
+        _s = re.match('^file://(.+)$', io_name)
         if not _s:
-            raise RuntimeError('Not a source: {} . Need a file path, e.g. file:///somepath/file'.format(source))
-        self.source = _s.groups()[0]
+            raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
+        self.io_name = _s.groups()[0]
+
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
@@ -46,9 +49,31 @@ class IO(_IO):
             self._reader_threads.append(_reader_thread)
 
 
+    def open_w(self, io_name, size=None, force=False):
+        self.mode = 'w'
+        _s = re.match('^file://(.+)$', io_name)
+        if not _s:
+            raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
+        self.io_name = _s.groups()[0]
+
+        if os.path.exists(self.io_name):
+            if not force:
+                logger.error('Target already exists: {}'.format(io_name))
+                exit('Error opening restore target. You must force the restore.')
+            else:
+                if size < self.size():
+                    logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
+                    exit('Error opening restore target.')
+        else:
+            # create the file
+            with open(self.io_name, 'wb') as f:
+                f.seek(size - 1)
+                f.write(b'\0')
+
+
     def size(self):
         source_size = 0
-        with open(self.source, 'rb') as source_file:
+        with open(self.io_name, 'rb') as source_file:
             #posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
             # determine source size
             source_file.seek(0, 2)  # to the end
@@ -61,7 +86,7 @@ class IO(_IO):
         """ self._inqueue contains Blocks.
         self._outqueue contains (block, data, data_checksum)
         """
-        with open(self.source, 'rb') as source_file:
+        with open(self.io_name, 'rb') as source_file:
             while True:
                 block = self._inqueue.get()
                 if block is None:
@@ -105,10 +130,21 @@ class IO(_IO):
         return d
 
 
+    def write(self, block, data):
+        # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
+        with open(self.io_name, 'rb+') as f:
+            f.seek(block.id * self.block_size)
+            written = f.write(data)
+            assert written == len(data)
+
+
     def close(self):
-        for _reader_thread in self._reader_threads:
-            self._inqueue.put(None)  # ends the threads
-        for _reader_thread in self._reader_threads:
-            _reader_thread.join()
+        if self.mode == 'r':
+            for _reader_thread in self._reader_threads:
+                self._inqueue.put(None)  # ends the threads
+            for _reader_thread in self._reader_threads:
+                _reader_thread.join()
+        elif self.mode == 'w':
+            pass
 
 

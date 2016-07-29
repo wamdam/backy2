@@ -7,14 +7,17 @@ class IO():
         pass
 
 
-    def open(self, source):
+    def open(self, io_name, mode='r', force=False):
         """ Prepare and check anything needed by the ios,
-        possibly open files and start threads """
+        possibly open files and start threads. If mode is 'w', then
+        the force parameter decides if the given target should be overwritten
+        (True) or if a new target should be created (False).
+        """
         raise NotImplementedError()
 
 
     def size(self):
-        """ Return the size in bytes of the opened source
+        """ Return the size in bytes of the opened io_name
         """
         raise NotImplementedError()
 
@@ -30,7 +33,13 @@ class IO():
         raise NotImplementedError()
 
 
+    def write(self, block, data):
+        """ Writes data to the given block
+        """
+        raise NotImplementedError()
+
+
     def close(self):
-        """ Close the source
+        """ Close the io
         """
         raise NotImplementedError()

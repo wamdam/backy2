@@ -15,6 +15,7 @@ class IO(_IO):
     pool_name = None
     image_name = None
     snapshot_name = None
+    mode = None
 
     def __init__(self, config, block_size, hash_function):
         self.simultaneous_reads = config.getint('simultaneous_reads')
@@ -28,12 +29,13 @@ class IO(_IO):
         self.cluster.connect()
 
 
-    def open(self, source):
-        # source has the form rbd://pool/imagename@snapshotname or rbd://pool/imagename
-        self.source = source
-        img_name = re.match('^rbd://([^/]+)/([^@]+)@?(.+)?$', source)
+    def open_r(self, io_name):
+        # io_name has the form rbd://pool/imagename@snapshotname or rbd://pool/imagename
+        self.mode = 'r'
+        self.io_name = io_name
+        img_name = re.match('^rbd://([^/]+)/([^@]+)@?(.+)?$', io_name)
         if not img_name:
-            raise RuntimeError('Not a source: {} . Need pool/imagename or pool/imagename@snapshotname'.format(source))
+            raise RuntimeError('Not a valid io name: {} . Need pool/imagename or pool/imagename@snapshotname'.format(io_name))
         self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
         # try opening it and quit if that's not possible.
         try:
@@ -41,6 +43,7 @@ class IO(_IO):
         except rados.ObjectNotFound:
             logger.error('Pool not found: {}'.format(self.pool_name))
             exit('Error opening backup source.')
+
         try:
             rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True)
         except rbd.ImageNotFound:
@@ -52,6 +55,38 @@ class IO(_IO):
             _reader_thread.daemon = True
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
+
+
+    def open_w(self, io_name, size=None, force=False):
+        """ size is bytes
+        """
+        self.mode = 'w'
+        # io_name has the form rbd://pool/imagename@snapshotname or rbd://pool/imagename
+        self.io_name = io_name
+        img_name = re.match('^rbd://([^/]+)/([^@]+)$', io_name)
+        if not img_name:
+            raise RuntimeError('Not a valid io name: {} . Need pool/imagename'.format(io_name))
+        self.pool_name, self.image_name = img_name.groups()
+        # try opening it and quit if that's not possible.
+        try:
+            ioctx = self.cluster.open_ioctx(self.pool_name)
+        except rados.ObjectNotFound:
+            logger.error('Pool not found: {}'.format(self.pool_name))
+            exit('Error opening backup source.')
+
+        try:
+            rbd.Image(ioctx, self.image_name)
+        except rbd.ImageNotFound:
+            # TODO: Make features configurable.
+            rbd.RBD().create(ioctx, self.image_name, size, old_format=False, features=rbd.RBD_FEATURE_LAYERING)
+        else:
+            if not force:
+                logger.error('Image already exists: {}'.format(self.image_name))
+                exit('Error opening restore target.')
+            else:
+                if size < self.size():
+                    logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
+                    exit('Error opening restore target.')
 
 
     def size(self):
@@ -115,10 +150,21 @@ class IO(_IO):
         return d
 
 
-    def close(self):
-        for _reader_thread in self._reader_threads:
-            self._inqueue.put(None)  # ends the threads
-        for _reader_thread in self._reader_threads:
-            _reader_thread.join()
+    def write(self, block, data):
+        # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
+        ioctx = self.cluster.open_ioctx(self.pool_name)
+        with rbd.Image(ioctx, self.image_name) as image:
+            offset = block.id * self.block_size
+            written = image.write(data, offset, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
+            assert written == len(data)
 
+
+    def close(self):
+        if self.mode == 'r':
+            for _reader_thread in self._reader_threads:
+                self._inqueue.put(None)  # ends the threads
+            for _reader_thread in self._reader_threads:
+                _reader_thread.join()
+        elif self.mode == 'w':
+            pass
 

@@ -142,7 +142,7 @@ class Backy():
             raise ValueError('Invalid URL.')
         scheme = res.scheme
         if not scheme:
-            raise ValueError('Invalid source. You must provide the source type (e.g. file://)')
+            raise ValueError('Invalid URL. You must provide the type (e.g. file://)')
         # import io with name == scheme
         # and pass config section io_<scheme>
         IOLib = importlib.import_module('backy2.io.{}'.format(scheme))
@@ -164,7 +164,7 @@ class Backy():
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
             io = self.get_io_by_source(source)
-            io.open(source)
+            io.open_r(source)
 
         state = True
         for block in blocks:
@@ -242,51 +242,47 @@ class Backy():
         return state
 
 
-    def restore(self, version_uid, target, sparse=False):
+    def restore(self, version_uid, target, sparse=False, force=False):
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
+
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        with open(target, 'wb') as f:
-            for block in blocks:
-                f.seek(block.id * self.block_size)
-                if block.uid:
-                    data = self.data_backend.read(block.uid)
-                    assert len(data) == block.size
-                    data_checksum = self.hash_function(data).hexdigest()
-                    written = f.write(data)
-                    assert written == len(data)
-                    if data_checksum != block.checksum:
-                        logger.error('Checksum mismatch during restore for block '
-                            '{} (is: {} should-be: {}, block-valid: {}). Block '
-                            'restored is invalid. Continuing.'.format(
-                                block.id,
-                                data_checksum,
-                                block.checksum,
-                                block.valid,
-                                ))
-                        self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    else:
-                        logger.debug('Restored block {} successfully ({} bytes).'.format(
+
+        io = self.get_io_by_source(target)
+        io.open_w(target, version.size_bytes, force)
+
+        for block in blocks:
+            if block.uid:
+                data = self.data_backend.read(block.uid)
+                assert len(data) == block.size
+                data_checksum = self.hash_function(data).hexdigest()
+                io.write(block, data)
+                if data_checksum != block.checksum:
+                    logger.error('Checksum mismatch during restore for block '
+                        '{} (is: {} should-be: {}, block-valid: {}). Block '
+                        'restored is invalid. Continuing.'.format(
                             block.id,
-                            block.size,
+                            data_checksum,
+                            block.checksum,
+                            block.valid,
                             ))
-                elif not sparse:
-                    f.write(b'\0'*block.size)
-                    logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
+                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                else:
+                    logger.debug('Restored block {} successfully ({} bytes).'.format(
                         block.id,
                         block.size,
                         ))
-                else:
-                    logger.debug('Ignored sparse block {}.'.format(
-                        block.id,
-                        ))
-            if f.tell() != version.size_bytes:
-                # write last byte with \0, because this can only happen when
-                # the last block was left over in sparse mode.
-                last_block = blocks[-1]
-                f.seek(last_block.id * self.block_size + last_block.size - 1)
-                f.write(b'\0')
+            elif not sparse:
+                io.write(block, b'\0'*block.size)
+                logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
+                    block.id,
+                    block.size,
+                    ))
+            else:
+                logger.debug('Ignored sparse block {}.'.format(
+                    block.id,
+                    ))
         self.locking.unlock(version_uid)
 
 
@@ -330,7 +326,7 @@ class Backy():
                 'start_time': time.time(),
             }
         io = self.get_io_by_source(source)
-        io.open(source)
+        io.open_r(source)
         source_size = io.size()
 
         size = math.ceil(source_size / self.block_size)
