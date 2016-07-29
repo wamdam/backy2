@@ -98,31 +98,21 @@ simultaneous_writes: 5
 cachedir: /tmp
 
 
-[Reader]
-# Where to read blocks from
-# Available Readers:
-#   backy2.readers.file
-#   backy2.readers.rbd
-
-#######################################
-# backy2.readers.file
-#######################################
-# This reader reads from a file or a blockdevice (e.g. /dev/sda)
-type: backy2.readers.file
+[io_file]
+# Configure the file IO (file://<path>)
+# This is for a file or a blockdevice (e.g. /dev/sda)
 
 # How many parallel reads are permitted? (also affects the queue length)
 simultaneous_reads: 5
 
 
-#######################################
-# backy2.readers.rbd
-#######################################
-# This reader accepts rbd images in the form pool/image@snapshot or pool/image
-#type: backy2.readers.rbd
+[io_rbd]
+# Configure the rbd IO (rbd://<pool>/<imagename>[@<snapshotname>])
+# This accepts rbd images in the form rbd://pool/image@snapshot or rbd://pool/image
 
 # Where to look for the ceph configfile to read keys and hosts from it
-#ceph_conffile: /etc/ceph/ceph.conf
+ceph_conffile: /etc/ceph/ceph.conf
 
 # How many parallel reads are permitted? (also affects the queue length)
-#simultaneous_reads: 10
+simultaneous_reads: 10
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.readers.lib import rados  # XXX use default rados lib?
-from backy2.readers.lib import rbd    # XXX use default rbd lib?
+from backy2.io.lib import rados  # XXX use default rados lib?
+from backy2.io.lib import rbd    # XXX use default rbd lib?
 from backy2.logging import logger
-from backy2.readers import Reader as _Reader
+from backy2.io import IO as _IO
 import queue
 import re
 import threading
 import time
 
-class Reader(_Reader):
+class IO(_IO):
     simultaneous_reads = 10
     pool_name = None
     image_name = None
@@ -29,8 +29,9 @@ class Reader(_Reader):
 
 
     def open(self, source):
-        self.source = source  # pool/imagename@snapshotname or pool/imagename
-        img_name = re.match('^([^/]+)/([^@]+)@?(.+)?$', source)
+        # source has the form rbd://pool/imagename@snapshotname or rbd://pool/imagename
+        self.source = source
+        img_name = re.match('^rbd://([^/]+)/([^@]+)@?(.+)?$', source)
         if not img_name:
             raise RuntimeError('Not a source: {} . Need pool/imagename or pool/imagename@snapshotname'.format(source))
         self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
@@ -69,7 +70,7 @@ class Reader(_Reader):
             while True:
                 block = self._inqueue.get()
                 if block is None:
-                    logger.debug("Reader {} finishing.".format(id_))
+                    logger.debug("IO {} finishing.".format(id_))
                     self._outqueue.put(None)  # also let the outqueue end
                     break
                 offset = block.id * self.block_size
@@ -82,9 +83,9 @@ class Reader(_Reader):
 
                 data_checksum = self.hash_function(data).hexdigest()
                 if not block.valid:
-                    logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
+                    logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
                 else:
-                    logger.debug('Reader {} read block {} (checksum {}...) in {:.2f}s) '
+                    logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s) '
                         '(Inqueue size: {}, Outqueue size: {})'.format(
                             id_,
                             block.id,

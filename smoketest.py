@@ -98,15 +98,18 @@ with TestPath() as testpath:
         [NBD]
         cachedir: /tmp
 
-        [Reader]
-        type: backy2.readers.file
+        [io_file]
         simultaneous_reads: 5
+
+        [io_rbd]
+        ceph_conffile: /etc/ceph/ceph.conf
+        simultaneous_reads: 10
         """.format(testpath=testpath)
         Config = partial(_Config, cfg=config)
         backy = backy_from_config(Config)()
         version_uid = backy.backup(
             'data-backup',
-            os.path.join(testpath, 'data'),
+            'file://'+os.path.join(testpath, 'data'),
             hints_from_rbd_diff(open(os.path.join(testpath, 'hints')).read()),
             from_version
             )
@@ -115,7 +118,7 @@ with TestPath() as testpath:
         try:
             assert backy.scrub(version_uid) == True
             print('  Scrub successful')
-            assert backy.scrub(version_uid, os.path.join(testpath, 'data')) == True
+            assert backy.scrub(version_uid, 'file://'+os.path.join(testpath, 'data')) == True
             print('  Deep scrub successful')
             backy.restore(version_uid, os.path.join(testpath, 'restore'), sparse=False)
             assert same(os.path.join(testpath, 'data'), os.path.join(testpath, 'restore')) == True

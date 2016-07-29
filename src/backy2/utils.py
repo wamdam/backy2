@@ -42,24 +42,11 @@ def backy_from_config(Config):
     else:
         data_backend = DataBackendLib.DataBackend(config_DataBackend)
 
-    # configure reader
-    config_Reader = Config(section='Reader')
-    try:
-        ReaderLib = importlib.import_module(config_Reader.get('type'))
-    except ImportError:
-        raise NotImplementedError('Reader type {} unsupported.'.format(config_Reader.get('type')))
-    else:
-        reader = ReaderLib.Reader(
-                config_Reader,
-                block_size=block_size,
-                hash_function=hash_function,
-                )
-
     from backy2.backy import Backy
     backy = partial(Backy,
             meta_backend=meta_backend,
             data_backend=data_backend,
-            reader=reader,
+            config=Config,
             block_size=block_size,
             hash_function=hash_function,
             lock_dir=lock_dir,

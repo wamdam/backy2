@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 from backy2.logging import logger
-from backy2.readers import Reader as _Reader
+from backy2.io import IO as _IO
 import os
 import time
 
@@ -19,7 +19,7 @@ else:  # pragma: no cover
         return
 
 
-class Reader(_Reader):
+class IO(_IO):
 
     def __init__(self, config, block_size, hash_function):
         self.block_size = block_size

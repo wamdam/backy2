@@ -4,7 +4,9 @@ from backy2.logging import logger
 from backy2.locking import Locking
 from backy2.locking import setprocname, find_other_procs
 from backy2.utils import grouper
+from urllib import parse
 import datetime
+import importlib
 import math
 import random
 import time
@@ -33,7 +35,7 @@ class Backy():
     """
     """
 
-    def __init__(self, meta_backend, data_backend, reader, block_size=None,
+    def __init__(self, meta_backend, data_backend, config, block_size=None,
             hash_function=None, lock_dir=None, process_name='backy2'):
         if block_size is None:
             block_size = 1024*4096  # 4MB
@@ -42,7 +44,7 @@ class Backy():
             hash_function = hashlib.sha512
         self.meta_backend = meta_backend
         self.data_backend = data_backend
-        self.reader = reader
+        self.config = config
         self.block_size = block_size
         self.hash_function = hash_function
         self.locking = Locking(lock_dir)
@@ -134,6 +136,24 @@ class Backy():
         return stats
 
 
+    def get_io_by_source(self, source):
+        res = parse.urlparse(source)
+        if res.params or res.query or res.fragment:
+            raise ValueError('Invalid URL.')
+        scheme = res.scheme
+        if not scheme:
+            raise ValueError('Invalid source. You must provide the source type (e.g. file://)')
+        # import io with name == scheme
+        # and pass config section io_<scheme>
+        IOLib = importlib.import_module('backy2.io.{}'.format(scheme))
+        config = self.config(section='io_{}'.format(scheme))
+        return IOLib.IO(
+                config=config,
+                block_size=self.block_size,
+                hash_function=self.hash_function,
+                )
+
+
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
@@ -143,7 +163,8 @@ class Backy():
         self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
-            self.reader.open(source)
+            io = self.get_io_by_source(source)
+            io.open(source)
 
         state = True
         for block in blocks:
@@ -185,7 +206,7 @@ class Backy():
                     continue
                 else:
                     if source:
-                        source_data = self.reader.read(block, sync=True)
+                        source_data = io.read(block, sync=True)
                         if source_data != data:
                             logger.error('Source data has changed for block {} '
                                 '(UID {}) (is: {} should-be: {}). NOT setting '
@@ -215,7 +236,7 @@ class Backy():
             # version is set invalid by set_blocks_invalid.
             logger.error('Marked version invalid because it has errors: {}'.format(version_uid))
         if source:
-            self.reader.close()  # wait for all readers
+            io.close()  # wait for all io
 
         self.locking.unlock(version_uid)
         return state
@@ -308,8 +329,9 @@ class Backy():
                 'blocks_sparse': 0,
                 'start_time': time.time(),
             }
-        self.reader.open(source)
-        source_size = self.reader.size()
+        io = self.get_io_by_source(source)
+        io.open(source)
+        source_size = io.size()
 
         size = math.ceil(source_size / self.block_size)
         stats['version_size_bytes'] = source_size
@@ -365,11 +387,11 @@ class Backy():
             num_reading = 0
             for block in blocks:
                 if block.id in check_block_ids and block.uid:  # no uid = sparse block in backup. Can't check.
-                    self.reader.read(block)
+                    io.read(block)
                     num_reading += 1
             for i in range(num_reading):
                 # this is source file data
-                source_block, source_data, source_data_checksum = self.reader.get()
+                source_block, source_data, source_data_checksum = io.get()
                 # check metadata checksum with the newly read one
                 if source_block.checksum != source_data_checksum:
                     logger.error("Source and backup don't match in regions outside of the hints.")
@@ -387,7 +409,7 @@ class Backy():
         read_jobs = 0
         for block in blocks:
             if block.id in read_blocks or not block.valid:
-                self.reader.read(block)  # adds a read job.
+                io.read(block)  # adds a read job.
                 read_jobs += 1
             elif block.id in sparse_blocks:
                 # This "elif" is very important. Because if the block is in read_blocks
@@ -403,7 +425,7 @@ class Backy():
         # now use the readers and write
         done_jobs = 0
         for i in range(read_jobs):
-            block, data, data_checksum = self.reader.get()
+            block, data, data_checksum = io.get()
 
             stats['blocks_read'] += 1
             stats['bytes_read'] += len(data)
@@ -424,7 +446,7 @@ class Backy():
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
 
-        self.reader.close()  # wait for all readers
+        io.close()  # wait for all readers
         self.data_backend.close()  # wait for all writers
         if read_jobs != done_jobs:
             logger.error('backy broke somewhere. Backup is invalid.')

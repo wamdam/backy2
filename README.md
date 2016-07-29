@@ -115,12 +115,13 @@ Other features:
 ### Backup
 
 ```
-# backy -h backup
+# backy2 backup -h
 
-usage: backy backup [-h] [-r RBD] [-f FROM_VERSION] source name
+usage: backy2 backup [-h] [-r RBD] [-f FROM_VERSION] source name
 
 positional arguments:
-  source                Source file
+  source                Source (url-like, e.g. file:///dev/sda or
+                        rbd://pool/imagename@snapshot)
   name                  Backup name
 
 optional arguments:
@@ -140,24 +141,28 @@ out sparse blocks (hint: do a fstrim first!).
 ```
 rbd snap create vms/vm1@backup1
 rbd diff vms/vm1@backup1 --format=json > /tmp/vm1@backup1.diff
-rbd map vms/vm1@backup1
-backy backup -r /tmp/vm1@backup1.diff /dev/rbd/vms/vm1@backup1 vm1@backup1
-rbd unmap vms/vm1@backup1
+backy2 backup rbd://vms/vm1@backup1 vm1@backup1
+
+    INFO: $ /home/dk/develop/backy2/env/bin/backy2 backup rbd://rbd/test@snap1 rbdtest2
+    INFO: New version: e3106ffa-5564-11e6-9bd5-a44e314f9270
+    INFO: Backy complete.
 ```
 
 This creates a snapshot in pool `vms` from the image `vm1` called vm1@backup1.
 Then it creates a json-formatted diff 'from the beginning', that means, the
 diff defines all used areas.
 
-Then the snapshot is mapped (i.e. made available as a block device) and backy
-is called with the rbd diff file as hints to backup the block device into a
-backup called `vm1@backup1`.
+Then the snapshot is backed up by backy with the rbd diff file as hints to
+backup the block device into a backup called `vm1@backup1`.
 
 
 #### lvm
 
 ```
 lvm TODO
+Mostly about creating a snapshot and calling sth like
+
+backy2 backup file://dev/mapper/something name
 ```
 
 
@@ -166,13 +171,13 @@ lvm TODO
 #### ceph
 
 An incremental backup with ceph is mostly equal to the initial one, except that
-we will tell backy and ceph to base the new backup on an old one.
+we will tell backy2 and ceph to base the new backup on an old one.
 
-For ceph, the old snapshot name is ok, for backy we need the backup uid::
+For ceph, the old snapshot name is ok, for backy2 we need the backup uid::
 
 ```
-# backy ls
-    INFO: $ backy ls
+# backy2 ls
+    INFO: $ backy2 ls
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
 |            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
@@ -184,7 +189,7 @@ For ceph, the old snapshot name is ok, for backy we need the backup uid::
 The backup uid can also be grabbed with the machine output::
 
 ```
-# backy -m ls | grep 90811ff0-83f5-11e5-ad76-003148d6aacc
+# backy2 -m ls | grep 90811ff0-83f5-11e5-ad76-003148d6aacc
 version 2015-10-30 16:28:57.262395 vm1@backup1 62500 262144000000 90811ff0-83f5-11e5-ad76-003148d6aacc 1
 ```
 
@@ -194,21 +199,20 @@ Then we create an incremental backup::
 rbd snap create vms/vm1@backup2
 rbd diff vms/vm1@backup2 --from-snap vms/vm1@backup1 --format=json > /tmp/vm1@backup2.diff
 rbd map vms/vm1@backup2
-backy backup -r /tmp/vm1@backup2.diff -f 90811ff0-83f5-11e5-ad76-003148d6aacc /dev/rbd/vms/vm1@backup2 vm1@backup2
-rbd unmap vms/vm1@backup2
+backy2 backup -r /tmp/vm1@backup2.diff -f 90811ff0-83f5-11e5-ad76-003148d6aacc rbd://vms/vm1@backup2 vm1@backup2
 ```
 
-Notice the -f (--from) for backy. This tells backy to use all the metadata
+Notice the -f (--from) for backy. This tells backy2 to use all the metadata
 (blocks, checksums, ...) from the old backup and only overwrite the parts given
 in the hints-file (-r).
 You must ensure that the from-backup (-f) matches the snapshot from which the
 diff was created (--from-snap). Otherwise the wrong data sections will be stored
-and the backup is invalid without backy being able to notice this.
+and the backup is invalid without backy2 being able to notice this.
 
 
 ### Metadata
 
-The metadata from backy is saved in an sql database that can be configured in
+The metadata from backy2 is saved in an sql database that can be configured in
 your backy.cfg (usually /etc/backy.cfg). Default is sqlite, but we recommend
 PostgreSQL.
 
@@ -220,8 +224,8 @@ backup data.
 To do this, export it:
 
 ```
-# backy ls
-    INFO: $ backy ls
+# backy2 ls
+    INFO: $ backy2 ls
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
 |            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
@@ -229,35 +233,35 @@ To do this, export it:
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
     INFO: Backy complete.
 
-# backy export 90811ff0-83f5-11e5-ad76-003148d6aacc /var/backup/vm1@backup1.metadata
-    INFO: $ backy export 90811ff0-83f5-11e5-ad76-003148d6aacc /var/backup/vm1@backup1.metadata
+# backy2 export 90811ff0-83f5-11e5-ad76-003148d6aacc /var/backup/vm1@backup1.metadata
+    INFO: $ backy2 export 90811ff0-83f5-11e5-ad76-003148d6aacc /var/backup/vm1@backup1.metadata
     INFO: Backy complete.
 ```
 
-The metadata file contains anything that backy requires to be able to restore
+The metadata file contains anything that backy2 requires to be able to restore
 from the data directory (of course, actual data blocks are also required).
 
 Let's try it out (you don't need to do this on live backup systems):
 
 ```
-# backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
-    INFO: $ backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+# backy2 rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+    INFO: $ backy2 rm 90811ff0-83f5-11e5-ad76-003148d6aacc
     INFO: Backy complete.
 
-# backy ls
-    INFO: $ backy ls
+# backy2 ls
+    INFO: $ backy2 ls
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
 |            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
     INFO: Backy complete.
 
-# backy import /var/backup/vm1@backup1.metadata
-    INFO: $ backy import /var/backup/vm1@backup1.metadata
+# backy2 import /var/backup/vm1@backup1.metadata
+    INFO: $ backy2 import /var/backup/vm1@backup1.metadata
     INFO: Backy complete.
 
-# backy ls
-    INFO: $ backy ls
+# backy2 ls
+    INFO: $ backy2 ls
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
 |            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
@@ -274,8 +278,8 @@ information about the validity of the backup.
 ### Restore
 
 ```
-# backy ls
-    INFO: $ env/bin/backy ls
+# backy2 ls
+    INFO: $ env/bin/backy2 ls
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
 |            date            |        name         |  size |  size_bytes  |                 uid                  | version valid |
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
@@ -283,7 +287,7 @@ information about the validity of the backup.
 +----------------------------+---------------------+-------+--------------+--------------------------------------+---------------+
     INFO: Backy complete.
 
-# backy restore 3117eecc-8369-11e5-ad76-003048d6aadd /tmp/restore.img
+# backy2 restore 3117eecc-8369-11e5-ad76-003048d6aadd /tmp/restore.img
 ```
 
 That would restore the given uid into a file `tmp/restore.img`.
@@ -303,12 +307,12 @@ on this.
 For production systems, scrubbing is highly recommended in order to prevent
 hidden bitrot, filesystem errors on the backup system and more.
 
-backy can scrub against its own checksums or even against original snapshots.
+backy2 can scrub against its own checksums or even against original snapshots.
 
 #### Checksum based scrub
 
 ```
-# backy scrub 90811ff0-83f5-11e5-ad76-003148d6aacc
+# backy2 scrub 90811ff0-83f5-11e5-ad76-003148d6aacc
 
 TODO Output
 ```
@@ -317,7 +321,7 @@ TODO Output
 
 ```
 rbd map vms/vm1@backup1
-backy scrub -s /dev/rbd/vms/vm1@backup1 90811ff0-83f5-11e5-ad76-003148d6aacc
+backy2 scrub -s /dev/rbd/vms/vm1@backup1 90811ff0-83f5-11e5-ad76-003148d6aacc
 rbd unmap vms/vm1@backup1
 
 TODO Output
@@ -328,9 +332,9 @@ TODO Output
 TODO
 
 ```
-backy rm 90811ff0-83f5-11e5-ad76-003148d6aacc
+backy2 rm 90811ff0-83f5-11e5-ad76-003148d6aacc
 # wait 1 hour, because cleanup will only run old delete jobs
-backy cleanup
+backy2 cleanup
 ```
 
 

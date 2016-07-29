@@ -340,7 +340,7 @@ def main():
         help="Perform a backup.")
     p.add_argument(
         'source',
-        help='Source file')
+        help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename@snapshot)')
     p.add_argument(
         'name',
         help='Backup name')
@@ -370,7 +370,7 @@ def main():
         'scrub',
         help="Scrub a given backup and check for consistency.")
     p.add_argument('-s', '--source', default=None,
-        help="Source, optional. If given, check if source matches backup in addition to checksum tests.")
+        help="Source, optional. If given, check if source matches backup in addition to checksum tests. url-like format as in backup.")
     p.add_argument('-p', '--percentile', default=100,
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('version_uid')

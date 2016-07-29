@@ -13,6 +13,7 @@ logfile: /tmp/backy.log
 block_size: 4194304
 hash_function: sha512
 disallow_rm_when_younger_than_days: 0
+lock_dir: /tmp
 
 [MetaBackend]
 type: backy2.meta_backends.sql
@@ -26,8 +27,10 @@ simultaneous_writes: 1
 [NBD]
 cachedir: /tmp
 
-[Reader]
-type: backy2.readers.file
+[io_file]
+simultaneous_reads: 1
+
+[io_rbd]
 simultaneous_reads: 1
 """
 

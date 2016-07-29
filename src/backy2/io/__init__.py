@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-class Reader():
+class IO():
 
     def __init__(self, config, block_size, hash_function):
         pass
 
 
     def open(self, source):
-        """ Prepare and check anything needed by the readers,
+        """ Prepare and check anything needed by the ios,
         possibly open files and start threads """
         raise NotImplementedError()
 

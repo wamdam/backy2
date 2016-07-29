@@ -2,9 +2,10 @@
 # -*- encoding: utf-8 -*-
 
 from backy2.logging import logger
-from backy2.readers import Reader as _Reader
+from backy2.io import IO as _IO
 import os
 import queue
+import re
 import threading
 import time
 
@@ -21,7 +22,7 @@ else:  # pragma: no cover
         return
 
 
-class Reader(_Reader):
+class IO(_IO):
     simultaneous_reads = 1
 
     def __init__(self, config, block_size, hash_function):
@@ -31,7 +32,10 @@ class Reader(_Reader):
 
 
     def open(self, source):
-        self.source = source
+        _s = re.match('^file://(.+)$', source)
+        if not _s:
+            raise RuntimeError('Not a source: {} . Need a file path, e.g. file:///somepath/file'.format(source))
+        self.source = _s.groups()[0]
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
@@ -61,7 +65,7 @@ class Reader(_Reader):
             while True:
                 block = self._inqueue.get()
                 if block is None:
-                    logger.debug("Reader {} finishing.".format(id_))
+                    logger.debug("IO {} finishing.".format(id_))
                     self._outqueue.put(None)  # also let the outqueue end
                     break
                 offset = block.id * self.block_size
@@ -77,9 +81,9 @@ class Reader(_Reader):
 
                 data_checksum = self.hash_function(data).hexdigest()
                 if not block.valid:
-                    logger.debug('Reader {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
+                    logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
                 else:
-                    logger.debug('Reader {} read block {} (len {}, checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
+                    logger.debug('IO {} read block {} (len {}, checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
 
                 self._outqueue.put((block, data, data_checksum))
                 self._inqueue.task_done()
