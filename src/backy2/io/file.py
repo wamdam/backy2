@@ -25,6 +25,7 @@ else:  # pragma: no cover
 class IO(_IO):
     simultaneous_reads = 1
     mode = None
+    _writer = None
 
     def __init__(self, config, block_size, hash_function):
         self.simultaneous_reads = config.getint('simultaneous_reads')
@@ -132,12 +133,14 @@ class IO(_IO):
 
     def write(self, block, data):
         # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
-        with open(self.io_name, 'rb+') as f:
-            offset = block.id * self.block_size
-            f.seek(offset)
-            written = f.write(data)
-            posix_fadvise(f.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
-            assert written == len(data)
+        if not self._writer:
+            self._writer = open(self.io_name, 'rb+')
+
+        offset = block.id * self.block_size
+        self._writer.seek(offset)
+        written = self._writer.write(data)
+        posix_fadvise(self._writer.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+        assert written == len(data)
 
 
     def close(self):
@@ -147,6 +150,5 @@ class IO(_IO):
             for _reader_thread in self._reader_threads:
                 _reader_thread.join()
         elif self.mode == 'w':
-            pass
-
+            self._writer.close()
 

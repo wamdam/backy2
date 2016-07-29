@@ -18,6 +18,7 @@ class IO(_IO):
     image_name = None
     snapshot_name = None
     mode = None
+    _writer = None
 
     def __init__(self, config, block_size, hash_function):
         self.simultaneous_reads = config.getint('simultaneous_reads')
@@ -155,11 +156,13 @@ class IO(_IO):
 
     def write(self, block, data):
         # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
-        ioctx = self.cluster.open_ioctx(self.pool_name)
-        with rbd.Image(ioctx, self.image_name) as image:
-            offset = block.id * self.block_size
-            written = image.write(data, offset, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
-            assert written == len(data)
+        if not self._writer:
+            ioctx = self.cluster.open_ioctx(self.pool_name)
+            self._writer = rbd.Image(ioctx, self.image_name)
+
+        offset = block.id * self.block_size
+        written = self._writer.write(data, offset, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
+        assert written == len(data)
 
 
     def close(self):
@@ -169,5 +172,5 @@ class IO(_IO):
             for _reader_thread in self._reader_threads:
                 _reader_thread.join()
         elif self.mode == 'w':
-            pass
+            self._writer.close()
 
