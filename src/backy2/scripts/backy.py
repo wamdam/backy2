@@ -37,9 +37,9 @@ class Commands():
         backy.close()
 
 
-    def restore(self, version_uid, target, sparse):
+    def restore(self, version_uid, target, sparse, force):
         backy = self.backy()
-        backy.restore(version_uid, target, sparse)
+        backy.restore(version_uid, target, sparse, force)
         backy.close()
 
 
@@ -353,6 +353,7 @@ def main():
         'restore',
         help="Restore a given backup with level to a given target.")
     p.add_argument('-s', '--sparse', action='store_true', help='Write restore file sparse (does not work with legacy devices)')
+    p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
     p.add_argument('version_uid')
     p.add_argument('target')
     p.set_defaults(func='restore')

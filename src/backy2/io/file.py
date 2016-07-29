@@ -135,6 +135,7 @@ class IO(_IO):
         with open(self.io_name, 'rb+') as f:
             f.seek(block.id * self.block_size)
             written = f.write(data)
+            # TODO: posix_fadvise...
             assert written == len(data)
 
 
