@@ -1,3 +1,16 @@
+backy2 (2.7.5) unstable; urgency=low
+
+  * Incompatible change: backy2 now takes url-like sources, e.g.
+    file:///dev/sda or rbd://pool/imagename@snapshot
+    Old format (only filename or rbd name) is not supported anymore.
+    => Backy can now backup from different source-types with the same config.
+  * Incompatible change: The Reader is not configured anymore statically
+    so new config options are there for pluggable i/o libs. See
+    backy.cfg.dist
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 29 Jul 2016 10:30:05 +0200
+
+
 backy2 (2.7.4) unstable; urgency=low
 
   * Added safetyguard so that no too young backups can be deleted.
