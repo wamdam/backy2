@@ -6,9 +6,13 @@ Backlog:
   bitrod in backup, ...
 * Make restore multi-threaded
 * Make restore accept rbd volumes as target
+* Consider using click (http://click.pocoo.org/6/) for option parsing
+* Check if we really should do image.close() ioctx.close() cluster.shutdown() as
+  recommended in http://docs.ceph.com/docs/jewel/rbd/librbdpy/
 
 Next:
 
+* Parallelize reads during restore (backy.py:257 data = self.data_backend.read(block.uid))
+  as this is a bottleneck, especially with s3 storage
 * Change lock lib to be a wrapper, possibly with a context manager
 * Add shell scripting to exports so that a shell script can restore any backup
-
