@@ -352,10 +352,12 @@ def main():
     p = subparsers.add_parser(
         'restore',
         help="Restore a given backup to a given target.")
-    p.add_argument('-s', '--sparse', action='store_true', help='Write restore file sparse (does not work with legacy devices)')
+    p.add_argument('-s', '--sparse', action='store_true', help='Faster. Restore '
+        'only existing blocks (works only with file- and rbd-restore, not with lvm)')
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
     p.add_argument('version_uid')
-    p.add_argument('target')
+    p.add_argument('target',
+        help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename)')
     p.set_defaults(func='restore')
 
     # RM
