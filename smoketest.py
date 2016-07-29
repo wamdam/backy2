@@ -120,8 +120,9 @@ with TestPath() as testpath:
             print('  Scrub successful')
             assert backy.scrub(version_uid, 'file://'+os.path.join(testpath, 'data')) == True
             print('  Deep scrub successful')
-            backy.restore(version_uid, os.path.join(testpath, 'restore'), sparse=False)
+            backy.restore(version_uid, 'file://'+os.path.join(testpath, 'restore'), sparse=False, force=False)
             assert same(os.path.join(testpath, 'data'), os.path.join(testpath, 'restore')) == True
+            os.unlink(os.path.join(testpath, 'restore'))
             print('  Restore successful')
         except AssertionError:
             import pdb; pdb.set_trace()

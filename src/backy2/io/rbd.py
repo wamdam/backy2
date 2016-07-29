@@ -5,6 +5,8 @@ from backy2.io.lib import rados  # XXX use default rados lib?
 from backy2.io.lib import rbd    # XXX use default rbd lib?
 from backy2.logging import logger
 from backy2.io import IO as _IO
+from functools import reduce
+from operator import or_
 import queue
 import re
 import threading
@@ -27,6 +29,8 @@ class IO(_IO):
         self._outqueue = queue.Queue(self.simultaneous_reads)
         self.cluster = rados.Rados(conffile=ceph_conffile)
         self.cluster.connect()
+        # create a bitwise or'd list of the configured features
+        self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.getlist('new_image_features')])
 
 
     def open_r(self, io_name):
@@ -77,8 +81,7 @@ class IO(_IO):
         try:
             rbd.Image(ioctx, self.image_name)
         except rbd.ImageNotFound:
-            # TODO: Make features configurable.
-            rbd.RBD().create(ioctx, self.image_name, size, old_format=False, features=rbd.RBD_FEATURE_LAYERING)
+            rbd.RBD().create(ioctx, self.image_name, size, old_format=False, features=self.new_image_features)
         else:
             if not force:
                 logger.error('Image already exists: {}'.format(self.image_name))

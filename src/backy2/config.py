@@ -74,6 +74,9 @@ class Config(object):
     def get(self, option, default=None):
         return self._getany(self.cp.get, option, default)
 
+    def getlist(self, option, default=None):
+        return self._getany(self.cp.get, option, default).split()
+
     def getint(self, option, default=None):
         return self._getany(self.cp.getint, option, default)
 

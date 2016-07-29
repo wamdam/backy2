@@ -133,9 +133,10 @@ class IO(_IO):
     def write(self, block, data):
         # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
         with open(self.io_name, 'rb+') as f:
-            f.seek(block.id * self.block_size)
+            offset = block.id * self.block_size
+            f.seek(offset)
             written = f.write(data)
-            # TODO: posix_fadvise...
+            posix_fadvise(f.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
             assert written == len(data)
 
 
