@@ -1,3 +1,17 @@
+backy2 (2.8.0) unstable; urgency=low
+
+  * Config changes, please look at backy.cfg.dist
+    New: new_image_features for the io_rbd section
+  * backy restore now also takes the schema (file:// or rbd://)
+  * Backy creates new rbd images now when restoring to rbd
+  * Backy now requires the --force switch when restoring into existing
+    images, revices or files
+  * Backy now checks if the size of the target is >= the restore size
+    and breaks before even beginning if it's not.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 29 Jul 2016 13:35:05 +0200
+
+
 backy2 (2.7.5) unstable; urgency=low
 
   * Incompatible change: backy2 now takes url-like sources, e.g.
