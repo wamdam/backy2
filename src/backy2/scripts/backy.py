@@ -351,7 +351,7 @@ def main():
     # RESTORE
     p = subparsers.add_parser(
         'restore',
-        help="Restore a given backup with level to a given target.")
+        help="Restore a given backup to a given target.")
     p.add_argument('-s', '--sparse', action='store_true', help='Write restore file sparse (does not work with legacy devices)')
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
     p.add_argument('version_uid')
