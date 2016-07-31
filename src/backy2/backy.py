@@ -378,8 +378,11 @@ class Backy():
             logger.info('Starting sanity check with 1% of the blocks. Reading...')
             ignore_blocks = list(set(range(size)) - read_blocks - sparse_blocks)
             random.shuffle(ignore_blocks)
-            num_check_blocks = max(10, len(ignore_blocks) // 100)  # 1%, but at least 10
-            check_block_ids = ignore_blocks[:num_check_blocks]
+            num_check_blocks = 10
+            # 50% from the start
+            check_block_ids = ignore_blocks[:num_check_blocks//2]
+            # and 50% from random locations
+            check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_check_blocks//2))
             num_reading = 0
             for block in blocks:
                 if block.id in check_block_ids and block.uid:  # no uid = sparse block in backup. Can't check.
@@ -400,7 +403,7 @@ class Backy():
                     # remove version
                     self.meta_backend.rm_version(version_uid)
                     sys.exit(5)
-            logger.info('Finished sanity check. Checked {} blocks.'.format(num_reading))
+            logger.info('Finished sanity check. Checked {} blocks {}.'.format(num_reading, check_block_ids))
 
         read_jobs = 0
         for block in blocks:
