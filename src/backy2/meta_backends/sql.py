@@ -309,34 +309,13 @@ class MetaBackend(_MetaBackend):
                     _delete_candidates.add(candidate.uid)
                     _stat_delete_candidates += 1
 
-                if len(_remove_from_delete_candidate_uids) >= 100:
-                    # remove false positives
-                    logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
-                    self.session.query(
-                        DeletedBlock
-                    ).filter(
-                        DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
-                    ).delete(synchronize_session='fetch')
-                    _remove_from_delete_candidate_uids = set()
-
-                if len(_delete_candidates) >= 100:
-                    logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
-                    yield(_delete_candidates)
-                    self.session.query(
-                        DeletedBlock
-                    ).filter(
-                        DeletedBlock.uid.in_(_delete_candidates)
-                    ).delete(synchronize_session='fetch')
-                    _delete_candidates = set()
-
-
             if _remove_from_delete_candidate_uids:
                 logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
                 self.session.query(
                     DeletedBlock
                 ).filter(
                     DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
-                ).delete(synchronize_session='fetch')
+                ).delete(synchronize_session=False)
 
             if _delete_candidates:
                 logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
@@ -344,7 +323,7 @@ class MetaBackend(_MetaBackend):
                     DeletedBlock
                 ).filter(
                     DeletedBlock.uid.in_(_delete_candidates)
-                ).delete(synchronize_session='fetch')
+                ).delete(synchronize_session=False)
                 yield(_delete_candidates)
 
         logger.info("Cleanup-fast: Cleanup finished. {} false positives, {} data deletions.".format(
