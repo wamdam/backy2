@@ -283,7 +283,7 @@ class MetaBackend(_MetaBackend):
                 DeletedBlock
             ).filter(
                 DeletedBlock.time < (inttime() - dt)
-            ).limit(1000).all()  # http://stackoverflow.com/questions/7389759/memory-efficient-built-in-sqlalchemy-iterator-generator
+            ).limit(250).all()  # http://stackoverflow.com/questions/7389759/memory-efficient-built-in-sqlalchemy-iterator-generator
             if not delete_candidates:
                 break
 
