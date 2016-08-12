@@ -113,7 +113,8 @@ class Backy():
                 checksum,
                 block_size,
                 valid,
-                _commit=False)
+                _commit=False,
+                _upsert=False)
         self.meta_backend._commit()
         #logger.info('New version: {}'.format(version_uid))
         self.locking.unlock(version_uid)

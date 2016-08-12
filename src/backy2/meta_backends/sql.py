@@ -95,6 +95,7 @@ class MetaBackend(_MetaBackend):
 
     def __init__(self, config):
         _MetaBackend.__init__(self)
+        # engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
         engine = sqlalchemy.create_engine(config.get('engine'))
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
@@ -194,9 +195,15 @@ class MetaBackend(_MetaBackend):
         return self.session.query(Version).order_by(Version.name, Version.date).all()
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True):
+    def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):
+        """ Upsert a block (or insert only when _upsert is False - this is only
+        a performance improvement)
+        """
         valid = 1 if valid else 0
-        block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
+        block = None
+        if _upsert:
+            block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
+
         if block:
             block.uid = block_uid
             block.checksum = checksum
