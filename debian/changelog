@@ -1,3 +1,10 @@
+backy2 (2.8.1) unstable; urgency=low
+
+  * Performance improvements for backup from other version and cleanup
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 12 Aug 2016 13:54:05 +0200
+
+
 backy2 (2.8.0) unstable; urgency=low
 
   * Config changes, please look at backy.cfg.dist
