@@ -478,13 +478,12 @@ class Backy():
         if not self.locking.lock('backy-cleanup-fast'):
             raise LockError('Another backy cleanup is running.')
 
-        for uid_list in self.meta_backend.get_delete_candidates():
-            print(uid_list)
+        for uid_list in self.meta_backend.get_delete_candidates(0):
+            logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
             no_del_uids = []
-            # TODO
-            # no_del_uids = self.data_backend.rm_many(uid_list)
+            no_del_uids = self.data_backend.rm_many(uid_list)
             if no_del_uids:
-                print("Unable to delete these uids: {}".format(no_del_uids))
+                logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
         self.locking.unlock('backy-cleanup-fast')
 
 

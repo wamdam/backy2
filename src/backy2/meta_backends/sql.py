@@ -279,63 +279,74 @@ class MetaBackend(_MetaBackend):
             DeletedBlock
         ).filter(
             DeletedBlock.time < (inttime() - dt)
-        ).limit(10000)  # TODO
+        )
         _remove_from_delete_candidate_uids = set()
         _delete_candidates = set()
+        _stat_i = 0
+        _stat_remove_from_delete_candidates = 0
+        _stat_delete_candidates = 0
         for candidate in delete_candidates:
+            _stat_i += 1
+            if _stat_i%1000 == 0:
+                logger.info("Cleanup-fast: {} false positives, {} data deletions.".format(
+                    _stat_remove_from_delete_candidates,
+                    _stat_delete_candidates,
+                    ))
+
             block = self.session.query(
                 Block
             ).filter(
                 Block.uid == candidate.uid
             ).limit(1).scalar()
             if block:
-                print("Block still exists, removing candidate with uid {}.".format(candidate.uid))
                 _remove_from_delete_candidate_uids.add(candidate.uid)
+                _stat_remove_from_delete_candidates += 1
             else:
-                print("UID can be deleted: {}.".format(candidate.uid))
                 _delete_candidates.add(candidate.uid)
+                _stat_delete_candidates += 1
 
             if len(_remove_from_delete_candidate_uids) >= 100:
                 # remove false positives
-                print("Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
-                # TODO
-                # self.session.query(
-                    # DeletedBlock
-                # ).filter(
-                    # DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
-                # ).delete(synchronize_session='fetch')
+                logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
+                self.session.query(
+                    DeletedBlock
+                ).filter(
+                    DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
+                ).delete(synchronize_session='fetch')
                 _remove_from_delete_candidate_uids = set()
 
             if len(_delete_candidates) >= 100:
-                print("Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
+                logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
                 yield(_delete_candidates)
-                # TODO
-                # self.session.query(
-                    # DeletedBlock
-                # ).filter(
-                    # DeletedBlock.uid.in_(_delete_candidates)
-                # ).delete(synchronize_session='fetch')
+                self.session.query(
+                    DeletedBlock
+                ).filter(
+                    DeletedBlock.uid.in_(_delete_candidates)
+                ).delete(synchronize_session='fetch')
                 _delete_candidates = set()
 
 
         if _remove_from_delete_candidate_uids:
-            print("Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
-            # TODO
-            # self.session.query(
-                # DeletedBlock
-            # ).filter(
-                # DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
-            # ).delete(synchronize_session='fetch')
+            logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
+            self.session.query(
+                DeletedBlock
+            ).filter(
+                DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
+            ).delete(synchronize_session='fetch')
 
-        print("Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
         if _delete_candidates:
-            # TODO
-            # self.session.query(
-                # DeletedBlock
-            # ).filter(
-                # DeletedBlock.uid.in_(_delete_candidates)
-            # ).delete(synchronize_session='fetch')
+            logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
+            self.session.query(
+                DeletedBlock
+            ).filter(
+                DeletedBlock.uid.in_(_delete_candidates)
+            ).delete(synchronize_session='fetch')
             yield(_delete_candidates)
+
+        logger.info("Cleanup-fast: Cleanup finished. {} false positives, {} data deletions.".format(
+            _stat_remove_from_delete_candidates,
+            _stat_delete_candidates,
+            ))
 
 
     def get_all_block_uids(self, prefix=None):
