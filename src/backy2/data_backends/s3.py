@@ -127,10 +127,14 @@ class DataBackend(_DataBackend):
 
 
     def rm_many(self, uids):
+        """ Deletes many uids from the data backend and returns a list
+        of uids that couldn't be deleted.
+        """
         errors = self.bucket.delete_keys(uids, quiet=True)
         if errors.errors:
             # unable to test this. ceph object gateway doesn't return errors.
-            raise FileNotFoundError('UIDS {} not found.'.format(errors.errors))
+            # raise FileNotFoundError('UIDS {} not found.'.format(errors.errors))
+            return errors.errors  # TODO: which should be a list of uids.
 
 
     def read(self, uid):

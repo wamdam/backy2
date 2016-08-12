@@ -119,8 +119,16 @@ class DataBackend(_DataBackend):
 
 
     def rm_many(self, uids):
+        """ Deletes many uids from the data backend and returns a list
+        of uids that couldn't be deleted.
+        """
+        _no_del = []
         for uid in uids:
-            self.rm(uid)
+            try:
+                self.rm(uid)
+            except FileNotFoundError:
+                _no_del.append(uid)
+        return _no_del
 
 
     def read(self, uid, offset=0, length=None):

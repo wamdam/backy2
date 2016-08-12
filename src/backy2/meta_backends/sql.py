@@ -84,8 +84,8 @@ class DeletedBlock(Base):
     time = Column(BigInteger, default=inttime, nullable=False)
 
     def __repr__(self):
-       return "<DeletedBlock(id='%s', uid='%s', version_uid='%s')>" % (
-                            self.id, self.uid, self.version_uid)
+       return "<DeletedBlock(id='%s', uid='%s')>" % (
+                            self.id, self.uid)
 
 
 class MetaBackend(_MetaBackend):
@@ -274,117 +274,68 @@ class MetaBackend(_MetaBackend):
         return num_blocks
 
 
-    def mark_delete_candidates(self, dt=3600):
-        """
-        Marks delete candidates when their uid does not exist in the block
-        table and their entry in the delete candidates list is older than
-        <dt> seconds.
-        We need the delay in order to not interfere with lazy inserts from the
-        backup process.
-        """
-        # Now check which block uids we have to keep. We keep those uids
-        # that are still referenced in the block table.
-
-        # This routine has double safety. First we look for the entries in
-        # delete candidates that we may not delete and remove them from the
-        # list:
-        # iterate, or else RAM kills you.
-        while True:
-            logger.debug('Looking for 1000 entries that may not be deleted...')
-            no_delete_candidates = self.session.query(
-                DeletedBlock
-            ).outerjoin(
-                (Block, DeletedBlock.uid == Block.uid)
-            ).filter(
-                DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
-                Block.uid != None,  # i.e. it HAS a block in the block table with this uid
-            ).limit(1000)
-            no_delete_uids = set([dc.uid for dc in no_delete_candidates])
-            if no_delete_uids:
-                logger.debug('Found {}. Removing them from delete list.'.format(len(no_delete_uids)))
-                q = self.session.query(DeletedBlock).filter(DeletedBlock.uid.in_(no_delete_uids))
-                q.delete(synchronize_session='fetch')
-            else:
-                break
-
-        self.session.commit()
-
-        # Then we select again those entries that have no matching block uid
-        # in the blocks table.
-        # iterate, or else RAM kills you.
-        while True:
-            logger.debug('Looking for 1000 entries that MAY be deleted...')
-            delete_candidates = self.session.query(
-                DeletedBlock
-            ).outerjoin(
-                (Block, DeletedBlock.uid == Block.uid)
-            ).filter(
-                DeletedBlock.delete_candidate == DELETE_CANDIDATE_MAYBE,
-                #DeletedBlock.date < func.now() - datetime.timedelta(seconds=dt),
-                DeletedBlock.time < (inttime() - dt),
-                Block.uid == None,
-            ).limit(1000)
-            delete_uids = set([dc.uid for dc in delete_candidates])
-            if delete_uids:
-                logger.debug('Found {}. Marking them for deletion.'.format(len(delete_uids)))
-                self.session.query(
-                    DeletedBlock
-                ).filter(
-                    DeletedBlock.uid.in_(delete_uids)
-                ).update({'delete_candidate': DELETE_CANDIDATE_SURE}, synchronize_session='fetch')
-            else:
-                break
-
-        self.session.commit()
-
-
     def get_delete_candidates(self, dt=3600):
-        self.mark_delete_candidates(dt)
         delete_candidates = self.session.query(
             DeletedBlock
         ).filter(
-            DeletedBlock.delete_candidate == DELETE_CANDIDATE_SURE
-        )
-        uids = [d.uid for d in delete_candidates]
-        delete_candidates.update({'delete_candidate': DELETE_CANDIDATE_DELETED})
-        self.session.commit()
-        return set(uids)
+            DeletedBlock.time < (inttime() - dt)
+        ).limit(10000)  # TODO
+        _remove_from_delete_candidate_uids = set()
+        _delete_candidates = set()
+        for candidate in delete_candidates:
+            block = self.session.query(
+                Block
+            ).filter(
+                Block.uid == candidate.uid
+            ).limit(1).scalar()
+            if block:
+                print("Block still exists, removing candidate with uid {}.".format(candidate.uid))
+                _remove_from_delete_candidate_uids.add(candidate.uid)
+            else:
+                print("UID can be deleted: {}.".format(candidate.uid))
+                _delete_candidates.add(candidate.uid)
+
+            if len(_remove_from_delete_candidate_uids) >= 100:
+                # remove false positives
+                print("Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
+                # TODO
+                # self.session.query(
+                    # DeletedBlock
+                # ).filter(
+                    # DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
+                # ).delete(synchronize_session='fetch')
+                _remove_from_delete_candidate_uids = set()
+
+            if len(_delete_candidates) >= 100:
+                print("Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
+                yield(_delete_candidates)
+                # TODO
+                # self.session.query(
+                    # DeletedBlock
+                # ).filter(
+                    # DeletedBlock.uid.in_(_delete_candidates)
+                # ).delete(synchronize_session='fetch')
+                _delete_candidates = set()
 
 
-    def remove_delete_candidates(self, uids):
-        """
-        Finally removes delete candidates after they have been deleted on the
-        data store.
-        """
-        logger.info('Deleting {} delete candidates.'.format(len(uids)))
-        if len(uids) == 0:
-            return
-        delete_candidates = self.session.query(
-            DeletedBlock
-        ).filter(
-            DeletedBlock.delete_candidate == DELETE_CANDIDATE_DELETED,
-            DeletedBlock.uid.in_(uids),
-        )
-        delete_candidates.delete(synchronize_session='fetch')
-        self.session.commit()
+        if _remove_from_delete_candidate_uids:
+            print("Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
+            # TODO
+            # self.session.query(
+                # DeletedBlock
+            # ).filter(
+                # DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
+            # ).delete(synchronize_session='fetch')
 
-
-    def revert_delete_candidates(self, uids):
-        """
-        Re-marks uids as deletable in case an exception occured during cleanup.
-        """
-        logger.warning('Reverting {} delete candidates.'.format(len(uids)))
-        if len(uids) == 0:
-            return
-        delete_candidates = self.session.query(
-            DeletedBlock
-        ).filter(
-            DeletedBlock.delete_candidate == DELETE_CANDIDATE_DELETED,
-            DeletedBlock.uid.in_(uids),
-        )
-        delete_candidates.update({'delete_candidate': DELETE_CANDIDATE_SURE},
-                                 synchronize_session='fetch')
-        self.session.commit()
+        print("Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
+        if _delete_candidates:
+            # TODO
+            # self.session.query(
+                # DeletedBlock
+            # ).filter(
+                # DeletedBlock.uid.in_(_delete_candidates)
+            # ).delete(synchronize_session='fetch')
+            yield(_delete_candidates)
 
 
     def get_all_block_uids(self, prefix=None):

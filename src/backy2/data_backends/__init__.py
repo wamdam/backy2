@@ -40,7 +40,9 @@ class DataBackend():
 
 
     def rm_many(self, uids):
-        """ Deletes a list of blocks """
+        """ Deletes many uids from the data backend and returns a list
+        of uids that couldn't be deleted.
+        """
         raise NotImplementedError()
 
 

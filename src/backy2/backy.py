@@ -477,26 +477,14 @@ class Backy():
         """ Delete unreferenced blob UIDs """
         if not self.locking.lock('backy-cleanup-fast'):
             raise LockError('Another backy cleanup is running.')
-        delete_candidates = self.meta_backend.get_delete_candidates(dt=dt)
-        try:
-            for candidates in grouper(100, delete_candidates):
-                # 100 is the number that works here smoothly within about 10-30s
-                # per batch. With more than 70s there's a timeout and the job
-                # is re-sent. Maybe we must either learn the best amount here
-                # or we make this configurable...
-                logger.debug('Cleanup: Removing UIDs {}'.format(', '.join(candidates)))
-                try:
-                    self.data_backend.rm_many(candidates)
-                except FileNotFoundError:
-                    continue
-        except:
-            logger.error('Error during cleanup. Reverting metadata changes.')
-            self.meta_backend.revert_delete_candidates(delete_candidates)
-            self.locking.unlock('backy-cleanup-fast')
-            raise
-        else:
-            self.meta_backend.remove_delete_candidates(delete_candidates)
-        logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
+
+        for uid_list in self.meta_backend.get_delete_candidates():
+            print(uid_list)
+            no_del_uids = []
+            # TODO
+            # no_del_uids = self.data_backend.rm_many(uid_list)
+            if no_del_uids:
+                print("Unable to delete these uids: {}".format(no_del_uids))
         self.locking.unlock('backy-cleanup-fast')
 
 
