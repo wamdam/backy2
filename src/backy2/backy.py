@@ -409,7 +409,7 @@ class Backy():
         read_jobs = 0
         for block in blocks:
             if block.id in read_blocks or not block.valid:
-                io.read(block)  # adds a read job.
+                io.read(block.deref())  # adds a read job.
                 read_jobs += 1
             elif block.id in sparse_blocks:
                 # This "elif" is very important. Because if the block is in read_blocks

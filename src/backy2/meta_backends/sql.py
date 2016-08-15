@@ -2,6 +2,7 @@
 # -*- encoding: utf-8 -*-
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
+from collections import namedtuple
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
@@ -55,6 +56,7 @@ class Version(Base):
                             self.uid, self.name, self.date)
 
 
+DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
 class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
@@ -64,6 +66,22 @@ class Block(Base):
     checksum = Column(String(128), index=True, nullable=True)
     size = Column(BigInteger, nullable=True)
     valid = Column(Integer, nullable=False)
+
+
+    def deref(self):
+        """ Dereference this to a namedtuple so that we can pass it around
+        without any thread inconsistencies
+        """
+        return DereferencedBlock(
+            uid=self.uid,
+            version_uid=self.version_uid,
+            id=self.id,
+            date=self.date,
+            checksum=self.checksum,
+            size=self.size,
+            valid=self.valid,
+        )
+
 
     def __repr__(self):
        return "<Block(id='%s', uid='%s', version_uid='%s')>" % (
