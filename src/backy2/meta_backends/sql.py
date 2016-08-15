@@ -5,6 +5,7 @@ from backy2.meta_backends import MetaBackend as _MetaBackend
 from collections import namedtuple
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
@@ -88,22 +89,29 @@ class Block(Base):
                             self.id, self.uid, self.version_uid)
 
 
-def inttime():
-    return int(time.time())
+# class DeletedBlock(Base):
+    # __tablename__ = 'deleted_blocks'
+    # id = Column(Integer, primary_key=True)
+    # uid = Column(String(32), nullable=True, index=True)
+    # size = Column(BigInteger, nullable=True)
+    # delete_candidate = Column(Integer, nullable=False)
+    # # we need a date in order to find only delete candidates that are older than 1 hour.
+    # time = Column(BigInteger, default=inttime, nullable=False)
+
+    # def __repr__(self):
+       # return "<DeletedBlock(id='%s', uid='%s')>" % (
+                            # self.id, self.uid)
 
 
-class DeletedBlock(Base):
-    __tablename__ = 'deleted_blocks'
-    id = Column(Integer, primary_key=True)
-    uid = Column(String(32), nullable=True, index=True)
-    size = Column(BigInteger, nullable=True)
-    delete_candidate = Column(Integer, nullable=False)
-    # we need a date in order to find only delete candidates that are older than 1 hour.
-    time = Column(BigInteger, default=inttime, nullable=False)
+class BlockRefCounter(Base):
+    __tablename__ = 'block_refcounter'
+    uid = Column(String(32), nullable=True, primary_key=True)
+    refs = Column(BigInteger, nullable=False, default=0)
+    modified = Column(DateTime, server_default=func.now(), onupdate=func.current_timestamp())
 
     def __repr__(self):
-       return "<DeletedBlock(id='%s', uid='%s')>" % (
-                            self.id, self.uid)
+       return "<BlockRefCounter(uid='%s', refs='%s')>" % (
+                            self.uid, self.refs)
 
 
 class MetaBackend(_MetaBackend):
@@ -127,6 +135,48 @@ class MetaBackend(_MetaBackend):
 
     def _commit(self):
         self.session.commit()
+
+
+    def ref_del(self, uid):
+        """ Modify the refs counter for a uid.
+        """
+        if not uid:  # i.e. block uid is None == sparse - we won't track these.
+            return
+        # This magic statement creates a UPDATE ... SET refs = refs + delta WHERE ...
+        r = self.session.query(BlockRefCounter).filter(BlockRefCounter.uid == uid)
+        res = r.update({'refs': BlockRefCounter.refs - 1})
+        if res != 1:
+            raise KeyError("UID should exist in block_refcounter, but isn't there.")
+
+
+    def ref_add(self, uid):
+        """ Modify the refs counter for a uid.
+        This tries to insert and then update via sql refs = refs + 1
+        If the insert fails due to primary key constraints, then the uid is
+        already in the list and we can ignore the error.
+
+        However, as the most common case is that the block is already in the
+        db, we will at first try an update.
+        """
+        if not uid:  # i.e. block uid is None == sparse - we won't track these.
+            return
+
+        # This magic statement creates a UPDATE ... SET refs = refs + delta WHERE ...
+        r = self.session.query(BlockRefCounter).filter(BlockRefCounter.uid == uid)
+        res = r.update({'refs': BlockRefCounter.refs + 1})
+        if res == 1:
+            return  # success!
+
+        block_refcounter = BlockRefCounter(uid=uid, refs=1)
+        try:
+            self.session.add(block_refcounter)
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            r = self.session.query(BlockRefCounter).filter(BlockRefCounter.uid == uid)
+            res = r.update({'refs': BlockRefCounter.refs + 1})
+            if res != 1:
+                raise KeyError("UID should exist in block_refcounter, but isn't there.")
 
 
     def set_version(self, version_name, size, size_bytes, valid):
@@ -223,11 +273,16 @@ class MetaBackend(_MetaBackend):
             block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
 
         if block:
-            block.uid = block_uid
+            if block.uid != block_uid:
+                self.ref_add(block_uid)  # add new uid
+                self.ref_del(block.uid)  # remove old uid
+                block.uid = block_uid
+
             block.checksum = checksum
             block.size = size
             block.valid = valid
             block.date = datetime.datetime.now()
+            # leave refcounter, this is just an update.
         else:
             block = Block(
                 id=id,
@@ -238,14 +293,16 @@ class MetaBackend(_MetaBackend):
                 valid=valid
                 )
             self.session.add(block)
+            self.ref_add(block_uid)
+
         self._flush_block_counter += 1
         if self._flush_block_counter % self.FLUSH_EVERY_N_BLOCKS == 0:
             t1 = time.time()
             self.session.flush()  # saves some ram
             t2 = time.time()
             logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
-        if _commit:
-            self.session.commit()
+
+        self.session.commit()
 
 
     def set_blocks_invalid(self, uid, checksum):
@@ -279,13 +336,7 @@ class MetaBackend(_MetaBackend):
         affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
         num_blocks = affected_blocks.count()
         for affected_block in affected_blocks:
-            if affected_block.uid:  # uid == None means sparse
-                deleted_block = DeletedBlock(
-                    uid=affected_block.uid,
-                    size=affected_block.size,
-                    delete_candidate=DELETE_CANDIDATE_MAYBE,
-                )
-                self.session.add(deleted_block)
+            self.ref_del(affected_block.uid)
         affected_blocks.delete()
         self.session.query(Version).filter_by(uid=version_uid).delete()
         self.session.commit()
@@ -294,60 +345,31 @@ class MetaBackend(_MetaBackend):
 
     def get_delete_candidates(self, dt=3600):
         _stat_i = 0
-        _stat_remove_from_delete_candidates = 0
-        _stat_delete_candidates = 0
         while True:
-            delete_candidates = self.session.query(
-                DeletedBlock
+            _uids = self.session.query(
+                BlockRefCounter
             ).filter(
-                DeletedBlock.time < (inttime() - dt)
-            ).limit(250).all()  # http://stackoverflow.com/questions/7389759/memory-efficient-built-in-sqlalchemy-iterator-generator
-            if not delete_candidates:
+                BlockRefCounter.modified < (datetime.datetime.now() - datetime.timedelta(seconds=dt)),
+                BlockRefCounter.refs == 0
+            ).limit(100).all()  # http://stackoverflow.com/questions/7389759/memory-efficient-built-in-sqlalchemy-iterator-generator
+            if not _uids:
                 break
 
-            _remove_from_delete_candidate_uids = set()
-            _delete_candidates = set()
-            for candidate in delete_candidates:
-                _stat_i += 1
-                if _stat_i%1000 == 0:
-                    logger.info("Cleanup-fast: {} false positives, {} data deletions.".format(
-                        _stat_remove_from_delete_candidates,
-                        _stat_delete_candidates,
-                        ))
+            uids = [u.uid for u in _uids]
 
-                block = self.session.query(
-                    Block
-                ).filter(
-                    Block.uid == candidate.uid
-                ).limit(1).scalar()
-                if block:
-                    _remove_from_delete_candidate_uids.add(candidate.uid)
-                    _stat_remove_from_delete_candidates += 1
-                else:
-                    _delete_candidates.add(candidate.uid)
-                    _stat_delete_candidates += 1
+            yield(uids)  # i.e. delete them from the data backend
 
-            if _remove_from_delete_candidate_uids:
-                logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
-                self.session.query(
-                    DeletedBlock
-                ).filter(
-                    DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
-                ).delete(synchronize_session=False)
+            _stat_i += len(uids)
 
-            if _delete_candidates:
-                logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
-                self.session.query(
-                    DeletedBlock
-                ).filter(
-                    DeletedBlock.uid.in_(_delete_candidates)
-                ).delete(synchronize_session=False)
-                yield(_delete_candidates)
+            self.session.query(
+                BlockRefCounter
+            ).filter(
+                BlockRefCounter.uid.in_(uids)
+            ).delete(synchronize_session='fetch')
 
-        logger.info("Cleanup-fast: Cleanup finished. {} false positives, {} data deletions.".format(
-            _stat_remove_from_delete_candidates,
-            _stat_delete_candidates,
-            ))
+            logger.info("Cleanup-fast: {} uid deletions.".format(_stat_i))
+
+        logger.info("Cleanup-fast: Finished. {} uid deletions.".format(_stat_i))
 
 
     def get_all_block_uids(self, prefix=None):
