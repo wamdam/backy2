@@ -12,7 +12,7 @@ Backlog:
 
 Next:
 
-* Parallelize reads during restore (backy.py:257 data = self.data_backend.read(block.uid))
+* Parallelize reads and writes during restore (backy.py:257 data = self.data_backend.read(block.uid))
   as this is a bottleneck, especially with s3 storage
 * Change lock lib to be a wrapper, possibly with a context manager
 * Add shell scripting to exports so that a shell script can restore any backup
