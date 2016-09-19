@@ -64,6 +64,10 @@ path: /var/lib/backy/data
 # can perform parallel writes faster than serial ones.
 simultaneous_writes: 5
 
+# How many reads to perform in parallel. This is useful if your backup space
+# can perform parallel reads faster than serial ones.
+simultaneous_reads: 5
+
 
 #######################################
 # backy2.data_backends.s3

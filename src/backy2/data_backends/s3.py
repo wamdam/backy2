@@ -18,6 +18,7 @@ class DataBackend(_DataBackend):
     stored in a configurable bucket. """
 
     WRITE_QUEUE_LENGTH = 20
+    READ_QUEUE_LENGTH = 20
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
@@ -31,6 +32,7 @@ class DataBackend(_DataBackend):
         is_secure = config.getboolean('is_secure')
         bucket_name = config.get('bucket_name', 'backy2')
         simultaneous_writes = config.getint('simultaneous_writes', 1)
+        simultaneous_reads = config.getint('simultaneous_reads', 1)
         calling_format=boto.s3.connection.OrdinaryCallingFormat()
 
         self.conn = boto.connect_s3(
@@ -55,19 +57,28 @@ class DataBackend(_DataBackend):
             exit(10)
 
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
-        self._queue = queue.Queue(self.write_queue_length)
+        self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
+        self._write_queue = queue.Queue(self.write_queue_length)
+        self._read_queue = queue.Queue()
+        self._read_data_queue = queue.Queue(self.read_queue_length)
         self._writer_threads = []
+        self._reader_threads = []
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
+        for i in range(simultaneous_reads):
+            _reader_thread = threading.Thread(target=self._reader, args=(i,))
+            _reader_thread.daemon = True
+            _reader_thread.start()
+            self._reader_threads.append(_reader_thread)
 
 
     def _writer(self, id_):
         """ A threaded background writer """
         while True:
-            entry = self._queue.get()
+            entry = self._write_queue.get()
             if entry is None or self.fatal_error:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
@@ -95,8 +106,34 @@ class DataBackend(_DataBackend):
                 os._exit(11)
             t2 = time.time()
             assert r == len(data)
-            self._queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
+            self._write_queue.task_done()
+            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+
+
+    def _reader(self, id_):
+        """ A threaded background reader """
+        while True:
+            block = self._read_queue.get()  # contains block
+            if block is None or self.fatal_error:
+                logger.debug("Reader {} finishing.".format(id_))
+                break
+            t1 = time.time()
+            try:
+                data = self.read_raw(block.uid)
+            except FileNotFoundError:
+                self._read_data_queue.put((block, None))  # catch this!
+            else:
+                self._read_data_queue.put((block, data))
+                t2 = time.time()
+                self._read_queue.task_done()
+                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
+
+
+    def read_raw(self, block_uid):
+        key = self.bucket.get_key(block_uid)
+        if not key:
+            raise FileNotFoundError('UID {} not found.'.format(block_uid))
+        return key.get_contents_as_string()
 
 
     def _uid(self):
@@ -113,9 +150,9 @@ class DataBackend(_DataBackend):
         if self.fatal_error:
             raise self.fatal_error
         uid = self._uid()
-        self._queue.put((uid, data))
+        self._write_queue.put((uid, data))
         if _sync:
-            self._queue.join()
+            self._write_queue.join()
         return uid
 
 
@@ -137,11 +174,27 @@ class DataBackend(_DataBackend):
             return errors.errors  # TODO: which should be a list of uids.
 
 
-    def read(self, uid):
-        key = self.bucket.get_key(uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(uid))
-        return key.get_contents_as_string()
+    def read(self, block, sync=False):
+        self._read_queue.put(block)
+        if sync:
+            rblock, data = self.read_get()
+            if rblock.id != block.id:
+                raise RuntimeError('Do not mix threaded reading with sync reading!')
+            if data is None:
+                raise FileNotFoundError('UID {} not found.'.format(block.uid))
+            return data
+
+
+    def read_get(self):
+        block, data = self._read_data_queue.get()
+        offset = 0
+        length = len(data)
+        self._read_data_queue.task_done()
+        return block, offset, length, data
+
+
+    def read_queue_size(self):
+        return self._read_queue.qsize()
 
 
     def get_all_blob_uids(self, prefix=None):
@@ -150,9 +203,13 @@ class DataBackend(_DataBackend):
 
     def close(self):
         for _writer_thread in self._writer_threads:
-            self._queue.put(None)  # ends the thread
+            self._write_queue.put(None)  # ends the thread
         for _writer_thread in self._writer_threads:
             _writer_thread.join()
+        for _reader_thread in self._reader_threads:
+            self._read_queue.put(None)  # ends the thread
+        for _reader_thread in self._reader_threads:
+            _reader_thread.join()
         self.conn.close()
 
 

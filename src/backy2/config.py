@@ -23,6 +23,7 @@ engine: sqlite:////tmp/backy.sqlite
 type: backy2.data_backends.file
 path: /tmp
 simultaneous_writes: 1
+simultaneous_reads: 1
 
 [NBD]
 cachedir: /tmp

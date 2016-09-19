@@ -29,6 +29,7 @@ class DataBackend(_DataBackend):
     SPLIT = 2
     SUFFIX = '.blob'
     WRITE_QUEUE_LENGTH = 10
+    READ_QUEUE_LENGTH = 20
 
     _SUPPORTS_PARTIAL_READS = True
     _SUPPORTS_PARTIAL_WRITES = True
@@ -37,20 +38,30 @@ class DataBackend(_DataBackend):
     def __init__(self, config):
         self.path = config.get('path')
         simultaneous_writes = config.getint('simultaneous_writes')
+        simultaneous_reads = config.getint('simultaneous_reads', 1)
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
-        self._queue = queue.Queue(self.write_queue_length)
+        self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
+        self._write_queue = queue.Queue(self.write_queue_length)
+        self._read_queue = queue.Queue()
+        self._read_data_queue = queue.Queue(self.read_queue_length)
         self._writer_threads = []
+        self._reader_threads = []
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
+        for i in range(simultaneous_reads):
+            _reader_thread = threading.Thread(target=self._reader, args=(i,))
+            _reader_thread.daemon = True
+            _reader_thread.start()
+            self._reader_threads.append(_reader_thread)
 
 
     def _writer(self, id_=0):
         """ A threaded background writer """
         while True:
-            entry = self._queue.get()
+            entry = self._write_queue.get()
             if entry is None:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
@@ -67,8 +78,28 @@ class DataBackend(_DataBackend):
                     r = f.write(data)
             t2 = time.time()
             assert r == len(data)
-            self._queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._queue.qsize()))
+            self._write_queue.task_done()
+            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+
+
+    def _reader(self, id_):
+        """ A threaded background reader """
+        while True:
+            d = self._read_queue.get()  # contains block, offset, length
+            if d is None:
+                logger.debug("Reader {} finishing.".format(id_))
+                break
+            block, offset, length = d
+            t1 = time.time()
+            try:
+                data = self.read_raw(block.uid, offset, length)
+            except FileNotFoundError:
+                self._read_data_queue.put((block, offset, length, None))  # catch this!
+            else:
+                self._read_data_queue.put((block, offset, length, data))
+                t2 = time.time()
+                self._read_queue.task_done()
+                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
     def _uid(self):
@@ -99,9 +130,9 @@ class DataBackend(_DataBackend):
 
     def save(self, data, _sync=False):
         uid = self._uid()
-        self._queue.put((uid, data))
+        self._write_queue.put((uid, data))
         if _sync:
-            self._queue.join()
+            self._write_queue.join()
         return uid
 
 
@@ -131,7 +162,30 @@ class DataBackend(_DataBackend):
         return _no_del
 
 
-    def read(self, uid, offset=0, length=None):
+    def read(self, block, sync=False, offset=0, length=None):
+        self._read_queue.put((block, offset, length))
+        if sync:
+            rblock, offset, length, data = self.read_get()
+            assert offset == offset
+            assert length == length
+            if rblock.id != block.id:
+                raise RuntimeError('Do not mix threaded reading with sync reading!')
+            if data is None:
+                raise FileNotFoundError('UID {} not found.'.format(block.uid))
+            return data
+
+
+    def read_get(self):
+        block, offset, length, data = self._read_data_queue.get()
+        self._read_data_queue.task_done()
+        return block, offset, length, data
+
+
+    def read_queue_size(self):
+        return self._read_queue.qsize()
+
+
+    def read_raw(self, uid, offset=0, length=None):
         filename = self._filename(uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
@@ -147,7 +201,6 @@ class DataBackend(_DataBackend):
                     return f.read()
 
 
-
     def get_all_blob_uids(self, prefix=None):
         if prefix:
             raise RuntimeError('prefix is not supported on file backends.')
@@ -161,9 +214,13 @@ class DataBackend(_DataBackend):
 
     def close(self):
         for _writer_thread in self._writer_threads:
-            self._queue.put(None)  # ends the thread
+            self._write_queue.put(None)  # ends the thread
         for _writer_thread in self._writer_threads:
             _writer_thread.join()
+        for _reader_thread in self._reader_threads:
+            self._read_queue.put(None)  # ends the thread
+        for _reader_thread in self._reader_threads:
+            _reader_thread.join()
 
 
 

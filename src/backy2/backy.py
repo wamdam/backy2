@@ -168,6 +168,8 @@ class Backy():
             io.open_r(source)
 
         state = True
+
+        # prepare
         for block in blocks:
             if block.uid:
                 if percentile < 100 and random.randint(1, 100) > percentile:
@@ -176,61 +178,64 @@ class Backy():
                         block.uid,
                         percentile,
                         ))
-                    continue
-                try:
-                    data = self.data_backend.read(block.uid)
-                except FileNotFoundError as e:
-                    logger.error('Blob not found: {}'.format(str(e)))
-                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
-                    continue
-                if len(data) != block.size:
-                    logger.error('Blob has wrong size: {} is: {} should be: {}'.format(
-                        block.uid,
-                        len(data),
-                        block.size,
-                        ))
-                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
-                    continue
-                data_checksum = self.hash_function(data).hexdigest()
-                if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during scrub for block '
-                        '{} (UID {}) (is: {} should-be: {}).'.format(
-                            block.id,
-                            block.uid,
-                            data_checksum,
-                            block.checksum,
-                            ))
-                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
-                    continue
                 else:
-                    if source:
-                        source_data = io.read(block, sync=True)
-                        if source_data != data:
-                            logger.error('Source data has changed for block {} '
-                                '(UID {}) (is: {} should-be: {}). NOT setting '
-                                'this block invalid, because the source looks '
-                                'wrong.'.format(
-                                    block.id,
-                                    block.uid,
-                                    self.hash_function(source_data).hexdigest(),
-                                    data_checksum,
-                                    ))
-                            state = False
-                            # We are not setting the block invalid here because
-                            # when the block is there AND the checksum is good,
-                            # then the source is invalid.
-                    logger.debug('Scrub of block {} (UID {}) ok.'.format(
-                        block.id,
-                        block.uid,
-                        ))
+                    self.data_backend.read(block.deref())  # async queue
             else:
                 logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
                     block.id,
                     block.uid,
                     ))
+
+        # and read
+        for i in range(self.data_backend.read_queue_size()):
+            block, offset, length, data = self.data_backend.read_get()
+            if data is None:
+                logger.error('Blob not found: {}'.format(str(e)))
+                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                state = False
+                continue
+            if len(data) != block.size:
+                logger.error('Blob has wrong size: {} is: {} should be: {}'.format(
+                    block.uid,
+                    len(data),
+                    block.size,
+                    ))
+                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                state = False
+                continue
+            data_checksum = self.hash_function(data).hexdigest()
+            if data_checksum != block.checksum:
+                logger.error('Checksum mismatch during scrub for block '
+                    '{} (UID {}) (is: {} should-be: {}).'.format(
+                        block.id,
+                        block.uid,
+                        data_checksum,
+                        block.checksum,
+                        ))
+                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                state = False
+                continue
+
+            if source:
+                source_data = io.read(block, sync=True)
+                if source_data != data:
+                    logger.error('Source data has changed for block {} '
+                        '(UID {}) (is: {} should-be: {}). NOT setting '
+                        'this block invalid, because the source looks '
+                        'wrong.'.format(
+                            block.id,
+                            block.uid,
+                            self.hash_function(source_data).hexdigest(),
+                            data_checksum,
+                            ))
+                    state = False
+                    # We are not setting the block invalid here because
+                    # when the block is there AND the checksum is good,
+                    # then the source is invalid.
+            logger.debug('Scrub of block {} (UID {}) ok.'.format(
+                block.id,
+                block.uid,
+                ))
         if state == True:
             self.meta_backend.set_version_valid(version_uid)
         else:
@@ -255,7 +260,7 @@ class Backy():
 
         for block in blocks:
             if block.uid:
-                data = self.data_backend.read(block.uid)
+                data = self.data_backend.read(block, sync=True)
                 assert len(data) == block.size
                 data_checksum = self.hash_function(data).hexdigest()
                 io.write(block, data)
@@ -447,7 +452,7 @@ class Backy():
             done_jobs += 1
 
         io.close()  # wait for all readers
-        self.data_backend.close()  # wait for all writers
+        # self.data_backend.close()  # wait for all writers
         if read_jobs != done_jobs:
             logger.error('backy broke somewhere. Backup is invalid.')
             sys.exit(3)
