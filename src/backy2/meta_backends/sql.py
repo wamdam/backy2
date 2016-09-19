@@ -365,7 +365,7 @@ class MetaBackend(_MetaBackend):
                 BlockRefCounter
             ).filter(
                 BlockRefCounter.uid.in_(uids)
-            ).delete(synchronize_session='fetch')
+            ).delete(synchronize_session=False)
 
             logger.info("Cleanup-fast: {} uid deletions.".format(_stat_i))
 
