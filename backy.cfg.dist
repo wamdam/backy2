@@ -95,6 +95,10 @@ simultaneous_reads: 5
 # How many s3 puts to perform in parallel
 #simultaneous_writes: 5
 
+# How many reads to perform in parallel. This is useful if your backup space
+# can perform parallel reads faster than serial ones.
+simultaneous_reads: 5
+
 
 [NBD]
 # Where to cache backy blocks when NBD Server is used
