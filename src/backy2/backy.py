@@ -190,7 +190,7 @@ class Backy():
         for i in range(self.data_backend.read_queue_size()):
             block, offset, length, data = self.data_backend.read_get()
             if data is None:
-                logger.error('Blob not found: {}'.format(str(e)))
+                logger.error('Blob not found: {}'.format(str(block)))
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 state = False
                 continue
