@@ -2,6 +2,8 @@
 # -*- encoding: utf-8 -*-
 
 from functools import partial
+from time import time
+from threading import Lock
 import itertools
 import hashlib
 import importlib
@@ -63,3 +65,55 @@ def grouper(n, iterable):
            return
        yield chunk
 
+
+# token_bucket.py
+class TokenBucket:
+    """
+    An implementation of the token bucket algorithm.
+    """
+    def __init__(self):
+        self.tokens = 0
+        self.rate = 0
+        self.last = time()
+        self.lock = Lock()
+
+
+    def set_rate(self, rate):
+        with self.lock:
+            self.rate = rate
+            self.tokens = self.rate
+
+
+    def consume(self, tokens):
+        with self.lock:
+            if not self.rate:
+                return 0
+
+            now = time()
+            lapse = now - self.last
+            self.last = now
+            self.tokens += lapse * self.rate
+
+            if self.tokens > self.rate:
+                self.tokens = self.rate
+
+            self.tokens -= tokens
+
+            if self.tokens >= 0:
+                return 0
+            else:
+                return -self.tokens / self.rate
+
+
+#if __name__ == '__main__':
+#    import sys
+#    from time import sleep
+#    bucket = TokenBucket()
+#    bucket.set_rate(80*1024*1024)  # 80MB/s
+#    for _ in range(100):
+#        print("Tokens: {}".format(bucket.tokens))
+#        nap = bucket.consume(4*1024*1024)
+#        print(nap)
+#        sleep(nap)
+#        print(".")
+#    sys.exit(0)

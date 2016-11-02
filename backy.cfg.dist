@@ -68,6 +68,10 @@ simultaneous_writes: 5
 # can perform parallel reads faster than serial ones.
 simultaneous_reads: 5
 
+# Bandwidth throttling (set to 0 to disable, i.e. use full bandwidth)
+# bytes per second
+bandwidth_read: 78643200
+bandwidth_write: 78643200
 
 #######################################
 # backy2.data_backends.s3
@@ -97,7 +101,12 @@ simultaneous_reads: 5
 
 # How many reads to perform in parallel. This is useful if your backup space
 # can perform parallel reads faster than serial ones.
-simultaneous_reads: 5
+#simultaneous_reads: 5
+
+# Bandwidth throttling (set to 0 to disable, i.e. use full bandwidth)
+# bytes per second
+bandwidth_read: 78643200
+bandwidth_write: 78643200
 
 
 [NBD]

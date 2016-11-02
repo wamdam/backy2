@@ -3,6 +3,7 @@
 
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
+from backy2.utils import TokenBucket
 import boto.exception
 import boto.s3.connection
 import hashlib
@@ -34,6 +35,13 @@ class DataBackend(_DataBackend):
         simultaneous_writes = config.getint('simultaneous_writes', 1)
         simultaneous_reads = config.getint('simultaneous_reads', 1)
         calling_format=boto.s3.connection.OrdinaryCallingFormat()
+        bandwidth_read = config.getint('bandwidth_read', 0)
+        bandwidth_write = config.getint('bandwidth_write', 0)
+
+        self.read_throttling = TokenBucket()
+        self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
+        self.write_throttling = TokenBucket()
+        self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
 
         self.conn = boto.connect_s3(
                 aws_access_key_id=aws_access_key_id,
@@ -83,6 +91,7 @@ class DataBackend(_DataBackend):
                 logger.debug("Writer {} finishing.".format(id_))
                 break
             uid, data = entry
+            time.sleep(self.write_throttling.consume(len(data)))
             t1 = time.time()
             key = self.bucket.new_key(uid)
             try:
@@ -133,7 +142,9 @@ class DataBackend(_DataBackend):
         key = self.bucket.get_key(block_uid)
         if not key:
             raise FileNotFoundError('UID {} not found.'.format(block_uid))
-        return key.get_contents_as_string()
+        data = key.get_contents_as_string()
+        time.sleep(self.read_throttling.consume(len(data)))
+        return data
 
 
     def _uid(self):

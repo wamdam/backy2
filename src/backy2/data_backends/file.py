@@ -3,6 +3,7 @@
 
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
+from backy2.utils import TokenBucket
 import fnmatch
 import hashlib
 import os
@@ -41,6 +42,15 @@ class DataBackend(_DataBackend):
         simultaneous_reads = config.getint('simultaneous_reads', 1)
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
+
+        bandwidth_read = config.getint('bandwidth_read', 0)
+        bandwidth_write = config.getint('bandwidth_write', 0)
+
+        self.read_throttling = TokenBucket()
+        self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
+        self.write_throttling = TokenBucket()
+        self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
+
         self._write_queue = queue.Queue(self.write_queue_length)
         self._read_queue = queue.Queue()
         self._read_data_queue = queue.Queue(self.read_queue_length)
@@ -68,6 +78,7 @@ class DataBackend(_DataBackend):
             uid, data = entry
             path = os.path.join(self.path, self._path(uid))
             filename = self._filename(uid)
+            time.sleep(self.write_throttling.consume(len(data)))
             t1 = time.time()
             try:
                 with open(filename, 'wb') as f:
@@ -196,9 +207,11 @@ class DataBackend(_DataBackend):
                 if offset:
                     f.seek(offset)
                 if length:
-                    return f.read(length)
+                    data = f.read(length)
                 else:
-                    return f.read()
+                    data = f.read()
+            time.sleep(self.read_throttling.consume(len(data)))
+            return data
 
 
     def get_all_blob_uids(self, prefix=None):

@@ -94,6 +94,8 @@ with TestPath() as testpath:
         type: backy2.data_backends.file
         path: {testpath}
         simultaneous_writes: 5
+        bandwidth_read: 100
+        bandwidth_write: 100
 
         [NBD]
         cachedir: /tmp
