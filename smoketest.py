@@ -94,8 +94,8 @@ with TestPath() as testpath:
         type: backy2.data_backends.file
         path: {testpath}
         simultaneous_writes: 5
-        bandwidth_read: 100
-        bandwidth_write: 100
+        bandwidth_read: 100000
+        bandwidth_write: 100000
 
         [NBD]
         cachedir: /tmp
@@ -115,14 +115,21 @@ with TestPath() as testpath:
             hints_from_rbd_diff(open(os.path.join(testpath, 'hints')).read()),
             from_version
             )
+        backy.close()
         version_uids.append(version_uid)
 
         try:
+            backy = backy_from_config(Config)()
             assert backy.scrub(version_uid) == True
+            backy.close()
             print('  Scrub successful')
+            backy = backy_from_config(Config)()
             assert backy.scrub(version_uid, 'file://'+os.path.join(testpath, 'data')) == True
+            backy.close()
             print('  Deep scrub successful')
+            backy = backy_from_config(Config)()
             backy.restore(version_uid, 'file://'+os.path.join(testpath, 'restore'), sparse=False, force=False)
+            backy.close()
             assert same(os.path.join(testpath, 'data'), os.path.join(testpath, 'restore')) == True
             os.unlink(os.path.join(testpath, 'restore'))
             print('  Restore successful')
@@ -133,9 +140,12 @@ with TestPath() as testpath:
 
         # delete old versions
         if len(version_uids) > 10:
+            backy = backy_from_config(Config)()
             backy.rm(version_uids.pop(0))
+            backy.close()
 
         if (i%7) == 0:
+            backy = backy_from_config(Config)()
             backy.cleanup_fast(dt=0)
-        backy.close()
+            backy.close()
     #import pdb; pdb.set_trace()

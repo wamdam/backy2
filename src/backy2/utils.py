@@ -100,8 +100,10 @@ class TokenBucket:
             self.tokens -= tokens
 
             if self.tokens >= 0:
+                #print("Tokens: {}".format(self.tokens))
                 return 0
             else:
+                #print("Recommended nap: {}".format(-self.tokens / self.rate))
                 return -self.tokens / self.rate
 
 
