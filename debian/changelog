@@ -1,3 +1,11 @@
+backy2 (2.8.3) unstable; urgency=low
+
+  * Bandwidth control for data backends (see new config params bandwidth_read
+    and bandwidth_write
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 02 Nov 2016 15:01:05 +0200
+
+
 backy2 (2.8.2) unstable; urgency=low
 
   * Performance improvements for scrub: Make it threaded with multiple readers
