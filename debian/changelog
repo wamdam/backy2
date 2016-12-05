@@ -1,3 +1,10 @@
+backy2 (2.8.4) unstable; urgency=low
+
+  * Fix nbd server for s3
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 05 Dec 2016 10:01:05 +0200
+
+
 backy2 (2.8.3) unstable; urgency=low
 
   * Bandwidth control for data backends (see new config params bandwidth_read

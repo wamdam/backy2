@@ -88,6 +88,7 @@ class BackyStore():
         read_list = self._block_list(version_uid, offset, length)
         data = []
         for block, offset, length in read_list:
+            logger.debug('Reading block {}:{}:{}'.format(block, offset, length))
             if block is None:
                 data.append(b'\0'*length)
             else:
