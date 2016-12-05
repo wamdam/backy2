@@ -51,8 +51,13 @@ class BackyStore():
                 read_list.append((None, 0, length))  # hint: return \0s
             else:
                 assert block.id == block_number
-                read_length = min(block.size-block_offset, length)
-                read_list.append((block, block_offset, read_length))
+                if block.uid is None:
+                    block = None
+                    read_length = length
+                    read_list.append((None, 0, length))  # hint: return \0s
+                else:
+                    read_length = min(block.size-block_offset, length)
+                    read_list.append((block, block_offset, read_length))
             block_number += 1
             block_offset = 0
             length -= read_length
