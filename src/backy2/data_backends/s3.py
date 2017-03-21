@@ -188,7 +188,7 @@ class DataBackend(_DataBackend):
     def read(self, block, sync=False):
         self._read_queue.put(block)
         if sync:
-            rblock, data = self.read_get()
+            rblock, offset, length, data = self.read_get()
             if rblock.id != block.id:
                 raise RuntimeError('Do not mix threaded reading with sync reading!')
             if data is None:
