@@ -1,3 +1,10 @@
+backy2 (2.9.1) unstable; urgency=low
+
+  * Make restore reading multithreaded from backup storage
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 10:53:05 +0100
+
+
 backy2 (2.9.0) unstable; urgency=low
 
   * Adding protection for versions, i.e. make them not removable
