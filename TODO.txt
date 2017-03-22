@@ -1,7 +1,6 @@
 Backlog:
 
 * Write tests for 100% coverage
-* Add more statistics
 * Add tests for anything where scrub marks blocks as invalid (source changed,
   bitrod in backup, ...
 * Check if we really should do image.close() ioctx.close() cluster.shutdown() as
