@@ -277,12 +277,8 @@ class Commands():
 
 
     def nbd(self, version_uid, bind_address, bind_port, read_only):
-        try:
-            from backy2.enterprise.nbdserver import Server as NbdServer
-            from backy2.enterprise.nbd import BackyStore
-        except ImportError:
-            logger.error('NBD is available in the Enterprise Version only.')
-            sys.exit(21)
+        from backy2.enterprise.nbdserver import Server as NbdServer
+        from backy2.enterprise.nbd import BackyStore
         backy = self.backy()
         config_NBD = self.Config(section='NBD')
         config_DEFAULTS = self.Config(section='DEFAULTS')
