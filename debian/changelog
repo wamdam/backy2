@@ -1,3 +1,10 @@
+backy2 (2.9.4) unstable; urgency=low
+
+  * Be robust against s3 socket timeouts
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 15:44:05 +0100
+
+
 backy2 (2.9.3) unstable; urgency=low
 
   * More ps notification on restore

@@ -10,6 +10,7 @@ import hashlib
 import os
 import queue
 import shortuuid
+import socket
 import threading
 import time
 
@@ -142,7 +143,14 @@ class DataBackend(_DataBackend):
         key = self.bucket.get_key(block_uid)
         if not key:
             raise FileNotFoundError('UID {} not found.'.format(block_uid))
-        data = key.get_contents_as_string()
+        while True:
+            try:
+                data = key.get_contents_as_string()
+            except socket.timeout:
+                logger.error('Timeout while fetching from s3, trying again.')
+                pass
+            else:
+                break
         time.sleep(self.read_throttling.consume(len(data)))
         return data
 
