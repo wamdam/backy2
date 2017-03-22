@@ -260,6 +260,7 @@ class Backy():
             raise LockError('Version {} is locked.'.format(version_uid))
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
+        notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
         io = self.get_io_by_source(target)
@@ -280,6 +281,7 @@ class Backy():
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
+            notify(self.process_name, 'Restoring Version {} to {} PREPARING AND SPARSE BLOCKS ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
