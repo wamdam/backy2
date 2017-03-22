@@ -100,6 +100,8 @@ Other features:
 
 ## Installation
 
+### Development
+
   ```
    git clone https://github.com/wamdam/backy2.git
    cd backy2
@@ -108,6 +110,16 @@ Other features:
   ```
 
   Tested under ubuntu.
+
+
+### Debian
+
+  ```
+   git clone https://github.com/wamdam/backy2.git
+   cd backy2
+   make clean
+   make deb
+  ```
 
 
 ## Usage
