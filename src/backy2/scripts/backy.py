@@ -43,6 +43,18 @@ class Commands():
         backy.close()
 
 
+    def protect(self, version_uid):
+        backy = self.backy()
+        backy.protect(version_uid)
+        backy.close()
+
+
+    def unprotect(self, version_uid):
+        backy = self.backy()
+        backy.unprotect(version_uid)
+        backy.close()
+
+
     def rm(self, version_uid, force):
         config_DEFAULTS = self.Config(section='DEFAULTS')
         disallow_rm_when_younger_than_days = int(config_DEFAULTS.get('disallow_rm_when_younger_than_days', '0'))
@@ -95,7 +107,7 @@ class Commands():
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
         tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid',
-                'version valid']
+                'valid', 'protected']
         tbl.align['name'] = 'l'
         tbl.align['size'] = 'r'
         tbl.align['size_bytes'] = 'r'
@@ -107,12 +119,13 @@ class Commands():
                 version.size_bytes,
                 version.uid,
                 int(version.valid),
+                int(version.protected),
                 ])
         print(tbl)
 
 
     def _ls_versions_machine_output(self, versions):
-        field_names = ['type', 'date', 'size', 'size_bytes', 'uid', 'version valid', 'name']
+        field_names = ['type', 'date', 'name', 'size', 'size_bytes', 'uid', 'valid', 'protected']
         print(' '.join(field_names))
         for version in versions:
             print(' '.join(map(str, [
@@ -123,6 +136,7 @@ class Commands():
                 version.size_bytes,
                 version.uid,
                 int(version.valid),
+                int(version.protected),
                 ])))
 
 
@@ -355,6 +369,20 @@ def main():
     p.add_argument('target',
         help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename)')
     p.set_defaults(func='restore')
+
+    # PROTECT
+    p = subparsers.add_parser(
+        'protect',
+        help="Protect a backup version. Protected versions cannot be removed.")
+    p.add_argument('version_uid')
+    p.set_defaults(func='protect')
+
+    # UNPROTECT
+    p = subparsers.add_parser(
+        'unprotect',
+        help="Unprotect a backup version. Unprotected versions can be removed.")
+    p.add_argument('version_uid')
+    p.set_defaults(func='unprotect')
 
     # RM
     p = subparsers.add_parser(

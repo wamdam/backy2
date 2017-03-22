@@ -1,15 +1,22 @@
+backy2 (2.9.0) unstable; urgency=low
+
+  * Adding protection for versions, i.e. make them not removable
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 09:57:05 +0100
+
+
 backy2 (2.8.5) unstable; urgency=low
 
   * Fix read for s3
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 21 Mar 2017 16:01:05 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 21 Mar 2017 16:01:05 +0100
 
 
 backy2 (2.8.4) unstable; urgency=low
 
   * Fix nbd server for s3
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 05 Dec 2016 10:01:05 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 05 Dec 2016 10:01:05 +0100
 
 
 backy2 (2.8.3) unstable; urgency=low
@@ -17,7 +24,7 @@ backy2 (2.8.3) unstable; urgency=low
   * Bandwidth control for data backends (see new config params bandwidth_read
     and bandwidth_write
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 02 Nov 2016 15:01:05 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 02 Nov 2016 15:01:05 +0100
 
 
 backy2 (2.8.2) unstable; urgency=low

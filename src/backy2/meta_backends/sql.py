@@ -50,6 +50,7 @@ class Version(Base):
     size = Column(BigInteger, nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
+    protected = Column(Integer, nullable=False)
 
     def __repr__(self):
        return "<Version(uid='%s', name='%s', date='%s')>" % (
@@ -129,7 +130,7 @@ class MetaBackend(_MetaBackend):
         self.session.commit()
 
 
-    def set_version(self, version_name, size, size_bytes, valid):
+    def set_version(self, version_name, size, size_bytes, valid, protected=0):
         uid = self._uid()
         version = Version(
             uid=uid,
@@ -137,6 +138,7 @@ class MetaBackend(_MetaBackend):
             size=size,
             size_bytes=size_bytes,
             valid=valid,
+            protected=protected,
             )
         self.session.add(version)
         self.session.commit()
@@ -207,6 +209,24 @@ class MetaBackend(_MetaBackend):
         if version is None:
             raise KeyError('Version {} not found.'.format(uid))
         return version
+
+
+    def protect_version(self, uid):
+        version = self.get_version(uid)
+        version.protected = 1
+        self.session.commit()
+        logger.debug('Marked version protected (UID {})'.format(
+            uid,
+            ))
+
+
+    def unprotect_version(self, uid):
+        version = self.get_version(uid)
+        version.protected = 0
+        self.session.commit()
+        logger.debug('Marked version unprotected (UID {})'.format(
+            uid,
+            ))
 
 
     def get_versions(self):

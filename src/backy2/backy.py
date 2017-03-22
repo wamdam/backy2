@@ -292,10 +292,26 @@ class Backy():
         self.locking.unlock(version_uid)
 
 
+    def protect(self, version_uid):
+        version = self.meta_backend.get_version(version_uid)
+        if version.protected:
+            raise ValueError('Version {} is already protected.'.format(version_uid))
+        self.meta_backend.protect_version(version_uid)
+
+
+    def unprotect(self, version_uid):
+        version = self.meta_backend.get_version(version_uid)
+        if not version.protected:
+            raise ValueError('Version {} is not protected.'.format(version_uid))
+        self.meta_backend.unprotect_version(version_uid)
+
+
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
         version = self.meta_backend.get_version(version_uid)
+        if version.protected:
+            raise ValueError('Version {} is protected. Will not delete.'.format(version_uid))
         if not force:
             # check if disallow_rm_when_younger_than_days allows deletion
             age_days = (datetime.datetime.now() - version.date).days
