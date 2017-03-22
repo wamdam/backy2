@@ -1,8 +1,9 @@
 # -*- encoding: utf-8 -*-
 
+from backy2 import notify
 from backy2.logging import logger
 from backy2.locking import Locking
-from backy2.locking import setprocname, find_other_procs
+from backy2.locking import find_other_procs
 from backy2.utils import grouper
 from urllib import parse
 import datetime
@@ -50,8 +51,7 @@ class Backy():
         self.locking = Locking(lock_dir)
         self.process_name = process_name
 
-        if setprocname(process_name) != 0:
-            raise RuntimeError('Unable to set process name')
+        notify(process_name)  # i.e. set process name without notification
 
         if not self.locking.lock('backy'):
             raise LockError('A backy is running which requires exclusive access.')
@@ -115,7 +115,9 @@ class Backy():
                 valid,
                 _commit=False,
                 _upsert=False)
+            notify(self.process_name, 'Preparing Version ({}%)'.format((id + 1) // size * 100))
         self.meta_backend._commit()
+        notify(self.process_name)
         #logger.info('New version: {}'.format(version_uid))
         self.locking.unlock(version_uid)
         return version_uid
@@ -169,7 +171,9 @@ class Backy():
 
         state = True
 
+        notify(self.process_name, 'Preparing Scrub of version {}'.format(version_uid))
         # prepare
+        read_jobs = 0
         for block in blocks:
             if block.uid:
                 if percentile < 100 and random.randint(1, 100) > percentile:
@@ -180,6 +184,7 @@ class Backy():
                         ))
                 else:
                     self.data_backend.read(block.deref())  # async queue
+                    read_jobs += 1
             else:
                 logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
                     block.id,
@@ -187,7 +192,7 @@ class Backy():
                     ))
 
         # and read
-        for i in range(self.data_backend.read_queue_size()):
+        for i in range(read_jobs):
             block, offset, length, data = self.data_backend.read_get()
             if data is None:
                 logger.error('Blob not found: {}'.format(str(block)))
@@ -236,6 +241,7 @@ class Backy():
                 block.id,
                 block.uid,
                 ))
+            notify(self.process_name, 'Scrubbing Version {} ({:.1f}%)'.format(version_uid, (i + 1) / read_jobs * 100))
         if state == True:
             self.meta_backend.set_version_valid(version_uid)
         else:
@@ -245,6 +251,7 @@ class Backy():
             io.close()  # wait for all io
 
         self.locking.unlock(version_uid)
+        notify(self.process_name)
         return state
 
 
@@ -297,6 +304,7 @@ class Backy():
                     block.size,
                     ))
 
+            notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
         self.locking.unlock(version_uid)
@@ -477,6 +485,7 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
+            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
 
