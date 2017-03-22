@@ -12,7 +12,6 @@ Backlog:
 
 Next:
 
-* Add progress output during restore
 * Parallelize reads and writes during restore (backy.py:257 data = self.data_backend.read(block.uid))
   as this is a bottleneck, especially with s3 storage
 * Change lock lib to be a wrapper, possibly with a context manager

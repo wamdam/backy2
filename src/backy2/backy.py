@@ -254,11 +254,13 @@ class Backy():
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        _block_count = len(blocks)
+        _log_every_blocks = _block_count // 200 + 1  # about every half percent
 
         io = self.get_io_by_source(target)
         io.open_w(target, version.size_bytes, force)
 
-        for block in blocks:
+        for i, block in enumerate(blocks):
             if block.uid:
                 data = self.data_backend.read(block, sync=True)
                 assert len(data) == block.size
@@ -289,6 +291,8 @@ class Backy():
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
+            if i % _log_every_blocks == 0 or i + 1 == _block_count:
+                logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, _block_count, (i + 1) / _block_count * 100))
         self.locking.unlock(version_uid)
 
 
@@ -445,6 +449,7 @@ class Backy():
 
         # now use the readers and write
         done_jobs = 0
+        _log_every_jobs = read_jobs // 200 + 1  # about every half percent
         for i in range(read_jobs):
             block, data, data_checksum = io.get()
 
@@ -466,6 +471,8 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
+            if i % _log_every_jobs == 0 or i + 1 == read_jobs:
+                logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
 
         io.close()  # wait for all readers
         # self.data_backend.close()  # wait for all writers
