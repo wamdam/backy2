@@ -254,33 +254,15 @@ class Backy():
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        _block_count = len(blocks)
-        _log_every_blocks = _block_count // 200 + 1  # about every half percent
 
         io = self.get_io_by_source(target)
         io.open_w(target, version.size_bytes, force)
 
+        read_jobs = 0
         for i, block in enumerate(blocks):
             if block.uid:
-                data = self.data_backend.read(block, sync=True)
-                assert len(data) == block.size
-                data_checksum = self.hash_function(data).hexdigest()
-                io.write(block, data)
-                if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during restore for block '
-                        '{} (is: {} should-be: {}, block-valid: {}). Block '
-                        'restored is invalid. Continuing.'.format(
-                            block.id,
-                            data_checksum,
-                            block.checksum,
-                            block.valid,
-                            ))
-                    self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                else:
-                    logger.debug('Restored block {} successfully ({} bytes).'.format(
-                        block.id,
-                        block.size,
-                        ))
+                self.data_backend.read(block.deref())  # adds a read job
+                read_jobs += 1
             elif not sparse:
                 io.write(block, b'\0'*block.size)
                 logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
@@ -291,8 +273,32 @@ class Backy():
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
-            if i % _log_every_blocks == 0 or i + 1 == _block_count:
-                logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, _block_count, (i + 1) / _block_count * 100))
+
+        done_jobs = 0
+        _log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        for i in range(read_jobs):
+            block, offset, length, data = self.data_backend.read_get()
+            assert len(data) == block.size
+            data_checksum = self.hash_function(data).hexdigest()
+            io.write(block, data)
+            if data_checksum != block.checksum:
+                logger.error('Checksum mismatch during restore for block '
+                    '{} (is: {} should-be: {}, block-valid: {}). Block '
+                    'restored is invalid. Continuing.'.format(
+                        block.id,
+                        data_checksum,
+                        block.checksum,
+                        block.valid,
+                        ))
+                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+            else:
+                logger.debug('Restored block {} successfully ({} bytes).'.format(
+                    block.id,
+                    block.size,
+                    ))
+
+            if i % _log_every_jobs == 0 or i + 1 == read_jobs:
+                logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
         self.locking.unlock(version_uid)
 
 
