@@ -376,12 +376,12 @@ class Backy():
         stats['version_size_blocks'] = size
 
         # Sanity check: check hints for validity, i.e. too high offsets, ...
-        if hints:
+        if hints is not None and len(hints) > 0:
             max_offset = max([h[0]+h[1] for h in hints])
             if max_offset > source_size:
                 raise ValueError('Hints have higher offsets than source file.')
 
-        if hints:
+        if hints is not None:
             sparse_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
             read_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
         else:

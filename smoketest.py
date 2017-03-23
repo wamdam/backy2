@@ -52,25 +52,30 @@ with TestPath() as testpath:
     init_logging(testpath+'/backy.log', logging.INFO)
 
     version_uids = []
+    old_size = 0
     for i in range(100):
-        size = 32*4*kB + random.randint(-4*kB, 4*kB)
         print('Run {}'.format(i+1))
         hints = []
-        for j in range(random.randint(0, 10)):  # up to 10 changes
-            if random.randint(0, 1):
-                patch_size = random.randint(0, 4*kB)
-                data = os.urandom(patch_size)
-                #exists = True
-                exists = "true"
-            else:
-                patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
-                data = b'\0' * patch_size
-                #exists = False
-                exists = "false"
-            offset = random.randint(0, size-1-patch_size)
-            print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
-            patch(testpath, 'data', offset, data)
-            hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
+        if old_size and random.randint(0, 10) == 0:  # every 10th time or so do not apply any changes.
+            size = old_size
+        else:
+            size = 32*4*kB + random.randint(-4*kB, 4*kB)
+            old_size = size
+            for j in range(random.randint(0, 10)):  # up to 10 changes
+                if random.randint(0, 1):
+                    patch_size = random.randint(0, 4*kB)
+                    data = os.urandom(patch_size)
+                    #exists = True
+                    exists = "true"
+                else:
+                    patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
+                    data = b'\0' * patch_size
+                    #exists = False
+                    exists = "false"
+                offset = random.randint(0, size-1-patch_size)
+                print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
+                patch(testpath, 'data', offset, data)
+                hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
         # truncate?
         open(os.path.join(testpath, 'data'), 'r+b').truncate(size)
 
