@@ -430,8 +430,48 @@ class MetaBackend(_MetaBackend):
     def import_(self, f):
         _csv = csv.reader(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         signature = next(_csv)
-        if signature[0] != 'backy2 Version {} metadata dump'.format(METADATA_VERSION):
+        if signature[0] == 'backy2 Version 2.1 metadata dump':
+            self.import_2_1(_csv)
+        elif signature[0] == 'backy2 Version 2.2 metadata dump':
+            self.import_2_2(_csv)
+        else:
             raise ValueError('Wrong import format.')
+
+
+    def import_2_1(self, _csv):
+        version_uid, version_date, version_name, version_size, version_size_bytes, version_valid = next(_csv)
+        try:
+            self.get_version(version_uid)
+        except KeyError:
+            pass  # does not exist
+        else:
+            raise KeyError('Version {} already exists and cannot be imported.'.format(version_uid))
+        version = Version(
+            uid=version_uid,
+            date=datetime.datetime.strptime(version_date, '%Y-%m-%d %H:%M:%S'),
+            name=version_name,
+            snapshot_name='',
+            size=version_size,
+            size_bytes=version_size_bytes,
+            valid=version_valid,
+            protected=0,
+            )
+        self.session.add(version)
+        for uid, version_uid, id, date, checksum, size, valid in _csv:
+            block = Block(
+                uid=uid,
+                version_uid=version_uid,
+                id=id,
+                date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
+                checksum=checksum,
+                size=size,
+                valid=valid,
+            )
+            self.session.add(block)
+        self.session.commit()
+
+
+    def import_2_2(self, _csv):
         version_uid, version_date, version_name, version_snapshot_name, version_size, version_size_bytes, version_valid, version_protected = next(_csv)
         try:
             self.get_version(version_uid)
