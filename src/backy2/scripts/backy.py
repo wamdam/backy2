@@ -91,9 +91,9 @@ class Commands():
 
     def _ls_blocks_machine_output(self, blocks):
         field_names = ['type', 'id', 'date', 'uid', 'size', 'valid']
-        print(' '.join(field_names))
+        print('|'.join(field_names))
         for block in blocks:
-            print(' '.join(map(str, [
+            print('|'.join(map(str, [
                 'block',
                 block.id,
                 block.date,
@@ -107,7 +107,7 @@ class Commands():
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
         tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid',
-                'valid', 'protected']
+                'valid', 'protected', 'tags']
         tbl.align['name'] = 'l'
         tbl.align['size'] = 'r'
         tbl.align['size_bytes'] = 'r'
@@ -121,15 +121,16 @@ class Commands():
                 version.uid,
                 int(version.valid),
                 int(version.protected),
+                ",".join([t.name for t in version.tags]),
                 ])
         print(tbl)
 
 
     def _ls_versions_machine_output(self, versions):
-        field_names = ['type', 'date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid', 'valid', 'protected']
-        print(' '.join(field_names))
+        field_names = ['type', 'date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid', 'valid', 'protected', 'tags']
+        print('|'.join(field_names))
         for version in versions:
-            print(' '.join(map(str, [
+            print('|'.join(map(str, [
                 'version',
                 version.date,
                 version.name,
@@ -139,6 +140,7 @@ class Commands():
                 version.uid,
                 int(version.valid),
                 int(version.protected),
+                ",".join([t.name for t in version.tags]),
                 ])))
 
 
@@ -185,9 +187,9 @@ class Commands():
                 'bytes read', 'blocks read', 'bytes written', 'blocks written',
                 'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
                 'duration (s)']
-        print(' '.join(field_names))
+        print('|'.join(field_names))
         for stat in stats:
-            print(' '.join(map(str, [
+            print('|'.join(map(str, [
                 'statistics',
                 stat.date,
                 stat.version_uid,
@@ -330,6 +332,22 @@ class Commands():
             exit(23)
         finally:
             backy.close()
+
+
+    def add_tag(self, version_uid, name):
+        try:
+            backy = self.backy()
+            backy.add_tag(version_uid, name)
+            backy.close()
+        except:
+            logger.warn('Unable to add tag.')
+
+
+    def remove_tag(self, version_uid, name):
+        backy = self.backy()
+        backy.remove_tag(version_uid, name)
+        backy.close()
+
 
 
 def main():
@@ -475,6 +493,23 @@ def main():
         '-r', '--read-only', action='store_true', default=False,
         help='Read only if set, otherwise a copy on write backup is created.')
     p.set_defaults(func='nbd')
+
+    # ADD TAG
+    p = subparsers.add_parser(
+        'add-tag',
+        help="Add a named tag to a backup version.")
+    p.add_argument('version_uid')
+    p.add_argument('name')
+    p.set_defaults(func='add_tag')
+
+    # ADD TAG
+    p = subparsers.add_parser(
+        'remove-tag',
+        help="Remove a named tag from a backup version.")
+    p.add_argument('version_uid')
+    p.add_argument('name')
+    p.set_defaults(func='remove_tag')
+
 
     args = parser.parse_args()
 

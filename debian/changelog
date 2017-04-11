@@ -1,9 +1,16 @@
+backy2 (2.9.7) unstable; urgency=low
+
+  * Added tagging for versions
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 11 Apr 2017 19:30:05 +0200
+
+
 backy2 (2.9.6) unstable; urgency=low
 
   * Added automatic database migration
   * Added snapshot_name to versions
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 23 Mar 2017 15:40:05 +0100
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 11 Apr 2017 18:40:05 +0200
 
 
 backy2 (2.9.5) unstable; urgency=low

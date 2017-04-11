@@ -53,10 +53,21 @@ class Version(Base):
     size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
     protected = Column(Integer, nullable=False)
+    tags = sqlalchemy.orm.relationship("Tag", backref="version")
 
     def __repr__(self):
        return "<Version(uid='%s', name='%s', snapshot_name='%s', date='%s')>" % (
                             self.uid, self.name, self.snapshot_name, self.date)
+
+
+class Tag(Base):
+    __tablename__ = 'tags'
+    version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    name = Column(String, nullable=False, primary_key=True)
+
+    def __repr__(self):
+       return "<Tag(version_uid='%s', name='%s')>" % (
+                            self.version_uid, self.name)
 
 
 DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
@@ -252,6 +263,21 @@ class MetaBackend(_MetaBackend):
 
     def get_versions(self):
         return self.session.query(Version).order_by(Version.name, Version.date).all()
+
+
+    def add_tag(self, version_uid, name):
+        """ Add a tag to a version_uid, do nothing if the tag already exists.
+        """
+        tag = Tag(
+            version_uid=version_uid,
+            name=name,
+            )
+        self.session.add(tag)
+
+
+    def remove_tag(self, version_uid, name):
+        self.session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
+        self.session.commit()
 
 
     def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):

@@ -555,6 +555,14 @@ class Backy():
         self.locking.unlock('backy')
 
 
+    def add_tag(self, version_uid, name):
+        self.meta_backend.add_tag(version_uid, name)
+
+
+    def remove_tag(self, version_uid, name):
+        self.meta_backend.remove_tag(version_uid, name)
+
+
     def close(self):
         self.meta_backend.close()
         self.data_backend.close()
