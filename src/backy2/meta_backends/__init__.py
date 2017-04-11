@@ -44,8 +44,28 @@ class MetaBackend():
         raise NotImplementedError()
 
 
+    def protect_version(self, uid):
+        """ Protect a version """
+        raise NotImplementedError()
+
+
+    def unprotect_version(self, uid):
+        """ Unprotect a version """
+        raise NotImplementedError()
+
+
     def get_versions(self):
         """ Returns a list of all versions """
+        raise NotImplementedError()
+
+
+    def add_tag(self, version_uid, name):
+        """ Adds a tag to a version versions """
+        raise NotImplementedError()
+
+
+    def remove_tag(self, version_uid, name):
+        """ Removes a tag from a version versions """
         raise NotImplementedError()
 
 
@@ -86,8 +106,20 @@ class MetaBackend():
         raise NotImplementedError()
 
 
+    def get_delete_candidates(self, dt=3600):
+        raise NotImplementedError()
+
+
     def get_all_block_uids(self, prefix=None):
         """ Get all block uids existing in the meta data store """
+        raise NotImplementedError()
+
+
+    def export(self, f):
+        raise NotImplementedError()
+
+
+    def import_(self, f):
         raise NotImplementedError()
 
 
