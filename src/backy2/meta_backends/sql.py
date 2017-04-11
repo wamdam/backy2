@@ -16,7 +16,7 @@ import time
 import uuid
 
 
-METADATA_VERSION = '2.1'
+METADATA_VERSION = '2.2'
 
 DELETE_CANDIDATE_MAYBE = 0
 DELETE_CANDIDATE_SURE = 1
@@ -47,15 +47,16 @@ class Version(Base):
     __tablename__ = 'versions'
     uid = Column(String(36), primary_key=True)
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, default='')
+    snapshot_name = Column(String, nullable=False, server_default='', default='')
     size = Column(BigInteger, nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
     protected = Column(Integer, nullable=False)
 
     def __repr__(self):
-       return "<Version(uid='%s', name='%s', date='%s')>" % (
-                            self.uid, self.name, self.date)
+       return "<Version(uid='%s', name='%s', snapshot_name='%s', date='%s')>" % (
+                            self.uid, self.name, self.snapshot_name, self.date)
 
 
 DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
@@ -121,18 +122,20 @@ class MetaBackend(_MetaBackend):
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-        try:
-            Base.metadata.create_all(engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
-        except sqlalchemy.exc.OperationalError:
-            # tables already exist, see if there are any db schema upgrades
-            with engine.begin() as connection:
-                alembic_cfg.attributes['connection'] = connection
-                #command.upgrade(alembic_cfg, "head", sql=True)
-                command.upgrade(alembic_cfg, "head")
-        else:
-            # new database.
-            # mark the version table, "stamping" it with the most recent rev:
-            command.stamp(alembic_cfg, "head")
+        with engine.begin() as connection:
+            alembic_cfg.attributes['connection'] = connection
+            try:
+                Base.metadata.create_all(engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
+            except sqlalchemy.exc.OperationalError:
+                # tables already exist, see if there are any db schema upgrades
+                with engine.begin() as connection:
+                    alembic_cfg.attributes['connection'] = connection
+                    #command.upgrade(alembic_cfg, "head", sql=True)
+                    command.upgrade(alembic_cfg, "head")
+            else:
+                # new database.
+                # mark the version table, "stamping" it with the most recent rev:
+                command.stamp(alembic_cfg, "head")
 
         Session = sessionmaker(bind=engine)
         self.session = Session()
@@ -147,11 +150,12 @@ class MetaBackend(_MetaBackend):
         self.session.commit()
 
 
-    def set_version(self, version_name, size, size_bytes, valid, protected=0):
+    def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=0):
         uid = self._uid()
         version = Version(
             uid=uid,
             name=version_name,
+            snapshot_name=snapshot_name,
             size=size,
             size_bytes=size_bytes,
             valid=valid,
@@ -404,9 +408,11 @@ class MetaBackend(_MetaBackend):
             version.uid,
             version.date.strftime('%Y-%m-%d %H:%M:%S'),
             version.name,
+            version.snapshot_name,
             version.size,
             version.size_bytes,
             version.valid,
+            version.protected,
             ])
         for block in blocks:
             _csv.writerow([
@@ -426,7 +432,7 @@ class MetaBackend(_MetaBackend):
         signature = next(_csv)
         if signature[0] != 'backy2 Version {} metadata dump'.format(METADATA_VERSION):
             raise ValueError('Wrong import format.')
-        version_uid, version_date, version_name, version_size, version_size_bytes, version_valid = next(_csv)
+        version_uid, version_date, version_name, version_snapshot_name, version_size, version_size_bytes, version_valid, version_protected = next(_csv)
         try:
             self.get_version(version_uid)
         except KeyError:
@@ -437,9 +443,11 @@ class MetaBackend(_MetaBackend):
             uid=version_uid,
             date=datetime.datetime.strptime(version_date, '%Y-%m-%d %H:%M:%S'),
             name=version_name,
+            snapshot_name=version_snapshot_name,
             size=version_size,
             size_bytes=version_size_bytes,
             valid=version_valid,
+            protected=version_protected,
             )
         self.session.add(version)
         for uid, version_uid, id, date, checksum, size, valid in _csv:

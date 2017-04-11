@@ -58,7 +58,7 @@ class Backy():
         self.locking.unlock('backy')
 
 
-    def _prepare_version(self, name, size_bytes, from_version_uid=None):
+    def _prepare_version(self, name, snapshot_name, size_bytes, from_version_uid=None):
         """ Prepares the metadata for a new version.
         If from_version_uid is given, this is taken as the base, otherwise
         a pure sparse version is created.
@@ -72,7 +72,7 @@ class Backy():
             old_blocks = None
         size = math.ceil(size_bytes / self.block_size)
         # we always start with invalid versions, then validate them after backup
-        version_uid = self.meta_backend.set_version(name, size, size_bytes, 0)
+        version_uid = self.meta_backend.set_version(name, snapshot_name, size, size_bytes, 0)
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
         for id in range(size):
@@ -346,7 +346,7 @@ class Backy():
         self.locking.unlock(version_uid)
 
 
-    def backup(self, name, source, hints, from_version):
+    def backup(self, name, snapshot_name, source, hints, from_version):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -391,7 +391,7 @@ class Backy():
         read_blocks = set(read_blocks)
 
         try:
-            version_uid = self._prepare_version(name, source_size, from_version)
+            version_uid = self._prepare_version(name, snapshot_name, source_size, from_version)
         except RuntimeError as e:
             logger.error(str(e))
             logger.error('Backy exiting.')

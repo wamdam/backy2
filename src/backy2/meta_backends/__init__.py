@@ -7,8 +7,8 @@ class MetaBackend():
     def __init__(self):
         pass
 
-    def set_version(self, version_name, size, size_bytes):
-        """ Creates a new version with a given name.
+    def set_version(self, version_name, snapshot_name, size, size_bytes):
+        """ Creates a new version with a given name and snapshot_name.
         size is the number of blocks this version will contain.
         Returns a uid for this version.
         """

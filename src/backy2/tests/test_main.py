@@ -38,7 +38,8 @@ def backy(request):
     backy = backy2.backy.Backy(meta_backend=meta_backend, data_backend=data_backend, block_size=BLOCK_SIZE)
 
     version_name = 'backup'
-    version_uid = backy.meta_backend.set_version(version_name, TESTLEN, BLOCK_SIZE*TESTLEN, 1)
+    snapshot_name = 'snapname'
+    version_uid = backy.meta_backend.set_version(version_name, snapshot_name, TESTLEN, BLOCK_SIZE*TESTLEN, 1)
     block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
     checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
 
@@ -110,7 +111,8 @@ def test_FileBackend_save_read(test_path):
 def test_metabackend_set_version(test_path):
     backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     name = 'backup-mysystem1-20150110140015'
-    uid = backend.set_version(name, 10, 5000, 1)
+    snapshot_name = 'snapname'
+    uid = backend.set_version(name, snapshot_name, 10, 5000, 1)
     assert(uid)
     version = backend.get_version(uid)
     assert version.name == name
@@ -132,11 +134,12 @@ def test_metabackend_version_not_found(test_path):
 def test_metabackend_block(test_path):
     backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     name = 'backup-mysystem1-20150110140015'
+    snapshot_name = 'snapname'
     block_uid = 'asdfgh'
     checksum = '1234567890'
     size = 5000
     id = 0
-    version_uid = backend.set_version(name, 10, 5000, 1)
+    version_uid = backend.set_version(name, snapshot_name, 10, 5000, 1)
     backend.set_block(id, version_uid, block_uid, checksum, size, 1)
 
     block = backend.get_block(block_uid)
@@ -154,7 +157,8 @@ def test_metabackend_blocks_by_version(test_path):
     TESTLEN = 10
     backend = backy2.backy.SQLBackend('sqlite:///'+test_path+'/backy.sqlite')
     version_name = 'backup-mysystem1-20150110140015'
-    version_uid = backend.set_version(version_name, TESTLEN, 5000, 1)
+    snapshot_name = 'snapname'
+    version_uid = backend.set_version(version_name, snapshot_name, TESTLEN, 5000, 1)
     block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
     checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
     size = 5000

@@ -27,13 +27,13 @@ class Commands():
         self.backy = backy_from_config(Config)
 
 
-    def backup(self, name, source, rbd, from_version):
+    def backup(self, name, snapshot_name, source, rbd, from_version):
         backy = self.backy()
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        backy.backup(name, source, hints, from_version)
+        backy.backup(name, snapshot_name, source, hints, from_version)
         backy.close()
 
 
@@ -106,7 +106,7 @@ class Commands():
     def _ls_versions_tbl_output(self, versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'size', 'size_bytes', 'uid',
+        tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid',
                 'valid', 'protected']
         tbl.align['name'] = 'l'
         tbl.align['size'] = 'r'
@@ -115,6 +115,7 @@ class Commands():
             tbl.add_row([
                 version.date,
                 version.name,
+                version.snapshot_name,
                 version.size,
                 version.size_bytes,
                 version.uid,
@@ -125,13 +126,14 @@ class Commands():
 
 
     def _ls_versions_machine_output(self, versions):
-        field_names = ['type', 'date', 'name', 'size', 'size_bytes', 'uid', 'valid', 'protected']
+        field_names = ['type', 'date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid', 'valid', 'protected']
         print(' '.join(field_names))
         for version in versions:
             print(' '.join(map(str, [
                 'version',
                 version.date,
                 version.name,
+                version.snapshot_name,
                 version.size,
                 version.size_bytes,
                 version.uid,
@@ -353,7 +355,8 @@ def main():
         help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename@snapshot)')
     p.add_argument(
         'name',
-        help='Backup name')
+        help='Backup name (e.g. the hostname)')
+    p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the rbd snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
     p.set_defaults(func='backup')

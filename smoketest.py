@@ -116,6 +116,7 @@ with TestPath() as testpath:
         backy = backy_from_config(Config)()
         version_uid = backy.backup(
             'data-backup',
+            'snapshot-name',
             'file://'+os.path.join(testpath, 'data'),
             hints_from_rbd_diff(open(os.path.join(testpath, 'hints')).read()),
             from_version
