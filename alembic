@@ -1,0 +1,3 @@
+#!/bin/bash
+
+alembic -c src/backy2/meta_backends/sql_migrations/alembic_cli.ini "$@"

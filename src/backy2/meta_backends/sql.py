@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
 import csv
 import datetime
+import os
 import sqlalchemy
 import time
 import uuid
@@ -116,7 +117,23 @@ class MetaBackend(_MetaBackend):
         _MetaBackend.__init__(self)
         # engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
         engine = sqlalchemy.create_engine(config.get('engine'))
-        Base.metadata.create_all(engine)
+
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
+        try:
+            Base.metadata.create_all(engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
+        except sqlalchemy.exc.OperationalError:
+            # tables already exist, see if there are any db schema upgrades
+            with engine.begin() as connection:
+                alembic_cfg.attributes['connection'] = connection
+                #command.upgrade(alembic_cfg, "head", sql=True)
+                command.upgrade(alembic_cfg, "head")
+        else:
+            # new database.
+            # mark the version table, "stamping" it with the most recent rev:
+            command.stamp(alembic_cfg, "head")
+
         Session = sessionmaker(bind=engine)
         self.session = Session()
         self._flush_block_counter = 0
