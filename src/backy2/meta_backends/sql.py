@@ -8,8 +8,11 @@ from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime
+from migrate.versioning import api as migration_api
 import csv
 import datetime
+import migrate.exceptions
+import os
 import sqlalchemy
 import time
 import uuid
@@ -116,10 +119,35 @@ class MetaBackend(_MetaBackend):
         _MetaBackend.__init__(self)
         # engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
         engine = sqlalchemy.create_engine(config.get('engine'))
-        Base.metadata.create_all(engine)
+
+        self.migrate_db(config.get('engine'))
+
+        #Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         self.session = Session()
         self._flush_block_counter = 0
+
+
+    def migrate_db(self, url):
+        # prepare DB and apply migrations
+        db_repository_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'sql_migrations')
+        try:
+            migration_api.version_control(url, db_repository_path)
+        except migrate.exceptions.DatabaseAlreadyControlledError:
+            pass
+        schema_version = migration_api.version(db_repository_path)
+        db_version = migration_api.db_version(url, db_repository_path)
+        if schema_version == db_version:
+            logger.debug('Using database version {}'.format(db_version))
+        else:
+            logger.info('Migrating database version from {} to {}...'.format(
+                schema_version,
+                db_version,
+                ))
+            sql = migration_api.upgrade(url, db_repository_path, preview_sql=True)
+            logger.debug('Applying migration SQL: \n{}'.format(sql))
+            migration_api.upgrade(url, db_repository_path)
+            logger.info('Migration done.')
 
 
     def _uid(self):
