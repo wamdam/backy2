@@ -53,6 +53,7 @@ with TestPath() as testpath:
 
     version_uids = []
     old_size = 0
+    initdb = True
     for i in range(100):
         print('Run {}'.format(i+1))
         hints = []
@@ -113,7 +114,8 @@ with TestPath() as testpath:
         simultaneous_reads: 10
         """.format(testpath=testpath)
         Config = partial(_Config, cfg=config)
-        backy = backy_from_config(Config)()
+        backy = backy_from_config(Config)(initdb=initdb)
+        initdb = False
         version_uid = backy.backup(
             'data-backup',
             'snapshot-name',

@@ -349,6 +349,10 @@ class Commands():
         backy.close()
 
 
+    def initdb(self):
+        self.backy(initdb=True)
+
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -363,6 +367,12 @@ def main():
         '-V', '--version', action='store_true', help='Show version')
 
     subparsers = parser.add_subparsers()
+
+    # INITDB
+    p = subparsers.add_parser(
+        'initdb',
+        help="Initialize the database by populating tables. This will not delete tables or data if they exist.")
+    p.set_defaults(func='initdb')
 
     # BACKUP
     p = subparsers.add_parser(
@@ -502,7 +512,7 @@ def main():
     p.add_argument('name')
     p.set_defaults(func='add_tag')
 
-    # ADD TAG
+    # REMOVE TAG
     p = subparsers.add_parser(
         'remove-tag',
         help="Remove a named tag from a backup version.")

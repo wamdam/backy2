@@ -12,6 +12,7 @@ import csv
 import datetime
 import os
 import sqlalchemy
+import sys
 import time
 import uuid
 
@@ -128,29 +129,48 @@ class MetaBackend(_MetaBackend):
     def __init__(self, config):
         _MetaBackend.__init__(self)
         # engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
-        engine = sqlalchemy.create_engine(config.get('engine'))
+        self.engine = sqlalchemy.create_engine(config.get('engine'))
+
+
+    def open(self):
+        try:
+            self.migrate_db(self.engine)
+        #except sqlalchemy.exc.OperationalError:
+        except:
+            logger.error('Invalid database ({}). Please run initdb first.'.format(self.engine.url))
+            sys.exit(1)  # TODO: Return something (or raise)
+            #raise RuntimeError('Invalid database')
+
+        Session = sessionmaker(bind=self.engine)
+        self.session = Session()
+        self._flush_block_counter = 0
+        return self
+
+
+    def migrate_db(self, engine):
+        # migrate the db to the lastest version
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
+        with self.engine.begin() as connection:
+            alembic_cfg.attributes['connection'] = connection
+            #command.upgrade(alembic_cfg, "head", sql=True)
+            command.upgrade(alembic_cfg, "head")
+
+
+    def initdb(self):
+        # this will create all tables. It will NOT delete any tables or data.
+        # Instead, it will raise when something can't be created.
+        # TODO: explicitly check if the database is empty
+        Base.metadata.create_all(self.engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
 
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-        with engine.begin() as connection:
+        with self.engine.begin() as connection:
             alembic_cfg.attributes['connection'] = connection
-            try:
-                Base.metadata.create_all(engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
-            except sqlalchemy.exc.OperationalError:
-                # tables already exist, see if there are any db schema upgrades
-                with engine.begin() as connection:
-                    alembic_cfg.attributes['connection'] = connection
-                    #command.upgrade(alembic_cfg, "head", sql=True)
-                    command.upgrade(alembic_cfg, "head")
-            else:
-                # new database.
-                # mark the version table, "stamping" it with the most recent rev:
-                command.stamp(alembic_cfg, "head")
-
-        Session = sessionmaker(bind=engine)
-        self.session = Session()
-        self._flush_block_counter = 0
+            # mark the version table, "stamping" it with the most recent rev:
+            command.stamp(alembic_cfg, "head")
 
 
     def _uid(self):
