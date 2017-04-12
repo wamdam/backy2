@@ -41,6 +41,7 @@ Topic :: System :: Archiving :: Backup
         'psutil>=2.2.1',
         'shortuuid>=0.4.2',
         'setproctitle>=1.1.8',
+        'python-dateutil>=2.6.0',
         'alembic',
         #'boto>=2.38.0',
         #'psycopg2>=2.6.1',

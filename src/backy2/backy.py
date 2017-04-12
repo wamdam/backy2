@@ -5,6 +5,7 @@ from backy2.logging import logger
 from backy2.locking import Locking
 from backy2.locking import find_other_procs
 from backy2.utils import grouper
+from dateutil.relativedelta import relativedelta
 from urllib import parse
 import datetime
 import importlib
@@ -349,6 +350,40 @@ class Backy():
         self.locking.unlock(version_uid)
 
 
+    def _generate_auto_tags(self, version_name):
+        """ Generates automatic tag suggestions by looking up versions with
+        the same name and comparing their dates.
+        This algorithm will
+        - give the tag 'b_daily' if the last b_daily tagged version for this name is > 0 days ago
+        - give the tag 'b_weekly' if the last b_weekly tagged version for this name is > 6 days ago
+        - give the tag 'b_monthly' if the last b_monthly tagged version for this name is > 1 month ago
+        """
+        all_versions = self.meta_backend.get_versions()
+        versions = [{'date': v.date.date(), 'tags': [t.name for t in v.tags]} for v in all_versions if v.name == version_name]
+
+        for version in versions:
+            b_daily = [v for v in versions if 'b_daily' in v['tags']]
+            b_weekly = [v for v in versions if 'b_weekly' in v['tags']]
+            b_monthly = [v for v in versions if 'b_monthly' in v['tags']]
+        b_daily_last = max([v['date'] for v in b_daily]) if b_daily else None
+        b_weekly_last = max([v['date'] for v in b_weekly]) if b_weekly else None
+        b_monthly_last = max([v['date'] for v in b_monthly]) if b_monthly else None
+
+        tags = []
+        today = datetime.date.today()
+        if not b_daily_last or \
+                (today - b_daily_last).days > 0:
+            tags.append('b_daily')
+        if not b_weekly_last or \
+                (today - b_weekly_last).days // 7 > 0:
+            tags.append('b_weekly')
+        if not b_monthly_last or \
+                relativedelta(today, b_monthly_last).months + 12 * relativedelta(today, b_monthly_last).years > 0:
+            tags.append('b_monthly')
+
+        return tags
+
+
     def backup(self, name, snapshot_name, source, hints, from_version):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
@@ -501,6 +536,11 @@ class Backy():
             sys.exit(3)
 
         self.meta_backend.set_version_valid(version_uid)
+
+        tags = self._generate_auto_tags(name)
+        for tag in tags:
+            self.meta_backend.add_tag(version_uid, tag)
+
         self.meta_backend.set_stats(
             version_uid=version_uid,
             version_name=name,
@@ -516,7 +556,7 @@ class Backy():
             blocks_sparse=stats['blocks_sparse'],
             duration_seconds=int(time.time() - stats['start_time']),
             )
-        logger.info('New version: {}'.format(version_uid))
+        logger.info('New version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
         self.locking.unlock(version_uid)
         return version_uid
 
