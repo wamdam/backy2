@@ -1,9 +1,16 @@
+backy2 (2.9.9) unstable; urgency=low
+
+  * Fix: Cleanup tags after version deletion
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 12 Apr 2017 22:30:05 +0200
+
+
 backy2 (2.9.8) unstable; urgency=low
 
   * Added automatic b_daily, b_weekly, b_monthly tagging for versions
   * Nicer ls output formatting
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 11 Apr 2017 19:30:05 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 12 Apr 2017 15:30:05 +0200
 
 
 backy2 (2.9.7) unstable; urgency=low
