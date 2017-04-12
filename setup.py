@@ -33,8 +33,11 @@ Topic :: System :: Archiving :: Backup
     package_dir={
         '': 'src',
     },
+    package_data={
+        'src': ['meta_backends/sql_migrations/alembic.ini'],
+    },
     include_package_data=True,
-    zip_safe=True,
+    zip_safe=False,  # ONLY because of alembic.ini. The rest is zip-safe.
     install_requires=[
         'PrettyTable>=0.7.2',
         'sqlalchemy>=1.0.8',
