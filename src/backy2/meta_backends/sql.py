@@ -54,7 +54,11 @@ class Version(Base):
     size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
     protected = Column(Integer, nullable=False)
-    tags = sqlalchemy.orm.relationship("Tag", backref="version")
+    tags = sqlalchemy.orm.relationship(
+            "Tag",
+            backref="version",
+            #cascade="all, delete, delete-orphan",  # i.e. delete when version is deleted
+            )
 
     def __repr__(self):
        return "<Version(uid='%s', name='%s', snapshot_name='%s', date='%s')>" % (
@@ -375,6 +379,7 @@ class MetaBackend(_MetaBackend):
                 self.session.add(deleted_block)
         affected_blocks.delete()
         self.session.query(Version).filter_by(uid=version_uid).delete()
+        self.session.query(Tag).filter_by(version_uid=version_uid).delete()  # TODO: somehow this should work from the cascade in the relationship...
         self.session.commit()
         return num_blocks
 
