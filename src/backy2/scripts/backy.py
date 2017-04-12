@@ -109,6 +109,8 @@ class Commands():
         tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid',
                 'valid', 'protected', 'tags']
         tbl.align['name'] = 'l'
+        tbl.align['snapshot_name'] = 'l'
+        tbl.align['tags'] = 'l'
         tbl.align['size'] = 'r'
         tbl.align['size_bytes'] = 'r'
         for version in versions:
@@ -121,7 +123,7 @@ class Commands():
                 version.uid,
                 int(version.valid),
                 int(version.protected),
-                ",".join([t.name for t in version.tags]),
+                ",".join(sorted([t.name for t in version.tags])),
                 ])
         print(tbl)
 
