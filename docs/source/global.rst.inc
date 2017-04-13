@@ -1,0 +1,2 @@
+.. highlight:: bash
+
