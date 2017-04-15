@@ -5,6 +5,13 @@
 
 .. include:: global.rst.inc
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   quickstart
+
+
 backy2 documentation
 ====================
 
@@ -158,12 +165,6 @@ Main features
     backy2 is licensed under the LGPLv3 license.
 
 
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-   quickstart
 
 
 
