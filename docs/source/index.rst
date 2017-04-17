@@ -9,9 +9,12 @@
 backy2 documentation
 ====================
 
-.. image:: _static/02-backy2-backup.gif
+Overview
+--------
+
+.. image:: _static/backy2-overview.gif
    :width: 100%
-   :alt: backy2 installation in ubuntu 16.04
+   :alt: backy2 overview
 
 .. include:: ../../README.rst
 

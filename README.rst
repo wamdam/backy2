@@ -5,7 +5,8 @@ backy2 is a deduplicating block based backup software.
 
 The primary usecases for backy are:
 
-* backup of ceph/rbd virtual machine images to S3 or NFS storages
+* fast and bandwidth-efficient backup of ceph/rbd virtual machine images to S3
+  or NFS storage
 * backup of LVM volumes (e.g. from personal computers) to external USB disks
 
 
@@ -14,35 +15,36 @@ Main features
 
 **Small backups**
     backy2 deduplicates while reading from the block device and only writes
-    blocks once if they have the same content.
+    blocks once if they have the same checksum (sha512).
 
 **Fast backups**
     With the help of ceph's ``rbd diff``, backy2 will only read the changed
     blocks since the last backup. We have virtual machines with 600GB backed
-    up in about 30 seconds.
+    up in about 30 seconds with <70MB/s bandwidth.
 
 **Small required bandwidth to the backup target**
     As only changed blocks are written to the backup target, a small (i.e.
-    gbit) connection is usually sufficient. Even with newly created block
-    devices the traffic to the backup target is small, because these block
-    devices usually are full of \0 and are deduplicated before even reaching
-    the target storage.
+    gbit) connection is sufficient even for larger backups. Even with newly
+    created block devices the traffic to the backup target is small, because
+    these block devices usually are full of \\0 and are deduplicated before even
+    reaching the target storage.
 
-**As dumb as ``cp``, but as clever as backup needs to be**
+**As simple as cp, but as clever as backup needs to be**
     With a very small set of commands, good ``--help`` and intuitive usage,
     backy2 feels mostly like ``cp``. And that's intentional, because we think,
     a restore must be fool-proof and succeed even if you're woken up at 3am
     and are drunk.
 
-    For example, existing files or rbd volumes will not be overwritten unless
-    you ``--force``.
+    And it must be hard for you to do stupid things. For example, existing
+    files or rbd volumes will not be overwritten unless you ``--force``,
+    deletion of young backups will fail per default.
 
-**Scrubbing with or without source data against bitrod**
+**Scrubbing with or without source data against bitrod and other data loss**
     Every backed up block keeps a checksum with it. When backy scrubs the backup,
     it reads the block from the backup target storage, calculates it's
-    checksum and compares it to the stored checksum. If the checksum differs,
-    it's most likely that there was an error when storing or reading the block,
-    or by bitrod on the backup target storage.
+    checksum and compares it to the stored checksum (and size). If the checksum
+    differs, it's most likely that there was an error when storing or reading
+    the block, or by bitrod on the backup target storage.
 
     Then, the block and the backups it belongs to, are marked 'invalid' and the
     block will be re-read for the next backup version even if ``rbd diff`` indicates
@@ -55,14 +57,15 @@ Main features
     .. NOTE:: Even invalid backups can be restored!
 
 **Fast restores**
-    With supporting block storage, a sparse restore is possible. This means,
-    sparse blocks (i.e. blocks which "don't exist" or are all \0) will be
-    skipped on restore.
+    With supporting block storage (like ceph/rbd), a sparse restore is
+    possible. This means, sparse blocks (i.e. blocks which "don't exist" or are
+    all \\0) will be skipped on restore.
 
-**scrub during restore during backup**
+**Parallel: backups while scrubbing while restoring**
     As backy2 is a long-running process, you will of course not want to wait
     until something has finished. So there are very few places in backy where
-    a global lock will be applied (especially on cleanup).
+    a global lock will be applied (especially on cleanup which you can kill
+    at any time to release the lock).
 
     So you can scrub, backup and restore (multiple times each) on the same
     machine.
@@ -70,11 +73,13 @@ Main features
 **Does not flood your caches**
     When reading large pieces of data on linux, often buffers/caches get filled
     with this data (which in case of backups is essentially only needed once).
-    backy2 instructs linux to immediately forget the read data once it's processed.
+    backy2 instructs linux to immediately forget the data once it's processed.
 
 **Backs up very large volumes RAM- and CPU efficiently**
     We backup multiple terabytes per vm (and this multiple times per night).
-    backy2 runs in <1GB of RAM with these volume sizes.
+    backy2 typically runs in <1GB of RAM with these volume sizes. RAM usage
+    depends mostly on simultaneous reads/writes which are configured through
+    ``backy.cfg``.
 
 **backups can be directly mounted**
     backy2 brings it's own nbd (network block device) server. So a simple linux
@@ -136,9 +141,10 @@ Main features
     Also, you'll need ``--force`` to overwrite existing files or volumes.
 
 **Easy installation**
-    Currently under ubuntu 16.04, all you have to do is dpkg -i backy*.deb.
+    Currently under ubuntu 16.04, you simply install the .deb. Please refer to
+    :ref:`installation` for a detailed install process.
 
 **Free and Open Source Software**
     Anyone can review the source code and audit security and functionality.
-    backy2 is licensed under the LGPLv3 license.
+    backy2 is licensed under the LGPLv3 license (:ref:`license`).
 

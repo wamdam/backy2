@@ -9,6 +9,28 @@ cycle with sqlite as metadata backend and a file storage backup target (e.g.
 NFS).
 
 
+What you need to know:
+----------------------
+
+1. backy2 backups from a block-storage (image file, block device). backy2 can not
+   backup files.
+
+2. If the block device is currently in use (e.g. by a virtual machine), you
+   should create and backup a snapshot. If your storage does not support
+   snapshots, you must pause (and flush) or better shutdown the virtual machine
+   before creating a backup or you will get a probably non-restorable
+   inconsistent filesystem.
+
+3. backy2 stores 4MB blocks to the *backup target*. The *backup target* can be
+   any local or remote filesystem (ext*, zfs, NFS, vfat, ...) or any S3
+   compatible storage.
+
+4. backy2 stores metadata about backups, which is required to scrub and restore,
+   to sql databases which can be a local DBMS or a sqlite file.
+
+
+.. _installation:
+
 Installation
 ------------
 
@@ -52,7 +74,8 @@ backup
             INFO: $ /usr/bin/backy2 initdb
             INFO: Backy complete.
 
-   .. NOTE:: Initializing a database multiple times does not destroy any data.
+   .. NOTE:: Initializing a database multiple times does not destroy any data,
+    but will fail because it finds already-existing tables.
 
 2. Create demo data:
 
