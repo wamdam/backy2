@@ -3,7 +3,7 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
+SPHINXBUILD   = ../env/bin/sphinx-build
 SPHINXPROJ    = backy2
 SOURCEDIR     = source
 BUILDDIR      = build
