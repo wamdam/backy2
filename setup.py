@@ -24,8 +24,7 @@ Programming Language :: Python :: 3.6
 Topic :: System :: Archiving :: Backup
 """[:-1].split('\n'),
     keywords='backup',
-    author=('Daniel Kraft <daniel.kraft@d9t.de>'
-            'Christian Theune <ct@flyingcircus.io>'),
+    author='Daniel Kraft <daniel.kraft@d9t.de>',
     author_email='daniel.kraft@d9t.de',
     url='https://d9t.de/',
     license='LGPL-3',
