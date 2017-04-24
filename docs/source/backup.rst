@@ -60,6 +60,12 @@ You can output this data with::
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
         INFO: Backy complete.
 
+.. HINT::
+    You can filter the output with various parameters:
+
+    .. command-output:: backy2 ls --help
+
+
 
 Differential backup
 -------------------
@@ -94,6 +100,10 @@ ways:
     case 2 you can create a ``rbd diff`` without ``--from-snap`` which will
     create a list of used (=non-sparse) blocks (i.e. all non-used blocks will
     be skipped).
+
+In any case, the backup source may differ in size. backy2 will then assume that
+the size change has happened at the end of the volume, which is the case if you
+resize partitions, logical volumes or rbd images.
 
 
 Examples of differential backups
@@ -131,30 +141,76 @@ With rbd it's possible to let ceph calculate the changes between two snapshots.
 Since *ceph jewel* that is a very fast process, as only metadata has to be
 compared (with the *fast-diff* feature enabled).
 
-.. TODO: TRY THIS AND FINALIZE THIS
 
-Day 1 (initial backup)::
+Manually
+~~~~~~~~
 
-    $ export SNAPNAME=$(date "+%Y-%m-%d")  # 2017-04-19
-    $ rbd snap create rbd/vm1@"$SNAPNAME"
-    $ rbd diff --whole-object rbd/vm1@"$SNAPNAME" --format=json > /tmp/vm1.diff
-    $ backy2 backup -s "$SNAPNAME" -r /tmp/vm1.diff rbd://rbd/vm1@"$SNAPNAME" backup_vm1
 
-    $ # DO NOT DELETE THE SNAPSHOT
+Automation
+~~~~~~~~~~
 
-Day 2..n (differential backups)::
+First for simplicity a few functions (all bash)::
 
-    $ export SNAPNAME=$(date "+%Y-%m-%d")  # 2017-04-20
-    $ # find the latest common snapshot name
-    $ export EXISTING_SNAPS_RBD=$(rbd snap ls vms/vm1|tail -n +2|awk '{ print $2 }'|sort)
-    $ export EXISTING_SNAPS_BACKY2=$(backy2 -m ls|grep -e '^version|[^\|]*|vm1'|awk -F '|' '{ print $4 }'|grep -v -e '^$')
-    $ export BEST_COMMON_SNAP=$(comm -12 <(echo "$EXISTING_SNAPS_RBD") <($EXISTING_SNAPS_BACKY2))
-    $ export OLDSNAPNAME=$(rbd snap ls rbd/vm1|grep backup_|awk '{ print $2 }')
-    $ # backy2 ls orders output by name, date.
-    $ rbd snap create rbd/vm1@"$SNAPNAME"
-    $ rbd diff --whole-object rbd/vm1@"$SNAPNAME" --from-snap $OLDSNAPNAME --format=json > /tmp/vm1.diff
-    $ rbd snap rm rbd/vm1@"$OLDSNAPNAME"
-    $ backy2 backup -s "$SNAPNAME" -r /tmp/vm1.diff -f $OLDVERSION rbd://rbd/vm1@"$SNAPNAME" vm1
+    function initial_backup {
+        # call: initial_backup rbd vm1
+        POOL="$1"
+        VM="$2"
+
+        SNAPNAME=$(date "+%Y-%m-%dT%H:%M:%S")  # 2017-04-19T11:33:23
+        TEMPFILE=$(tempfile)
+
+        echo "Performing initial backup of $POOL/$VM."
+
+        rbd snap create "$POOL"/"$VM"@"$SNAPNAME"
+        rbd diff --whole-object "$POOL"/"$VM"@"$SNAPNAME" --format=json > "$TEMPFILE"
+        backy2 backup -s "$SNAPNAME" -r "$TEMPFILE" rbd://"$POOL"/"$VM"@"$SNAPNAME" $VM
+
+        rm $TEMPFILE
+    }
+
+    function differential_backup {
+        # call: differential_backup rbd vm1 old_rbd_snap old_backy2_version
+        POOL="$1"
+        VM="$2"
+        LAST_RBD_SNAP="$3"
+        BACKY_SNAP_VERSION_UID="$4"
+
+        SNAPNAME=$(date "+%Y-%m-%dT%H:%M:%S")  # 2017-04-20T11:33:23
+        TEMPFILE=$(tempfile)
+
+        echo "Performing differential backup of $POOL/$VM from rbd snapshot $LAST_RBD_SNAP and backy2 version $BACKY_SNAP_VERSION_UID."
+
+        rbd snap create "$POOL"/"$VM"@"$SNAPNAME"
+        rbd diff --whole-object "$POOL"/"$VM"@"$SNAPNAME" --from-snap "$LAST_RBD_SNAP" --format=json > "$TEMPFILE"
+        # delete old snapshot
+        rbd snap rm "$POOL"/"$VM"@"$LAST_RBD_SNAP"
+        # and backup
+        backy2 backup -s "$SNAPNAME" -r "$TEMPFILE" -f "$BACKY_SNAP_VERSION_UID" rbd://"$POOL"/"$VM"@"$SNAPNAME" "$VM"
+    }
+
+    function backup {
+        # call as backup rbd vm1
+        POOL="$1"
+        VM="$2"
+
+        # find the latest snapshot name from rbd
+        LAST_RBD_SNAP=$(rbd snap ls "$POOL"/"$VM"|tail -n +2|awk '{ print $2 }'|sort|tail -n1)
+        if [ -z $LAST_RBD_SNAP ]; then
+            echo "No previous snapshot found, reverting to initial backup."
+            initial_backup "$POOL" "$VM"
+        else
+            # check if this snapshot exists in backy2
+            BACKY_SNAP_VERSION_UID=$(backy2 -m ls -s "$LAST_RBD_SNAP" "$VM"|grep -e '^version'|awk -F '|' '{ print $7 }')
+            if [ -z $BACKY_SNAP_VERSION_UID ]; then
+                echo "Existing rbd snapshot not found in backy2, reverting to initial backup."
+                initial_backup "$POOL" "$VM"
+            else
+                differential_backup "$POOL" "$VM" "$LAST_RBD_SNAP" "$BACKY_SNAP_VERSION_UID"
+            fi
+        fi
+    }
+
+    backup "$@"
 
 .. CAUTION:: This example is for demonstration purpose only and not at all as
     fool-proof as it should be for backups. Please script your own logic of how
@@ -170,7 +226,7 @@ This is what it does:
   you may call ``fstrim`` (if your storage driver supports it) or
   ``dd if=/dev/zero of=T bs=1M; rm T`` inside the VM in order to zero a large
   part of the storage. With this, backy2 (or rbd) can deduplicate empty parts.
-* Then backy2 backups the image under the name *backup_vm1* with the snapshot
+* Then backy2 backups the image under the name *vm1* with the snapshot
   name *2017-04-19*. The latter is to be able to find the old snapshot name again
   tomorrow (i.e. the snapshot name stored in backy2 matches the snapshot name
   in ceph).
