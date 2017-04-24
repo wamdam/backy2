@@ -246,9 +246,7 @@ initial backups where necessary::
             backup "$1" "$2"
     fi
 
-.. CAUTION:: This example is for demonstration purpose only and not at all as
-    fool-proof as it could be for backups. Please script your own logic of how
-    to find yesterday's snapshots et.al.
+.. CAUTION:: This code is for demonstration purpose only. It should work however.
 
 This is what it does:
 
