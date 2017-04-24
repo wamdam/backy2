@@ -57,7 +57,7 @@ class Version(Base):
     tags = sqlalchemy.orm.relationship(
             "Tag",
             backref="version",
-            #cascade="all, delete, delete-orphan",  # i.e. delete when version is deleted
+            cascade="all, delete, delete-orphan",  # i.e. delete when version is deleted
             )
 
     def __repr__(self):
@@ -378,8 +378,13 @@ class MetaBackend(_MetaBackend):
                 )
                 self.session.add(deleted_block)
         affected_blocks.delete()
+        # TODO: This is a sqlalchemy stupidity. cascade only works if the version
+        # is deleted via session.delete() which first loads all objects into
+        # memory. A session.query().filter().delete does not work with cascade.
+        # Please see http://stackoverflow.com/questions/5033547/sqlalchemy-cascade-delete/12801654#12801654
+        # for reference.
+        self.session.query(Tag).filter_by(version_uid=version_uid).delete()
         self.session.query(Version).filter_by(uid=version_uid).delete()
-        self.session.query(Tag).filter_by(version_uid=version_uid).delete()  # TODO: somehow this should work from the cascade in the relationship...
         self.session.commit()
         return num_blocks
 
