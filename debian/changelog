@@ -1,3 +1,13 @@
+backy2 (2.9.10) unstable; urgency=low
+
+  * Add features to backy ls.
+    This is an incompatible change to the previous behavour of ls, however
+    nobody has ever needed a list of blocks for a version, so this should
+    not bother anyone.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 24 Apr 2017 11:34:05 +0200
+
+
 backy2 (2.9.9) unstable; urgency=low
 
   * Fix: Cleanup tags after version deletion
