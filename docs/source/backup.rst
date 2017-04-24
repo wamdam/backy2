@@ -145,11 +145,35 @@ compared (with the *fast-diff* feature enabled).
 Manually
 ~~~~~~~~
 
+In this example, we will backup an rbd image called ``vm1`` which is in the
+pool ``pool``.
+
+1. Create an initial backup::
+
+    $ rbd snap create pool/vm1@backup1
+    $ rbd diff --whole-object pool/vm1@backup1 --format=json > /tmp/vm1.diff
+    $ backy2 backup -s backup1 -r /tmp/vm1.diff rbd://pool/vm1@backup1 vm1
+
+2. Create a differential backup::
+
+    $ rbd snap create pool/vm1@backup2
+    $ rbd diff --whole-object pool/vm1@backup2 --from-snap backup1 --format=json > /tmp/vm1.diff
+
+    # delete old snapshot
+    $ rbd snap rm pool/vm1@backup1
+
+    # get the uid of the version corrosponding to the old rbd snapshot. This
+    # looks like "90fcbeb6-1fce-11c7-9c25-a44c314f9270". Copy it.
+    $ backy2 ls vm1 -s backup1
+
+    # and backup
+    $ backy2 backup -s backup2 -r /tmp/vm1.diff -f 90fcbeb6-1fce-11c7-9c25-a44c314f9270 rbd://pool/vm1@backup2 vm1
 
 Automation
 ~~~~~~~~~~
 
-First for simplicity a few functions (all bash)::
+This is how you can automate forward differential backups including automatic
+initial backups where necessary::
 
     function initial_backup {
         # call: initial_backup rbd vm1
@@ -210,13 +234,22 @@ First for simplicity a few functions (all bash)::
         fi
     }
 
-    backup "$@"
+    if [ -z $1 ] || [ -z $2 ]; then
+            echo "Usage: $0 [pool] [image]"
+            exit 1
+    else
+            rbd snap ls "$1"/"$2" > /dev/null 2>&1
+            if [ "$?" != "0" ]; then
+                    echo "Cannot find rbd image $1/$2."
+                    exit 2
+            fi
+            backup "$1" "$2"
+    fi
 
 .. CAUTION:: This example is for demonstration purpose only and not at all as
-    fool-proof as it should be for backups. Please script your own logic of how
+    fool-proof as it could be for backups. Please script your own logic of how
     to find yesterday's snapshots et.al.
 
-This example is a simplified version of what you can script for your backups.
 This is what it does:
 
 * On day 1, it creates a snapshot from the vm *vm1* in pool *rbd* called
