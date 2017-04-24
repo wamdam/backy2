@@ -547,7 +547,12 @@ def main():
 
     Config = partial(_Config, conf_name='backy')
     config = Config(section='DEFAULTS')
-    init_logging(config.get('logfile'), console_level)
+
+    # logging ERROR only when machine output is selected
+    if args.machine_output:
+        init_logging(config.get('logfile'), logging.ERROR)
+    else:
+        init_logging(config.get('logfile'), console_level)
 
     commands = Commands(args.machine_output, Config)
     func = getattr(commands, args.func)
