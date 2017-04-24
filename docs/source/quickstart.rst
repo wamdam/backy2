@@ -5,28 +5,29 @@ Quick Start
 ===========
 
 This guide will show you how to do a *backup* - *scrub* - *restore* - *cleanup*
-cycle with sqlite as metadata backend and a file storage backup target (e.g.
-NFS).
+cycle with **sqlite** as metadata backend and a **file storage** backup target
+(e.g. NFS).
 
 
 What you need to know:
 ----------------------
 
-1. backy2 backups from a block-storage (image file, block device). backy2 can not
-   backup files.
+Backup source
+    A block device or image file (e.g. containing a VM) to be backed up.
+    backy2 can not backup folders or multiple files. The source must not be
+    modified during backup, so either stop all writers or create a snapshot.
 
-2. If the block device is currently in use (e.g. by a virtual machine), you
-   should create and backup a snapshot. If your storage does not support
-   snapshots, you must pause (and flush) or better shutdown the virtual machine
-   before creating a backup or you will get a probably non-restorable
-   inconsistent filesystem.
+Backup target
+    A storage (currently supported: filesystem or S3 compatible) to which the
+    backed up data will be saved in 4MB blocks.
 
-3. backy2 stores 4MB blocks to the *backup target*. The *backup target* can be
-   any local or remote filesystem (ext*, zfs, NFS, vfat, ...) or any S3
-   compatible storage.
+Backup Metadata
+    A Database containing information on how to reassemble the stored blocks
+    to get the original data back. Currently an SQL database.
 
-4. backy2 stores metadata about backups, which is required to scrub and restore,
-   to sql databases which can be a local DBMS or a sqlite file.
+Version
+    A version of a backup. A version is a backup on a specific time for a
+    specific backup source. A version is identified by its UUID.
 
 
 .. _installation:
@@ -42,6 +43,8 @@ Installation::
     wget https://github.com/wamdam/backy2/releases/download/2.9.9/backy2_2.9.9_all.deb
     sudo dpkg -i backy2_2.9.9_all.deb  # Install the debian archive
     sudo apt-get -f install            # Install the dependencies
+
+.. TODO: Show how to install drivers for postgreSQL, MySQL, others
 
 Edit backy.cfg::
 
@@ -61,7 +64,17 @@ Other values of interest are ``simultaneous_writes`` and ``simultaneous_reads``.
 Depending on your backup source and target you may want to go lower (i.e.
 disk with very slow seeks) or higher (raid source or target, S3 target, ...).
 
-For reference, we use about the half the number of disks for simultaneous access.
+.. TIP::
+    For reference, we use about the half the number of disks as value for
+    simultaneous access. So if you have 40 OSDs in ceph/rbd on the backup
+    source and a 20 disk raid 10 backup target (which makes only 10 parallel
+    disks on writes), you'd use ::
+
+        simultaneous_reads: 20
+        simultaneous_writes: 5
+
+    Of course your mileage may vary.
+
 These settings have great impact on the backup and restore performance. Higher
 values need a bit more RAM.
 
@@ -74,8 +87,8 @@ backup
             INFO: $ /usr/bin/backy2 initdb
             INFO: Backy complete.
 
-   .. NOTE:: Initializing a database multiple times does not destroy any data,
-    but will fail because it finds already-existing tables.
+   .. NOTE:: Initializing a database multiple times does **not** destroy any
+       data, instead will fail because it finds already-existing tables.
 
 2. Create demo data:
 
@@ -157,8 +170,8 @@ Also, the version is marked invalid as you can see in::
 Just in case you are able to fix the error, just scrub again and backy2 will mark the version valid again.
 
 
-restore (full)
---------------
+restore
+-------
 
 Restore into a file or device::
 
@@ -185,6 +198,9 @@ try again, it will fail::
     Error opening restore target. You must force the restore.
 
 If you want to overwrite data, you must ``--force``.
+
+.. NOTE:: For more (and possibly faster) restore methods, please refer to the
+    section :ref:`restore`.
 
 
 version rm and cleanup
