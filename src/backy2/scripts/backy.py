@@ -129,7 +129,8 @@ class Commands():
 
 
     def _ls_versions_machine_output(self, versions):
-        field_names = ['type', 'date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid', 'valid', 'protected', 'tags']
+        field_names = ['type', 'date', 'name', 'snapshot_name', 'size',
+                'size_bytes', 'uid', 'valid', 'protected', 'tags']
         print('|'.join(field_names))
         for version in versions:
             print('|'.join(map(str, [
@@ -210,20 +211,20 @@ class Commands():
                 ])))
 
 
-    def ls(self, version_uid):
+    def ls(self, name, snapshot_name, tag):
         backy = self.backy()
-        if version_uid:
-            blocks = backy.ls_version(version_uid)
-            if self.machine_output:
-                self._ls_blocks_machine_output(blocks)
-            else:
-                self._ls_blocks_tbl_output(blocks)
+        versions = backy.ls()
+        if name:
+            versions = [v for v in versions if v.name == name]
+        if snapshot_name:
+            versions = [v for v in versions if v.snapshot_name == snapshot_name]
+        if tag:
+            versions = [v for v in versions if tag in [t.name for t in v.tags]]
+
+        if self.machine_output:
+            self._ls_versions_machine_output(versions)
         else:
-            versions = backy.ls()
-            if self.machine_output:
-                self._ls_versions_machine_output(versions)
-            else:
-                self._ls_versions_tbl_output(versions)
+            self._ls_versions_tbl_output(versions)
         backy.close()
 
 
@@ -472,7 +473,11 @@ def main():
     p = subparsers.add_parser(
         'ls',
         help="List existing backups.")
-    p.add_argument('version_uid', nargs='?', default=None, help='Show verbose blocks for this version')
+    p.add_argument('name', nargs='?', default=None, help='Show versions for this name only')
+    p.add_argument('-s', '--snapshot-name', default=None,
+            help="Limit output to this snapshot name")
+    p.add_argument('-t', '--tag', default=None,
+            help="Limit output to this tag")
     p.set_defaults(func='ls')
 
     # STATS
