@@ -1,5 +1,7 @@
 .. include:: global.rst.inc
 
+.. _scrubbing:
+
 Scrub
 =====
 

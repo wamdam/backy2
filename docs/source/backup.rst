@@ -143,7 +143,7 @@ compared (with the *fast-diff* feature enabled).
 
 
 Manually
-~~~~~~~~
+^^^^^^^^
 
 In this example, we will backup an rbd image called ``vm1`` which is in the
 pool ``pool``.
@@ -170,7 +170,7 @@ pool ``pool``.
     $ backy2 backup -s backup2 -r /tmp/vm1.diff -f 90fcbeb6-1fce-11c7-9c25-a44c314f9270 rbd://pool/vm1@backup2 vm1
 
 Automation
-~~~~~~~~~~
+^^^^^^^^^^
 
 This is how you can automate forward differential backups including automatic
 initial backups where necessary::
@@ -250,25 +250,97 @@ initial backups where necessary::
 
 This is what it does:
 
-* On day 1, it creates a snapshot from the vm *vm1* in pool *rbd* called
-  *2017-04-19*.
-* After that, the command ``rbd diff`` creates a list of used blocks of this
-  image. If you want to keep backup time short even for this very first backup,
-  you may call ``fstrim`` (if your storage driver supports it) or
-  ``dd if=/dev/zero of=T bs=1M; rm T`` inside the VM in order to zero a large
-  part of the storage. With this, backy2 (or rbd) can deduplicate empty parts.
-* Then backy2 backups the image under the name *vm1* with the snapshot
-  name *2017-04-19*. The latter is to be able to find the old snapshot name again
-  tomorrow (i.e. the snapshot name stored in backy2 matches the snapshot name
-  in ceph).
+* When called via ``command pool image``, it searches for the latest rbd
+  snapshot. As rbd snapshots have no date assigned, it's the last one from
+  ``rbd snap ls … | sort``.
+* If none is found, an initial backup is performed.
+* If there is a rbd snapshot, backy2 is asked if it has a *version* of this
+  snapshot. If not, an initial_backup is performed.
+* If backy2 has a *version* of this snapshot, a *diff* file is created via
+  ``rbd diff --whole-object <new snapshot> --from-snap <old snapshot> --format=json``.
+* backy2 then backs up according to changes found in this diff file.
+
+So this script can be called each day (or even multiple times a day) and will
+automatically keep only one snapshot and create forward-differential backups.
+
+.. NOTE:: This alone will not be enough to be safe. You will have to perform
+    additional scrubs. Please refer to section :ref:`scrubbing`.
+    Also you will have to backup metadata exports along with your data, which
+    will be handled in the next section.
 
 
-TODO
+Export metadata
+---------------
 
-- machine output
-- Export metadata
-- percentage in process output
+backy2 has now backed up all image data to a (hopefully) safe place. However,
+the 4MB sized blocks are of no use without the corrosponding metadata. backy2
+will need this information to get the blocks back in the correct order.
 
+This information is stored in *metadata*. You must export the metadata and store
+it to the backup storage. backy2 will not do this for you.
+
+Otherwise, you'll lose all backups if you lose backy2's metadata storage which
+resists on the backup server usually.
+
+Just create an export file:
+
+.. command-output:: backy2 export --help
+
+Like this::
+
+    $ backy2 export 52da2130-2929-11e7-bde0-003048d74f6c vm1.backy-metadata
+    INFO: $ /usr/local/bin/backy2 export 52da2130-2929-11e7-bde0-003048d74f6c T
+    INFO: Backy complete.
+
+The created file is a simple CSV and can be re-imported to backy2::
+
+    backy2 Version 2.2 metadata dump
+    52da2130-2929-11e7-bde0-003048d74f6c,2017-04-24 22:05:04,zimbra.trusted@backup_20170424214643,,214000,897581056000,1,0
+    38fdb171ccdm34m59W8wMCDiArpTRTsF,52da2130-2929-11e7-bde0-003048d74f6c,0,2017-04-24 22:11:14,d85694f3969a59aece4ab3758f25f3bf8f2e4223b7b69b701843f0292b9c857eb4f5d157d365f194c093a7014dec419dc54c868b6ed7fde8f572583b4b75520b,4194304,1
+    3cf9e33358aQdAqmX7LtWNFVAjsZTw5S,52da2130-2929-11e7-bde0-003048d74f6c,1,2017-04-24 22:11:14,a1e9bc0b8aa9579360b9c71685de3e54eb70b8be2a915676b9dd100d5bbd40a91c71b1920a971c291d8643b334e88077592a12d41843bab138257c6cb2b01bfd,4194304,1
+    …
+
+However, backy2 will ignore your request if the version uid is already in the database. ::
+
+    $ backy2 import vm1.backy-metadata
+    INFO: $ /usr/local/bin/backy2 import vm1.backy-metadata
+    ERROR: 'Version 52da2130-2929-11e7-bde0-003048d74f6c already exists and cannot be imported.'
+
+Otherwise the version will show up after importing it when looking at ``backy2 ls``.
+
+
+Features
+--------
+
+Machine output
+~~~~~~~~~~~~~~
+
+All commands in backy2 are available with machine compatible output too.
+Columns will be pipe (``|``) separated.
+
+Example::
+
+    $ backy2 -m ls
+    type|date|name|snapshot_name|size|size_bytes|uid|valid|protected|tags
+    version|2017-04-18 18:05:04.174907|vm1|2017-04-19T11:12:13|25600|107374182400|c94299f2-2450-11e7-bde0-003048d74f6c|1|0|b_daily,b_monthly,b_weekly
+
+.. HINT::
+    Pipe separated content can be read easily with awk::
+
+        awk -F '|' '{ print $3 }'
+
+
+Progress in process tree
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+When automating backup, scrub and restore jobs, it's hard to keep track of what's
+going on when looking only at log files.
+
+For this, backy2 updates its progress in the process tree. So in order to watch
+backy2's progress, just look at ::
+
+    $ ps axfu|grep "[b]acky2"
+    …  \_ backy2 [Scrubbing Version 52da2130-2929-11e7-bde0-003048d74f6c (0.1%)]
 
 .. _hints_file:
 
