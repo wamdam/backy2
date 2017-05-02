@@ -74,6 +74,7 @@ time), backy2 needs to prevent race-conditions between adding a
 a cleanup will only remove data blocks once they're on the list of
 *delete-candidates* for more than 1 hour.
 
+.. _full_cleanup:
 
 full-cleanup
 ~~~~~~~~~~~~
