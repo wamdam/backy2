@@ -29,6 +29,7 @@ Overview
    cleanup
    administration
    datalayout
+   develop
    support
    license
    imprint

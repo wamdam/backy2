@@ -78,6 +78,8 @@ disk with very slow seeks) or higher (raid source or target, S3 target, ...).
 These settings have great impact on the backup and restore performance. Higher
 values need a bit more RAM.
 
+.. _backup:
+
 backup
 ------
 
