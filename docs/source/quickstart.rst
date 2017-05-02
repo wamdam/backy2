@@ -257,6 +257,10 @@ timeout. However be warned (also shown when doing a ``backy2 cleanup --help``):
         backup server.
 
 
+.. CAUTION:: Parallelism has been tested successfully with PostgreSQL. It might
+    not work reliably with other DBMS.
+
+
 .. [1] backy2 uses sha512 which can be configured in ``backy.cfg``. sha512
     is the only recommended checksum, however it's possible to use any other
     algorithm from python3's hashlib (i.e. ``md5``, ``sha1``, ``sha224``,
