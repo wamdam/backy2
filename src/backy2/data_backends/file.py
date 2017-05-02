@@ -103,14 +103,14 @@ class DataBackend(_DataBackend):
             block, offset, length = d
             t1 = time.time()
             try:
-                data = self.read_raw(block, offset, length)
+                data = self.read_raw(block.uid, offset, length)
             except FileNotFoundError:
                 self._read_data_queue.put((block, offset, length, None))  # catch this!
             else:
                 self._read_data_queue.put((block, offset, length, data))
                 t2 = time.time()
                 self._read_queue.task_done()
-                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block, t2-t1, self._read_queue.qsize()))
+                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
     def _uid(self):
