@@ -32,3 +32,6 @@ Overview
    support
    license
    imprint
+
+.. TODO
+    logging
