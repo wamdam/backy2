@@ -40,8 +40,8 @@ Ubuntu 16.04
 
 Installation::
 
-    wget https://github.com/wamdam/backy2/releases/download/2.9.9/backy2_2.9.9_all.deb
-    sudo dpkg -i backy2_2.9.9_all.deb  # Install the debian archive
+    wget https://github.com/wamdam/backy2/releases/download/2.9.9/backy2_2.9.11_all.deb
+    sudo dpkg -i backy2_2.9.11_all.deb  # Install the debian archive
     sudo apt-get -f install            # Install the dependencies
 
 .. TODO: Show how to install drivers for postgreSQL, MySQL, others
