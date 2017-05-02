@@ -67,6 +67,8 @@ You can output this data with::
 
 
 
+.. _differential_backup:
+
 Differential backup
 -------------------
 
