@@ -9,6 +9,8 @@
 backy2 documentation
 ====================
 
+backy2 homepage: http://backy2.com/
+
 Overview
 --------
 
