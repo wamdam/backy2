@@ -270,6 +270,26 @@ automatically keep only one snapshot and create forward-differential backups.
     Also you will have to backup metadata exports along with your data, which
     will be handled in the next section.
 
+Tag backups
+-----------
+backy2 provides predefined backup tags: b_daily, b_weekly, b_monthly
+These tags are created automatically by compating the dates of version with the
+same name.
+
+If a specific tag should be used for a target backup revision, the backup
+command provides the command line switch '-t' or '--tag':
+
+    $ backy2 backup -t mytag rbd://cephstorage/test_vm test_vm
+
+You can also use multiple tags for one revision:
+
+    $ backy2 backup -t mytag -t anothertag rbd://cephstorage/test_vm test_vm
+
+Later on you can modify tags with the commands 'add-tag' and 'remove-tag':
+
+    $ backy2 add-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 mytag
+    $ backy2 remove-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 anothertag
+
 
 Export metadata
 ---------------

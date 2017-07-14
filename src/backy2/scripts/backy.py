@@ -27,13 +27,13 @@ class Commands():
         self.backy = backy_from_config(Config)
 
 
-    def backup(self, name, snapshot_name, source, rbd, from_version):
+    def backup(self, name, snapshot_name, source, rbd, from_version, tag=None):
         backy = self.backy()
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        backy.backup(name, snapshot_name, source, hints, from_version)
+        backy.backup(name, snapshot_name, source, hints, from_version, tag)
         backy.close()
 
 
@@ -392,6 +392,9 @@ def main():
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the rbd snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
+    p.add_argument(
+        '-t', '--tag', action='append',  dest='tag', default=None,
+        help='Use a specific tag for the target backup version-uid')
     p.set_defaults(func='backup')
 
     # RESTORE
