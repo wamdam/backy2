@@ -512,7 +512,10 @@ class Backy():
 
             # dedup
             existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
-            if existing_block and existing_block.size == len(data):
+            if data == b'\0' * block.size:
+                # if the block is only \0, set it as a sparse block.
+                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
+            elif existing_block and existing_block.size == len(data):
                 self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
                 stats['blocks_found_dedup'] += 1
                 stats['bytes_found_dedup'] += len(data)
