@@ -514,6 +514,9 @@ class Backy():
             existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
             if data == b'\0' * block.size:
                 # if the block is only \0, set it as a sparse block.
+                stats['blocks_sparse'] += 1
+                stats['bytes_sparse'] += block.size
+                logger.debug('Skipping block (detected sparse) {}'.format(block.id))
                 self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
             elif existing_block and existing_block.size == len(data):
                 self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
