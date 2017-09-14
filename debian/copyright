@@ -1,6 +1,6 @@
 Files: *
 Copyright:
-    2015-2016, Daniel Kraft
+    2015-2017, Daniel Kraft
 License: LGPL 3.0
 
 Files: nbdserver.py
