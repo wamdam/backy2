@@ -384,7 +384,7 @@ class Backy():
         return tags
 
 
-    def backup(self, name, snapshot_name, source, hints, from_version):
+    def backup(self, name, snapshot_name, source, hints, from_version, tag=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -543,7 +543,14 @@ class Backy():
 
         self.meta_backend.set_version_valid(version_uid)
 
-        tags = self._generate_auto_tags(name)
+        if tag is not None:
+            if isinstance(tag, list):
+                tags = tag
+            else:
+                tags = []
+                tags.append(tag)
+        else:
+            tags = self._generate_auto_tags(name)
         for tag in tags:
             self.meta_backend.add_tag(version_uid, tag)
 
@@ -624,5 +631,3 @@ class Backy():
 
     def import_(self, f):
         self.meta_backend.import_(f)
-
-
