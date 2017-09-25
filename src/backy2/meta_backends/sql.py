@@ -546,18 +546,37 @@ class MetaBackend(_MetaBackend):
             protected=version_protected,
             )
         self.session.add(version)
-        for uid, version_uid, id, date, checksum, size, valid in _csv:
-            block = Block(
-                uid=uid,
-                version_uid=version_uid,
-                id=id,
-                date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
-                checksum=checksum,
-                size=size,
-                valid=valid,
-            )
-            self.session.add(block)
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # SQLAlchemy Bug
+        # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
+        #
+        # """
+        # Within the same class, the order is indeed determined by the order
+        # that add was called. However, you may see different orderings in the
+        # INSERTs between different classes. If you add object a of type A and
+        # later add object b of type B, but a turns out to have a foreign key
+        # to b, you'll see an INSERT for b before the INSERT for a.
+        # """
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         self.session.commit()
+        # and because of this bug we must also try/except here instead of
+        # simply leaving this to the database's transaction handling.
+        try:
+            for uid, version_uid, id, date, checksum, size, valid in _csv:
+                block = Block(
+                    uid=uid,
+                    version_uid=version_uid,
+                    id=id,
+                    date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
+                    checksum=checksum,
+                    size=size,
+                    valid=valid,
+                )
+                self.session.add(block)
+        except:  # see above
+            self.rm_version(version_uid)
+        finally:
+            self.session.commit()
 
 
     def close(self):
