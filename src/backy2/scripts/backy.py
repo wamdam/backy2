@@ -369,7 +369,7 @@ def main():
     parser.add_argument(
         '-V', '--version', action='store_true', help='Show version')
     parser.add_argument(
-        '-c', '--config-file', default=None, type=str)
+        '-c', '--configfile', default=None, type=str)
 
     subparsers = parser.add_subparsers()
 
@@ -550,8 +550,8 @@ def main():
     else:
         console_level = logging.INFO
 
-    if args.config is not None and args.config != '':
-        Config = partial(_Config, conf_name='backy' + '_' + args.config)
+    if args.configfile is not None and args.configfile != '':
+        Config = partial(_Config, conf_name='backy' + '_' + args.configfile)
     else:
         Config = partial(_Config, conf_name='backy')
     config = Config(section='DEFAULTS')
@@ -567,7 +567,7 @@ def main():
 
     # Pass over to function
     func_args = dict(args._get_kwargs())
-    del func_args['config']
+    del func_args['configfile']
     del func_args['func']
     del func_args['verbose']
     del func_args['version']
