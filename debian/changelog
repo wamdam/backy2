@@ -1,3 +1,10 @@
+backy2 (2.9.14) unstable; urgency=low
+
+  * Bugfix: Individual configfile option didn't work as expected.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 26 Sep 2017 08:45:05 +0200
+
+
 backy2 (2.9.13) unstable; urgency=low
 
   * Individual tags on backup command (thanks gschoenberger)
