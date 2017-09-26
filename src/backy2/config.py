@@ -42,6 +42,12 @@ class Config(object):
     SECTION = 'DEFAULTS'
 
     def __init__(self, cfg=None, extra_sources=(), section=None, conf_name=None):
+        """
+            cfg may be a string containing a configuration.
+            extra_sources is a list of explicit filenames to parse.
+            section initializes this class to default to this section.
+            conf_name, if given, is resolved to {conf_name}.cfg in several places (see _getsources)
+        """
         if section is not None:
             self.SECTION = section
         if cfg is None:
@@ -49,7 +55,7 @@ class Config(object):
             self.cp.readfp(StringIO(default_config))
             if conf_name:
                 sources = self._getsources(conf_name)
-            self.cp.read(sources)
+                self.cp.read(sources)
             for fp in extra_sources:
                 self.cp.readfp(fp)
         else:

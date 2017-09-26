@@ -551,7 +551,12 @@ def main():
         console_level = logging.INFO
 
     if args.configfile is not None and args.configfile != '':
-        Config = partial(_Config, conf_name='backy' + '_' + args.configfile)
+        try:
+            cfg = open(args.configfile, 'r', encoding='utf-8').read()
+        except FileNotFoundError:
+            logger.error('File not found: {}'.format(args.configfile))
+            sys.exit(1)
+        Config = partial(_Config, cfg=cfg)
     else:
         Config = partial(_Config, conf_name='backy')
     config = Config(section='DEFAULTS')
