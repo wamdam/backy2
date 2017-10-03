@@ -65,7 +65,7 @@ release: env build/backy2.pex deb
 	@echo "Releasing at github"
 	git push github
 	# create release
-	curl --data '{"tag_name": "v$(CURRENT_VERSION)", "target_commitish": "master", "name": "$(CURRENT_VERSION)", "body": "Release $(CURRENT_VERSION)", "draft": true, "prerelease": true}' https://api.github.com/repos/wamdam/backy2/releases?access_token=$(GITHUB_ACCESS_TOKEN)
+	curl --data '{"tag_name": "v$(CURRENT_VERSION)", "target_commitish": "master", "name": "$(CURRENT_VERSION)", "body": "Release $(CURRENT_VERSION)", "draft": false, "prerelease": false}' https://api.github.com/repos/wamdam/backy2/releases?access_token=$(GITHUB_ACCESS_TOKEN)
 	# upload sdist, deb and pex release
 	RELEASE_ID=$$(curl -sH "Authorization: token $(GITHUB_ACCESS_TOKEN)" https://api.github.com/repos/wamdam/backy2/releases/tags/v$(CURRENT_VERSION) | grep -m 1 "id.:" | grep -w id | tr : = | tr -cd '=[[:alnum:]]' | cut -d '=' -f 2); \
 	curl -i -H "Authorization: token $(GITHUB_ACCESS_TOKEN)" -H "Accept: application/vnd.github.manifold-preview" -H "Content-Type: binary/octet-stream" --data-binary @dist/backy2_$(CURRENT_VERSION)_all.deb https://uploads.github.com/repos/wamdam/backy2/releases/$$RELEASE_ID/assets\?name\=backy2_$(CURRENT_VERSION)_all.deb; \
