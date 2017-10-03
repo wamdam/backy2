@@ -49,3 +49,4 @@ debian/backy2/
 debian/files
 debian/debhelper-build-stamp
 dist
+.github-access-token
