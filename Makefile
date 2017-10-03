@@ -4,6 +4,9 @@ PYTEST=env/bin/py.test
 PEX=env/bin/pex
 PEXCACHE=build/.pex
 
+CURRENT_VERSION := $(shell python3 setup.py --version)
+GITHUB_ACCESS_TOKEN := $(shell cat .github-access-token)
+
 all: build/backy2.pex deb
 
 .PHONY : deb
@@ -46,6 +49,24 @@ smoketest: env
 
 .PHONY : release
 release: env
+	@echo ""
+	@echo "--------------------------------------------------------------------------------"
+	@echo Releasing Version $(CURRENT_VERSION)
+
+	# pypi release
+	@echo "--------------------------------------------------------------------------------"
+	@echo Pypi...
 	$(PYTHON) setup.py sdist upload
 
-# TODO: release to github, update docs and upload new docs to website
+	# github release
+	@echo "--------------------------------------------------------------------------------"
+	@echo "Releasing at github"
+	git push github
+	curl --data '{"tag_name": "v$(CURRENT_VERSION)", "target_commitish": "master", "name": "$(CURRENT_VERSION)", "body": "Release $(CURRENT_VERSION)", "draft": true, "prerelease": true}' https://api.github.com/repos/wamdam/backy2/releases?access_token=$(GITHUB_ACCESS_TOKEN)
+
+	# docs release
+	@echo "--------------------------------------------------------------------------------"
+	@echo "Releasing docs and website"
+	cd docs && $(MAKE) html
+	cd website && ./sync.sh
+
