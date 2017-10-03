@@ -12,6 +12,8 @@ all: build/backy2.pex deb
 .PHONY : deb
 deb:
 	fakeroot make -f debian/rules binary
+	mkdir -p dist
+	ln -f ../backy2_$(CURRENT_VERSION)_all.deb dist
 
 env: setup.py
 	virtualenv -p python3 env
@@ -48,7 +50,7 @@ smoketest: env
 	$(PYTHON) smoketest.py
 
 .PHONY : release
-release: env
+release: env build/backy2.pex deb
 	@echo ""
 	@echo "--------------------------------------------------------------------------------"
 	@echo Releasing Version $(CURRENT_VERSION)
@@ -62,7 +64,13 @@ release: env
 	@echo "--------------------------------------------------------------------------------"
 	@echo "Releasing at github"
 	git push github
+	# create release
 	curl --data '{"tag_name": "v$(CURRENT_VERSION)", "target_commitish": "master", "name": "$(CURRENT_VERSION)", "body": "Release $(CURRENT_VERSION)", "draft": true, "prerelease": true}' https://api.github.com/repos/wamdam/backy2/releases?access_token=$(GITHUB_ACCESS_TOKEN)
+	# upload sdist, deb and pex release
+	RELEASE_ID=$$(curl -sH "Authorization: token $(GITHUB_ACCESS_TOKEN)" https://api.github.com/repos/wamdam/backy2/releases/tags/v$(CURRENT_VERSION) | grep -m 1 "id.:" | grep -w id | tr : = | tr -cd '=[[:alnum:]]' | cut -d '=' -f 2); \
+	curl -i -H "Authorization: token $(GITHUB_ACCESS_TOKEN)" -H "Accept: application/vnd.github.manifold-preview" -H "Content-Type: binary/octet-stream" --data-binary @dist/backy2_$(CURRENT_VERSION)_all.deb https://uploads.github.com/repos/wamdam/backy2/releases/$$RELEASE_ID/assets\?name\=backy2_$(CURRENT_VERSION)_all.deb; \
+	curl -i -H "Authorization: token $(GITHUB_ACCESS_TOKEN)" -H "Accept: application/vnd.github.manifold-preview" -H "Content-Type: binary/octet-stream" --data-binary @build/backy2.pex https://uploads.github.com/repos/wamdam/backy2/releases/$$RELEASE_ID/assets\?name\=backy2.pex; \
+	curl -i -H "Authorization: token $(GITHUB_ACCESS_TOKEN)" -H "Accept: application/vnd.github.manifold-preview" -H "Content-Type: binary/octet-stream" --data-binary @dist/backy2-$(CURRENT_VERSION).tar.gz https://uploads.github.com/repos/wamdam/backy2/releases/$$RELEASE_ID/assets\?name\=bacly2_$(CURRENT_VERSION).tar.gz
 
 	# docs release
 	@echo "--------------------------------------------------------------------------------"
@@ -70,3 +78,5 @@ release: env
 	cd docs && $(MAKE) html
 	cd website && ./sync.sh
 
+.PHONY : bbb
+bbb:
