@@ -43,3 +43,9 @@ test: info
 .PHONY : smoketest
 smoketest: env
 	$(PYTHON) smoketest.py
+
+.PHONY : release
+release: env
+	$(PYTHON) setup.py sdist upload
+
+# TODO: release to github, update docs and upload new docs to website

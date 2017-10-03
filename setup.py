@@ -6,10 +6,8 @@ version = '2.9.14'
 setup(name='backy2',
     version=version,
     description="A block / disk based backup and restore solution",
-    long_description="""\
-            """,
-    classifiers="""
-Development Status :: 4 - Beta
+    long_description=open('README.rst', 'r', encoding='utf-8').read(),
+    classifiers="""Development Status :: 4 - Beta
 Environment :: Console
 Intended Audience :: System Administrators
 License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)
@@ -26,7 +24,7 @@ Topic :: System :: Archiving :: Backup
     keywords='backup',
     author='Daniel Kraft <daniel.kraft@d9t.de>',
     author_email='daniel.kraft@d9t.de',
-    url='https://d9t.de/',
+    url='http://backy2.com/',
     license='LGPL-3',
     packages=find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
     package_dir={
