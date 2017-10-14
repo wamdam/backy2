@@ -19,7 +19,7 @@ deb:
 env: setup.py
 	virtualenv -p python3 env
 	$(PYTHON) setup.py develop
-	$(PIP) install pex==1.1.0
+	$(PIP) install pex==1.2.13
 	$(PIP) install -r requirements_tests.txt
 	$(PIP) install -r requirements_docs.txt
 
