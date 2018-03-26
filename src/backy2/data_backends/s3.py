@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 from backy2.utils import TokenBucket
-import boto.exception
-import boto.s3.connection
+import boto3
+from botocore.exceptions import ClientError
+from botocore.client import Config
 import hashlib
 import os
 import queue
@@ -35,7 +35,6 @@ class DataBackend(_DataBackend):
         bucket_name = config.get('bucket_name', 'backy2')
         simultaneous_writes = config.getint('simultaneous_writes', 1)
         simultaneous_reads = config.getint('simultaneous_reads', 1)
-        calling_format=boto.s3.connection.OrdinaryCallingFormat()
         bandwidth_read = config.getint('bandwidth_read', 0)
         bandwidth_write = config.getint('bandwidth_write', 0)
 
@@ -44,26 +43,49 @@ class DataBackend(_DataBackend):
         self.write_throttling = TokenBucket()
         self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
 
-        self.conn = boto.connect_s3(
+        self.conn = boto3.client(
+                's3',
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
                 host=host,
                 port=port,
                 is_secure=is_secure,
-                calling_format=calling_format
+                config=Config(s3={'addressing_style': 'path'})
             )
         # create our bucket
+        exists = True
+        self.bucket_name = bucket_name
         try:
-            self.bucket = self.conn.create_bucket(bucket_name)
-        except boto.exception.S3CreateError:
-            # exists...
-            pass
+            self.bucket = self.conn.meta.client.head_bucket(Bucket=bucket_name)
+        except ClientError as e:
+            error_code = int(e.response['Error']['Code'])
+            if error_code == 404:
+                # Doesn't exists...
+                exists = False
+            else:
+                # e.g. 403 Forbidden -> ACL forbids access
+                self.fatal_error = e
+                logger.error('Fatal error, dying: {}'.format(e))
+                print('Fatal error: {}'.format(e))
+                exit(10)
         except OSError as e:
             # no route to host
             self.fatal_error = e
             logger.error('Fatal error, dying: {}'.format(e))
             print('Fatal error: {}'.format(e))
             exit(10)
+
+        if not exists:
+            try:
+                self.conn.create_bucket(Bucker=bucket_name)
+            except (
+                    OSError,
+                    ClientError,
+            ) as e:
+                self.fatal_error = e
+                logger.error('Fatal error, dying: {}'.format(e))
+                print('Fatal error: {}'.format(e))
+                exit(10)
 
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
@@ -94,28 +116,22 @@ class DataBackend(_DataBackend):
             uid, data = entry
             time.sleep(self.write_throttling.consume(len(data)))
             t1 = time.time()
-            key = self.bucket.new_key(uid)
+            object = self.conn.Object(self.bucket_name, uid)
             try:
-                r = key.set_contents_from_string(data)
+                r = object.put(Body=data)
             except (
                     OSError,
-                    boto.exception.BotoServerError,
-                    boto.exception.S3ResponseError,
+                    ClientError,
                     ) as e:
                 # OSError happens when the S3 host is gone (i.e. network died,
                 # host down, ...). boto tries hard to recover, however after
                 # several attempts it will give up and raise.
-                # BotoServerError happens, when there is no server.
-                # S3ResponseError sometimes happens, when the cluster is about
-                # to shutdown. Hard to reproduce because the writer must write
-                # in exactly this moment.
-                # We let the backup job die here fataly.
                 self.fatal_error = e
                 logger.error('Fatal error, dying: {}'.format(e))
                 #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
                 os._exit(11)
             t2 = time.time()
-            assert r == len(data)
+            assert r['ContentLength'] == len(data)
             self._write_queue.task_done()
             logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
 
@@ -140,12 +156,16 @@ class DataBackend(_DataBackend):
 
 
     def read_raw(self, block_uid):
-        key = self.bucket.get_key(block_uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(block_uid))
+        object = self.conn.Object(self.bucket_name, block_uid)
         while True:
             try:
-                data = key.get_contents_as_string()
+                data = object.get()['Body'].read()
+            except ClientError as e:
+                error_code = int(e.response['Error']['Code'])
+                if error_code == 404:
+                    raise FileNotFoundError('UID {} not found.'.format(block_uid))
+                else:
+                    raise e
             except socket.timeout:
                 logger.error('Timeout while fetching from s3, trying again.')
                 pass
@@ -176,21 +196,40 @@ class DataBackend(_DataBackend):
 
 
     def rm(self, uid):
-        key = self.bucket.get_key(uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(uid))
-        self.bucket.delete_key(uid)
+        try:
+            object = self.conn.Object(self.bucket_name, uid).load()
+        except ClientError as e:
+            error_code = int(e.response['Error']['Code'])
+            if error_code == 404:
+                raise FileNotFoundError('UID {} not found.'.format(uid))
+            else:
+                raise e
+        object.delete()
 
 
     def rm_many(self, uids):
         """ Deletes many uids from the data backend and returns a list
         of uids that couldn't be deleted.
         """
-        errors = self.bucket.delete_keys(uids, quiet=True)
-        if errors.errors:
+        # Amazon (at least) only handles 1000 deletes at a time
+        # Split list into parts of at most 1000 elements
+        uids_parts = map(lambda uid: {'Key': uid}, [uids[i:i+1000] for i  in range(0, len(uids), 1000)])
+
+        errors = []
+        for part in uids_parts:
+            response = self.conn.delete_objects(
+                Bucket=self.bucket_name,
+                Delete={
+                    'Objects': part,
+                    'Quiet': True,
+                    }
+            )
+            errors += list(map(lambda object: object['Key'], response['Errors']))
+
+        if len(errors) > 0:
             # unable to test this. ceph object gateway doesn't return errors.
-            # raise FileNotFoundError('UIDS {} not found.'.format(errors.errors))
-            return errors.errors  # TODO: which should be a list of uids.
+            # raise FileNotFoundError('UIDS {} not found.'.format(errors))
+            return errors
 
 
     def read(self, block, sync=False):
@@ -217,7 +256,7 @@ class DataBackend(_DataBackend):
 
 
     def get_all_blob_uids(self, prefix=None):
-        return [k.name for k in self.bucket.list(prefix)]
+        return [object.key for object in self.bucket.objects.filzer(prefix)]
 
 
     def close(self):
