@@ -66,8 +66,8 @@ class Config(object):
         sources = ['/etc/{name}.cfg'.format(name=conf_name)]
         sources.append('/etc/{name}/{name}.cfg'.format(name=conf_name))
         sources.extend(sorted(glob.glob('/etc/{name}/conf.d/*'.format(name=conf_name))))
-        sources.append('~/.{name}.cfg'.format(name=conf_name))
-        sources.append(expanduser('{name}.cfg'.format(name=conf_name)))
+        sources.append(expanduser('~/.{name}.cfg'.format(name=conf_name)))
+        sources.append(expanduser('~/{name}.cfg'.format(name=conf_name)))
         return sources
 
     def _getany(self, method, option, default):
