@@ -43,6 +43,7 @@ Topic :: System :: Archiving :: Backup
         'setproctitle>=1.1.8',
         'python-dateutil>=2.6.0',
         'alembic',
+        #'boto>=2.38.0',
         #'boto3>=1.6.16',
         #'psycopg2>=2.7.4',
         #'pex==1.1.0',
