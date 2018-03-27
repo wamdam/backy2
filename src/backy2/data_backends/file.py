@@ -201,7 +201,9 @@ class DataBackend(_DataBackend):
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
         if offset==0 and length is None:
-            return open(filename, 'rb').read()
+            with open(filename, 'rb') as f:
+                data = f.read()
+            return data
         else:
             with open(filename, 'rb') as f:
                 if offset:
