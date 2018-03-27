@@ -54,7 +54,7 @@ class DataBackend(_DataBackend):
             )
         # create our bucket
         try:
-            self.bucket = self.conn.create_bucket(bucket_name)
+            self.conn.create_bucket(bucket_name)
         except boto.exception.S3CreateError:
             # exists...
             pass
@@ -64,6 +64,8 @@ class DataBackend(_DataBackend):
             logger.error('Fatal error, dying: {}'.format(e))
             print('Fatal error: {}'.format(e))
             exit(10)
+
+        self.bucket = self.conn.get_bucket(bucket_name)
 
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
@@ -203,11 +205,13 @@ class DataBackend(_DataBackend):
                 raise FileNotFoundError('UID {} not found.'.format(block.uid))
             return data
 
-
     def read_get(self):
         block, data = self._read_data_queue.get()
         offset = 0
-        length = len(data)
+        if data is None:
+            length = 0
+        else:
+            length = len(data)
         self._read_data_queue.task_done()
         return block, offset, length, data
 
