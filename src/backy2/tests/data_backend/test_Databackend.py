@@ -107,6 +107,13 @@ class test_Databackend(unittest.TestCase):
 
         self.data_backend.rm(uid)
 
+        try:
+            self.data_backend.rm(uid)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            self.fail()
+
         block = Mock(Block, uid=uid)
         try:
             self.data_backend.read(block, sync=True)
