@@ -19,6 +19,8 @@ class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
+    NAME = "s3_boto3"
+
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
@@ -198,14 +200,17 @@ class DataBackend(_DataBackend):
 
 
     def rm(self, uid):
+        # delete() always returns 204 even when key doesn't exist, so check for existence
         object = self.bucket.Object(uid)
         try:
-            object.delete()
+            object.load()
         except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchKey':
+            if e.response['Error']['Code'] == "404":
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
                 raise e
+        else:
+            object.delete()
 
     def rm_many(self, uids):
         """ Deletes many uids from the data backend and returns a list
@@ -232,7 +237,7 @@ class DataBackend(_DataBackend):
             errors = []
             for uid in uids:
                 try:
-                    self.bucket.Object(uid)
+                    self.bucket.Object(uid).delete()
                 except ClientError as e:
                     errors.append(uid)
 
@@ -281,5 +286,3 @@ class DataBackend(_DataBackend):
             self._read_queue.put(None)  # ends the thread
         for _reader_thread in self._reader_threads:
             _reader_thread.join()
-
-

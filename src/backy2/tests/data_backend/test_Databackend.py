@@ -87,7 +87,7 @@ class test_Databackend(unittest.TestCase):
         saved_uids = self.data_backend.get_all_blob_uids()
         self.assertEqual(0, len(saved_uids))
 
-    def test_rm_many(self):
+    def _test_rm_many(self):
         NUM_BLOBS = 1500
 
         uids = [self.data_backend.save(b'B',_sync=True) for _ in range(NUM_BLOBS)]
@@ -96,6 +96,16 @@ class test_Databackend(unittest.TestCase):
 
         saved_uids = self.data_backend.get_all_blob_uids()
         self.assertEqual(0, len(saved_uids))
+
+    def test_rm_many(self):
+        self._test_rm_many()
+
+    def test_rm_many_wo_multidelete(self):
+        if self.data_backend.NAME == 's3_boto3':
+            self.data_backend.multi_delete = False
+            self._test_rm_many()
+        else:
+            self.skipTest('not applicable to this backend')
 
     def test_not_exists(self):
         uid = self.data_backend.save(b'B',_sync=True)
@@ -107,18 +117,8 @@ class test_Databackend(unittest.TestCase):
 
         self.data_backend.rm(uid)
 
-        try:
-            self.data_backend.rm(uid)
-        except FileNotFoundError:
-            pass
-        except Exception:
-            self.fail()
+        self.assertRaises(FileNotFoundError, lambda: self.data_backend.rm(uid))
 
         block = Mock(Block, uid=uid)
-        try:
-            self.data_backend.read(block, sync=True)
-        except FileNotFoundError:
-            pass
-        except Exception:
-            self.fail()
+        self.assertRaises(FileNotFoundError, lambda: self.data_backend.read(block, sync=True))
 
