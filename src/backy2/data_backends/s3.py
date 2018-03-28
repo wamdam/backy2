@@ -29,6 +29,9 @@ class DataBackend(_DataBackend):
     fatal_error = None
 
     def __init__(self, config):
+
+        super().__init__(config)
+
         aws_access_key_id = config.get('aws_access_key_id')
         aws_secret_access_key = config.get('aws_secret_access_key')
         host = config.get('host')

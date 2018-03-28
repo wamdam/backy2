@@ -39,6 +39,9 @@ class DataBackend(_DataBackend):
 
 
     def __init__(self, config):
+
+        super().__init__(config)
+
         self.path = config.get('path')
         simultaneous_writes = config.getint('simultaneous_writes')
         simultaneous_reads = config.getint('simultaneous_reads', 1)

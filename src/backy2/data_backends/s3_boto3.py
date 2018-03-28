@@ -13,7 +13,6 @@ import shortuuid
 import socket
 import threading
 import time
-import blinker
 
 class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
@@ -26,11 +25,12 @@ class DataBackend(_DataBackend):
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
-
-    signals = blinker.Namespace()
     fatal_error = None
 
     def __init__(self, config):
+
+        super().__init__(config)
+
         aws_access_key_id = config.get('aws_access_key_id')
         aws_secret_access_key = config.get('aws_secret_access_key')
         host = config.get('host')
@@ -126,12 +126,12 @@ class DataBackend(_DataBackend):
             t1 = time.time()
             object = self.bucket.Object(uid)
 
-            context = {'Metadata': {}, 'Data': data}
-            self.signals.signal('writer.compress').send(self, context=context)
-            self.signals.signal('writer.encrypt').send(self, context=context)
+            data, metadata = self.compress(data)
+            data, metadata_2 = self.encrypt(data)
+            metadata.update(metadata_2)
 
             try:
-                r = object.put(Metadata=context['Metadata'], Body=context['Data'])
+                r = object.put(Metadata=metadata, Body=data)
             except (
                     OSError,
                     ClientError,
@@ -185,11 +185,10 @@ class DataBackend(_DataBackend):
                 break
         time.sleep(self.read_throttling.consume(len(data)))
 
-        context = {'Metadata': object['Metadata'], 'Data': data}
-        self.signals.signal('reader.uncompress').send(self, context=context)
-        self.signals.signal('reader.decrypt').send(self, context=context)
+        data = self.decrypt(data, object['Metadata'])
+        data = self.uncompress(data, object['Metadata'])
 
-        return context['Data']
+        return data
 
 
     def _uid(self):
@@ -241,7 +240,6 @@ class DataBackend(_DataBackend):
                     Bucket=self.bucket.name,
                     Delete={
                         'Objects': [{'Key': uid} for uid in part],
-                        #'Quiet': True,
                         }
                 )
                 if 'Errors' in response:
