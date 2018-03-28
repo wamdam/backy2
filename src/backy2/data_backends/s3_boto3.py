@@ -13,7 +13,7 @@ import shortuuid
 import socket
 import threading
 import time
-
+import blinker
 
 class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
@@ -26,6 +26,8 @@ class DataBackend(_DataBackend):
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
+
+    signals = blinker.Namespace()
     fatal_error = None
 
     def __init__(self, config):
@@ -123,8 +125,13 @@ class DataBackend(_DataBackend):
             time.sleep(self.write_throttling.consume(len(data)))
             t1 = time.time()
             object = self.bucket.Object(uid)
+
+            context = {'Metadata': {}, 'Data': data}
+            self.signals.signal('writer.compress').send(self, context=context)
+            self.signals.signal('writer.encrypt').send(self, context=context)
+
             try:
-                r = object.put(Body=data)
+                r = object.put(Metadata=context['Metadata'], Body=context['Data'])
             except (
                     OSError,
                     ClientError,
@@ -164,7 +171,8 @@ class DataBackend(_DataBackend):
         object = self.bucket.Object(block_uid)
         while True:
             try:
-                data = object.get()['Body'].read()
+                object = object.get()
+                data = object['Body'].read()
             except ClientError as e:
                 if e.response['Error']['Code'] == 'NoSuchKey':
                     raise FileNotFoundError('UID {} not found.'.format(block_uid))
@@ -176,7 +184,12 @@ class DataBackend(_DataBackend):
             else:
                 break
         time.sleep(self.read_throttling.consume(len(data)))
-        return data
+
+        context = {'Metadata': object['Metadata'], 'Data': data}
+        self.signals.signal('reader.uncompress').send(self, context=context)
+        self.signals.signal('reader.decrypt').send(self, context=context)
+
+        return context['Data']
 
 
     def _uid(self):
