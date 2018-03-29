@@ -8,7 +8,7 @@ class Encryption:
 
         if 'MasterKey' not in materials:
             raise KeyError('required field MasterKey is missing in encryption materials')
-        master_key = materials['MasterKey']
+        master_key = materials['MasterKey'].encode('utf-8')
 
         self.delegate = CSE(MasterKey=master_key)
 

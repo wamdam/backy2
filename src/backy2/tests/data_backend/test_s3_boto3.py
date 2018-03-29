@@ -18,6 +18,13 @@ class test_Databackend(test_Databackend):
         [DataBackend]
         type: backy2.data_backends.s3_boto3
         
+        compression: backy2.data_backends.compression.zstd
+        compression_default: zstd
+        
+        encryption: backy2.data_backends.encryption.aws_s3_cse
+        encryption_materials: {{"MasterKey": "0000000000000000"}}
+        encryption_default: aws_s3_cse
+        
         aws_access_key_id: minio
         aws_secret_access_key: minio123
         host: 127.0.0.1
@@ -42,7 +49,7 @@ class test_Databackend(test_Databackend):
         """
 
     def setUp(self):
-        super(test_Databackend, self)._setUp(self.CONFIG)
+        super().setUp(self.CONFIG)
 
 if __name__ == '__main__':
     unittest.main()

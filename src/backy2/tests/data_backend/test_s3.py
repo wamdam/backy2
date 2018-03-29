@@ -43,7 +43,7 @@ class test_Databackend(test_Databackend):
         """
 
     def setUp(self):
-        super(test_Databackend, self)._setUp(self.CONFIG)
+        super().setUp(self.CONFIG)
 
 if __name__ == '__main__':
     unittest.main()

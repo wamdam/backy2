@@ -33,9 +33,9 @@ class test_Databackend(unittest.TestCase):
             pass
             shutil.rmtree(self.path)
 
-    def _setUp(self, config):
+    def setUp(self, config):
         self.testpath = self.TestPath()
-        init_logging(None, logging.INFO)
+        init_logging(None, logging.DEBUG)
 
         config = self.CONFIG.format(testpath=self.testpath.path)
         self.config_DataBackend = Config(cfg=config, section='DataBackend')

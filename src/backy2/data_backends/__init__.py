@@ -22,16 +22,17 @@ class DataBackend():
         self.encryption_default = None
         self.compression_default = None
 
-        encryption_type = config.get('encryption', '')
-        if encryption_type != '':
-            materials = json.loads(config.get('encryption_materials', '{}'))
-
-            try:
-                encryption_module = importlib.import_module(encryption_type)
-            except ImportError:
-                raise NotImplementedError('encryption type {} is not supported'.format(encryption_type))
-            else:
-                self.encryption[encryption_module.Encryption.NAME] = encryption_module.Encryption(materials)
+        encryption_types = config.get('encryption', '')
+        if encryption_types != '':
+            encryption_types = [type.strip() for type in encryption_types.split(',')]
+            for encryption_type in encryption_types:
+                materials = json.loads(config.get('encryption_materials', '{}'))
+                try:
+                    encryption_module = importlib.import_module(encryption_type)
+                except ImportError:
+                    raise NotImplementedError('encryption type {} is not supported'.format(encryption_type))
+                else:
+                    self.encryption[encryption_module.Encryption.NAME] = encryption_module.Encryption(materials)
 
         encryption_default = config.get('encryption_default', '')
         if encryption_default != '' and encryption_default != 'none':
@@ -40,16 +41,17 @@ class DataBackend():
             else:
                 raise NotImplementedError('encryption default {} is not supported'.format(encryption_type))
 
-        compression_type = config.get('compression', '')
-        if compression_type != '':
-            materials = json.loads(config.get('compression_materials', '{}'))
-
-            try:
-                compression_module = importlib.import_module(compression_type)
-            except ImportError:
-                raise NotImplementedError('compression type {} is not supported'.format(compression_type))
-            else:
-                self.compression[compression_module.Compression.NAME] = compression_module.Compression(materials)
+        compression_types = config.get('compression', '')
+        if compression_types != '':
+            compression_types = [type.strip() for type in compression_types.split(',')]
+            for compression_type in compression_types:
+                materials = json.loads(config.get('compression_materials', '{}'))
+                try:
+                    compression_module = importlib.import_module(compression_type)
+                except ImportError:
+                    raise NotImplementedError('compression type {} is not supported'.format(compression_type))
+                else:
+                    self.compression[compression_module.Compression.NAME] = compression_module.Compression(materials)
 
         compression_default = config.get('compression_default', '')
         if compression_default != '' and compression_default != 'none':
@@ -113,7 +115,9 @@ class DataBackend():
 
     def compress(self, data):
         if self.compression_default is not None:
-            return self.compression_default.compress(data), {self._COMPRESSION_HEADER: self.compression_default.NAME}
+            data, metadata = self.compression_default.compress(data)
+            metadata[self._COMPRESSION_HEADER] = self.compression_default.NAME
+            return data, metadata
         else:
             return data, {}
 
