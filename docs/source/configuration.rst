@@ -25,6 +25,7 @@ backy2 will per default search the following locations for configuration files:
 * /etc/backy/backy.cfg
 * /etc/backy/conf.d/*
 * ~/.backy.cfg
+* ~/backy.cfg
 
 In case multiple of these configurations exist, they are read in this order (later options
 overwrite earier ones).
