@@ -3,11 +3,12 @@
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 from collections import namedtuple
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, SmallInteger
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import DateTime
+from sqlalchemy.types import DateTime, TypeDecorator
+from binascii import hexlify, unhexlify
 import csv
 import datetime
 import os
@@ -29,7 +30,7 @@ Base = declarative_base()
 class Stats(Base):
     __tablename__ = 'stats'
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    version_uid = Column(String(36), primary_key=True)
+    version_uid = Column(Integer, primary_key=True)
     version_name = Column(String, nullable=False)
     version_size_bytes = Column(BigInteger, nullable=False)
     version_size_blocks = Column(BigInteger, nullable=False)
@@ -46,14 +47,14 @@ class Stats(Base):
 
 class Version(Base):
     __tablename__ = 'versions'
-    uid = Column(String(36), primary_key=True)
+    uid = Column(Integer, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     name = Column(String, nullable=False, default='')
     snapshot_name = Column(String, nullable=False, server_default='', default='')
-    size = Column(BigInteger, nullable=False)
+    size = Column(Integer, nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
-    valid = Column(Integer, nullable=False)
-    protected = Column(Integer, nullable=False)
+    valid = Column(Boolean, nullable=False)
+    protected = Column(Boolean, nullable=False)
     tags = sqlalchemy.orm.relationship(
             "Tag",
             backref="version",
@@ -67,24 +68,36 @@ class Version(Base):
 
 class Tag(Base):
     __tablename__ = 'tags'
-    version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    version_uid = Column(Integer, ForeignKey('versions.uid'), primary_key=True, nullable=False)
     name = Column(String, nullable=False, primary_key=True)
 
     def __repr__(self):
        return "<Tag(version_uid='%s', name='%s')>" % (
                             self.version_uid, self.name)
 
+class Checksum(TypeDecorator):
+
+    impl = LargeBinary
+
+    def process_bind_param(self, value, dialect):
+        return unhexlify(value)
+
+    def process_result_value(self, value, dialect):
+        return hexlify(value)
+
+    def copy(self, **kw):
+        return Checksum(self.impl.length)
 
 DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
 class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
-    version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    version_uid = Column(Integer, ForeignKey('versions.uid'), primary_key=True, nullable=False)
     id = Column(Integer, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    checksum = Column(String(128), index=True, nullable=True)
-    size = Column(BigInteger, nullable=True)
-    valid = Column(Integer, nullable=False)
+    checksum = Column(Checksum(64), index=True, nullable=True)
+    size = Column(Integer, nullable=True)
+    valid = Column(Boolean, nullable=False)
 
 
     def deref(self):
@@ -115,8 +128,8 @@ class DeletedBlock(Base):
     __tablename__ = 'deleted_blocks'
     id = Column(Integer, primary_key=True)
     uid = Column(String(32), nullable=True, index=True)
-    size = Column(BigInteger, nullable=True)
-    delete_candidate = Column(Integer, nullable=False)
+    size = Column(Integer, nullable=True)
+    delete_candidate = Column(SmallInteger, nullable=False)
     # we need a date in order to find only delete candidates that are older than 1 hour.
     time = Column(BigInteger, default=inttime, nullable=False)
 
@@ -177,18 +190,12 @@ class MetaBackend(_MetaBackend):
             command.stamp(alembic_cfg, "head")
 
 
-    def _uid(self):
-        return str(uuid.uuid1())
-
-
     def _commit(self):
         self.session.commit()
 
 
     def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=0):
-        uid = self._uid()
         version = Version(
-            uid=uid,
             name=version_name,
             snapshot_name=snapshot_name,
             size=size,
@@ -198,7 +205,7 @@ class MetaBackend(_MetaBackend):
             )
         self.session.add(version)
         self.session.commit()
-        return uid
+        return version.uid
 
 
     def set_stats(self, version_uid, version_name, version_size_bytes,
