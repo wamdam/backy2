@@ -115,9 +115,12 @@ class DataBackend():
 
     def compress(self, data):
         if self.compression_default is not None:
-            data, metadata = self.compression_default.compress(data)
-            metadata[self._COMPRESSION_HEADER] = self.compression_default.NAME
-            return data, metadata
+            compressed_data, metadata = self.compression_default.compress(data)
+            if len(compressed_data) < len(data):
+                metadata[self._COMPRESSION_HEADER] = self.compression_default.NAME
+                return compressed_data, metadata
+            else:
+                return data, {}
         else:
             return data, {}
 
