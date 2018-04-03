@@ -1,8 +1,8 @@
 import unittest
 
-from .test_Databackend import test_Databackend
+from . import DatabackendTestCase
 
-class test_Databackend(test_Databackend):
+class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
         [DEFAULTS]
         logfile: /dev/stderr

@@ -18,8 +18,6 @@ class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
-    NAME = "s3_boto3"
-
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 

@@ -26,8 +26,6 @@ class DataBackend(_DataBackend):
     starting with the bytes of the generated uid. The depth of this structure
     is configurable via the DEPTH parameter, which defaults to 2. """
 
-    NAME = 'file'
-
     DEPTH = 2
     SPLIT = 2
     SUFFIX = '.blob'
