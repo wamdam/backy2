@@ -1,7 +1,20 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import hashlib
+import queue
+import threading
+import time
+
+import os
+
 import importlib
 import json
+
+import shortuuid
+
+from backy2.logging import logger
+from backy2.utils import TokenBucket
+
 
 class DataBackend():
     """ Holds BLOBs
@@ -64,13 +77,11 @@ class DataBackend():
         """ Saves data, returns unique ID """
         raise NotImplementedError()
 
-
     def update(self, uid, data, offset=0):
         """ Updates data, returns written bytes.
         This is only available on *some* data backends.
         """
         raise NotImplementedError()
-
 
     def read(self, uid, offset=0, length=None):
         """ Returns b'<data>' or raises FileNotFoundError.
@@ -78,18 +89,15 @@ class DataBackend():
         """
         raise NotImplementedError()
 
-
     def rm(self, uid):
         """ Deletes a block """
         raise NotImplementedError()
-
 
     def rm_many(self, uids):
         """ Deletes many uids from the data backend and returns a list
         of uids that couldn't be deleted.
         """
         raise NotImplementedError()
-
 
     def get_all_blob_uids(self, prefix=None):
         """ Get all existing blob uids """
@@ -136,3 +144,139 @@ class DataBackend():
 
     def close(self):
         pass
+
+class ROSDataBackend(DataBackend):
+    """Parent class for data backends using a remote object storage"""
+
+    fatal_error = None
+
+    def __init__(self, config):
+
+        super().__init__(config)
+
+        simultaneous_writes = config.getint('simultaneous_writes', 1)
+        simultaneous_reads = config.getint('simultaneous_reads', 1)
+        bandwidth_read = config.getint('bandwidth_read', 0)
+        bandwidth_write = config.getint('bandwidth_write', 0)
+
+        self.read_throttling = TokenBucket()
+        self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
+        self.write_throttling = TokenBucket()
+        self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
+
+        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
+        self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
+        self._write_queue = queue.Queue(self.write_queue_length)
+        self._read_queue = queue.Queue()
+        self._read_data_queue = queue.Queue(self.read_queue_length)
+        self._writer_threads = []
+        self._reader_threads = []
+        for i in range(simultaneous_writes):
+            _writer_thread = threading.Thread(target=self._writer, args=(i,))
+            _writer_thread.daemon = True
+            _writer_thread.start()
+            self._writer_threads.append(_writer_thread)
+        for i in range(simultaneous_reads):
+            _reader_thread = threading.Thread(target=self._reader, args=(i,))
+            _reader_thread.daemon = True
+            _reader_thread.start()
+            self._reader_threads.append(_reader_thread)
+
+    def _fatal_error(self, exception):
+        self.fatal_error = exception
+        logger.error('Fatal error, dying: {}'.format(exception))
+        #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
+        os._exit(11)
+
+    def _writer(self, id_):
+        """ A threaded background writer """
+        while True:
+            entry = self._write_queue.get()
+            if entry is None or self.fatal_error:
+                logger.debug("Writer {} finishing.".format(id_))
+                break
+            uid, data = entry
+            time.sleep(self.write_throttling.consume(len(data)))
+            t1 = time.time()
+            try:
+                data, metadata = self.compress(data)
+                data, metadata_2 = self.encrypt(data)
+                metadata.update(metadata_2)
+
+                self._write_raw(uid, data, metadata)
+            except Exception as exception:
+                self._fatal_error(exception) # does not return
+            t2 = time.time()
+            self._write_queue.task_done()
+            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+
+    def _reader(self, id_):
+        """ A threaded background reader """
+        while True:
+            block = self._read_queue.get()  # contains block
+            if block is None or self.fatal_error:
+                logger.debug("Reader {} finishing.".format(id_))
+                break
+            t1 = time.time()
+            try:
+                data, metadata = self._read_raw(block.uid)
+                data = self.decrypt(data, metadata)
+                data = self.uncompress(data, metadata)
+            except FileNotFoundError:
+                self._read_data_queue.put((block, None))  # catch this!
+            except Exception as exception:
+                self._fatal_error(exception) # does not return
+            else:
+                self._read_data_queue.put((block, data))
+                time.sleep(self.read_throttling.consume(len(data)))
+                t2 = time.time()
+                self._read_queue.task_done()
+                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
+
+    def _uid(self):
+        # 32 chars are allowed and we need to spread the first few chars so
+        # that blobs are distributed nicely. And want to avoid hash collisions.
+        # So we create a real base57-encoded uuid (22 chars) and prefix it with
+        # its own md5 hash[:10].
+        suuid = shortuuid.uuid()
+        hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
+        return hash[:10] + suuid
+
+    def save(self, data, _sync=False):
+        if self.fatal_error:
+            raise self.fatal_error
+        uid = self._uid()
+        self._write_queue.put((uid, data))
+        if _sync:
+            self._write_queue.join()
+        return uid
+
+    def read(self, block, sync=False):
+        self._read_queue.put(block)
+        if sync:
+            rblock, offset, length, data = self.read_get()
+            if rblock.id != block.id:
+                raise RuntimeError('Do not mix threaded reading with sync reading!')
+            if data is None:
+                raise FileNotFoundError('UID {} not found.'.format(block.uid))
+            return data
+
+    def read_get(self):
+        block, data = self._read_data_queue.get()
+        offset = 0
+        if data is None:
+            length = 0
+        else:
+            length = len(data)
+        self._read_data_queue.task_done()
+        return block, offset, length, data
+
+    def close(self):
+        for _writer_thread in self._writer_threads:
+            self._write_queue.put(None)  # ends the thread
+        for _writer_thread in self._writer_threads:
+            _writer_thread.join()
+        for _reader_thread in self._reader_threads:
+            self._read_queue.put(None)  # ends the thread
+        for _reader_thread in self._reader_threads:
+            _reader_thread.join()
