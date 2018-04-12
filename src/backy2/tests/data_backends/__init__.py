@@ -1,5 +1,6 @@
 import logging
 import string
+from queue import Empty
 
 import importlib
 import random
@@ -52,7 +53,7 @@ class DatabackendTestCase(object):
         self.data_backend.close()
         self.testpath.close()
 
-    def test_save_rm(self):
+    def test_save_rm_sync(self):
         NUM_BLOBS = 15
         BLOB_SIZE = 4096
 
@@ -87,8 +88,54 @@ class DatabackendTestCase(object):
         saved_uids = self.data_backend.get_all_blob_uids()
         self.assertEqual(0, len(saved_uids))
 
+    def test_save_rm_async(self):
+        NUM_BLOBS = 15
+        BLOB_SIZE = 4096
+
+        saved_uids = self.data_backend.get_all_blob_uids()
+        self.assertEqual(0, len(saved_uids))
+
+        data_by_uid = {}
+        for _ in range(NUM_BLOBS):
+            data = self.random_bytes(BLOB_SIZE)
+            self.assertEqual(BLOB_SIZE, len(data))
+            uid = self.data_backend.save(data)
+            data_by_uid[uid] = data
+        uids = list(data_by_uid.keys())
+        self.assertEqual(NUM_BLOBS, len(uids))
+
+        self.data_backend.wait_write_finished()
+
+        saved_uids = self.data_backend.get_all_blob_uids()
+        self.assertEqual(NUM_BLOBS, len(saved_uids))
+
+        uids_set = set(uids)
+        saved_uids_set = set(saved_uids)
+        self.assertEqual(NUM_BLOBS, len(uids_set))
+        self.assertEqual(NUM_BLOBS, len(saved_uids_set))
+        self.assertEqual(0, len(uids_set.symmetric_difference(saved_uids_set)))
+
+        for uid in uids:
+            block = Mock(Block, uid=uid)
+            self.data_backend.read(block)
+
+        self.data_backend.wait_read_finished()
+
+        for _ in uids:
+            block, offset, length, data = self.data_backend.read_get(qtimeout=1)
+            self.assertEqual(0, offset)
+            self.assertEqual(BLOB_SIZE, length)
+            self.assertEqual(data_by_uid[block.uid], data)
+
+        self.assertRaises(Empty, lambda: self.data_backend.read_get(qtimeout=1))
+
+        for uid in uids:
+            self.data_backend.rm(uid)
+        saved_uids = self.data_backend.get_all_blob_uids()
+        self.assertEqual(0, len(saved_uids))
+
     def _test_rm_many(self):
-        NUM_BLOBS = 1500
+        NUM_BLOBS = 15
 
         uids = [self.data_backend.save(b'B',_sync=True) for _ in range(NUM_BLOBS)]
 
