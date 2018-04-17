@@ -14,8 +14,9 @@ import logging
 import sys
 
 
-import pkg_resources
-__version__ = pkg_resources.get_distribution('backy2').version
+#import pkg_resources
+#__version__ = pkg_resources.get_distribution('backy2').version
+__version__ = '2.9.17'
 
 
 class Commands():
