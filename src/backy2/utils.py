@@ -4,10 +4,13 @@
 from functools import partial
 from time import time
 from threading import Lock
+from ast import literal_eval
 import itertools
 import hashlib
 import importlib
 import json
+
+from backy2.logging import logger
 
 
 def hints_from_rbd_diff(rbd_diff):
@@ -17,12 +20,28 @@ def hints_from_rbd_diff(rbd_diff):
     return [(l['offset'], l['length'], False if l['exists']=='false' or not l['exists'] else True) for l in data]
 
 
+def parametrized_hash_function(config_hash_function):
+    hash_name = None
+    hash_args = None
+    try:
+        hash_name, hash_args = config_hash_function.split(',', 1)
+    except:
+        hash_name = config_hash_function
+    hash_function = getattr(hashlib, hash_name)
+    if hash_function is None:
+        raise NotImplementedError('Unsupported hash function {}'.format(hash_name))
+    kwargs = {}
+    if hash_args is not None:
+        kwargs = dict((k, literal_eval(v)) for k, v in (pair.split('=') for pair in hash_args.split(',')))
+    logger.info('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
+    return hash_function(**kwargs)
+
 def backy_from_config(Config):
     """ Create a partial backy class from a given Config object
     """
     config_DEFAULTS = Config(section='DEFAULTS')
     block_size = config_DEFAULTS.getint('block_size')
-    hash_function = getattr(hashlib, config_DEFAULTS.get('hash_function', 'sha512'))
+    hash_function = parametrized_hash_function(config_DEFAULTS.get('hash_function', 'sha512'))
     lock_dir = config_DEFAULTS.get('lock_dir', None)
     process_name = config_DEFAULTS.get('process_name', 'backy2')
 

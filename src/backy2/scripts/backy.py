@@ -3,7 +3,7 @@
 
 from backy2.config import Config as _Config
 from backy2.logging import logger, init_logging
-from backy2.utils import hints_from_rbd_diff, backy_from_config
+from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_hash_function
 from functools import partial
 from io import StringIO
 from prettytable import PrettyTable
@@ -303,7 +303,7 @@ class Commands():
         backy = self.backy()
         config_NBD = self.Config(section='NBD')
         config_DEFAULTS = self.Config(section='DEFAULTS')
-        hash_function = getattr(hashlib, config_DEFAULTS.get('hash_function', 'sha512'))
+        hash_function = parametrized_hash_function(config_DEFAULTS.get('hash_function', 'sha512'))
         store = BackyStore(
                 backy, cachedir=config_NBD.get('cachedir'),
                 hash_function=hash_function,
