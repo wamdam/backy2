@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-from configparser import SafeConfigParser, NoSectionError, NoOptionError
+from configparser import ConfigParser, NoSectionError, NoOptionError
 from io import StringIO
 from os.path import expanduser
 import glob
@@ -51,23 +51,23 @@ class Config(object):
         if section is not None:
             self.SECTION = section
         if cfg is None:
-            self.cp = SafeConfigParser()
-            self.cp.readfp(StringIO(default_config))
+            self.cp = ConfigParser()
+            self.cp.read_file(StringIO(default_config))
             if conf_name:
                 sources = self._getsources(conf_name)
                 self.cp.read(sources)
             for fp in extra_sources:
-                self.cp.readfp(fp)
+                self.cp.read_file(fp)
         else:
-            self.cp = SafeConfigParser()
-            self.cp.readfp(StringIO(cfg))
+            self.cp = ConfigParser()
+            self.cp.read_file(StringIO(cfg))
 
     def _getsources(self, conf_name):
         sources = ['/etc/{name}.cfg'.format(name=conf_name)]
         sources.append('/etc/{name}/{name}.cfg'.format(name=conf_name))
         sources.extend(sorted(glob.glob('/etc/{name}/conf.d/*'.format(name=conf_name))))
-        sources.append('~/.{name}.cfg'.format(name=conf_name))
-        sources.append(expanduser('{name}.cfg'.format(name=conf_name)))
+        sources.append(expanduser('~/.{name}.cfg'.format(name=conf_name)))
+        sources.append(expanduser('~/{name}.cfg'.format(name=conf_name)))
         return sources
 
     def _getany(self, method, option, default):

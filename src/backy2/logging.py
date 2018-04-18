@@ -7,21 +7,22 @@ import sys
 logger = logging.getLogger(__name__)
 
 def init_logging(logfile, console_level):  # pragma: no cover
+    handlers = []
+
     console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s')),
+    console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s'))
     console.setLevel(console_level)
-    #logger.addHandler(console)
+    handlers.append(console)
 
-    logfile = logging.FileHandler(logfile)
-    logfile.setLevel(logging.INFO)
-    logfile.setFormatter(logging.Formatter('%(asctime)s [%(process)d] %(message)s')),
-    #logger.addHandler(logfile)
+    if not logfile is None:
+        logfile = logging.FileHandler(logfile)
+        logfile.setLevel(logging.INFO)
+        logfile.setFormatter(logging.Formatter('%(asctime)s [%(process)d] %(message)s'))
+        handlers.append(logfile)
 
-    logging.basicConfig(handlers = [console, logfile], level=logging.DEBUG)
+    logging.basicConfig(handlers=handlers, level=logging.DEBUG)
 
     # make alembic quiet
     logging.getLogger('alembic').setLevel(logging.WARN)
 
     logger.info('$ ' + ' '.join(sys.argv))
-
-
