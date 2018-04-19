@@ -18,19 +18,34 @@ import time
 import uuid
 
 
-METADATA_VERSION = '2.2'
+METADATA_VERSION = '2.2-1.0'
 
-DELETE_CANDIDATE_MAYBE = 0
-DELETE_CANDIDATE_SURE = 1
-DELETE_CANDIDATE_DELETED = 2
+class VersionUid(TypeDecorator):
 
+    impl = Integer
+
+    def process_bind_param(self, value, dialect):
+        return int(value[1:])
+
+    def process_result_value(self, value, dialect):
+        return 'V' + str(value).zfill(10)
+
+class Checksum(TypeDecorator):
+
+    impl = LargeBinary
+
+    def process_bind_param(self, value, dialect):
+        return unhexlify(value)
+
+    def process_result_value(self, value, dialect):
+        return hexlify(value)
 
 Base = declarative_base()
 
 class Stats(Base):
     __tablename__ = 'stats'
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    version_uid = Column(Integer, primary_key=True)
+    version_uid = Column(VersionUid, primary_key=True)
     version_name = Column(String, nullable=False)
     version_size_bytes = Column(BigInteger, nullable=False)
     version_size_blocks = Column(BigInteger, nullable=False)
@@ -47,7 +62,7 @@ class Stats(Base):
 
 class Version(Base):
     __tablename__ = 'versions'
-    uid = Column(Integer, primary_key=True, nullable=False)
+    uid = Column(VersionUid, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     name = Column(String, nullable=False, default='')
     snapshot_name = Column(String, nullable=False, server_default='', default='')
@@ -68,31 +83,18 @@ class Version(Base):
 
 class Tag(Base):
     __tablename__ = 'tags'
-    version_uid = Column(Integer, ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    version_uid = Column(VersionUid, ForeignKey('versions.uid'), primary_key=True, nullable=False)
     name = Column(String, nullable=False, primary_key=True)
 
     def __repr__(self):
        return "<Tag(version_uid='%s', name='%s')>" % (
                             self.version_uid, self.name)
 
-class Checksum(TypeDecorator):
-
-    impl = LargeBinary
-
-    def process_bind_param(self, value, dialect):
-        return unhexlify(value)
-
-    def process_result_value(self, value, dialect):
-        return hexlify(value)
-
-    def copy(self, **kw):
-        return Checksum(self.impl.length)
-
 DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
 class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
-    version_uid = Column(Integer, ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    version_uid = Column(VersionUid, ForeignKey('versions.uid'), primary_key=True, nullable=False)
     id = Column(Integer, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     checksum = Column(Checksum(64), index=True, nullable=True)
@@ -129,7 +131,6 @@ class DeletedBlock(Base):
     id = Column(Integer, primary_key=True)
     uid = Column(String(32), nullable=True, index=True)
     size = Column(Integer, nullable=True)
-    delete_candidate = Column(SmallInteger, nullable=False)
     # we need a date in order to find only delete candidates that are older than 1 hour.
     time = Column(BigInteger, default=inttime, nullable=False)
 
@@ -381,7 +382,6 @@ class MetaBackend(_MetaBackend):
                 deleted_block = DeletedBlock(
                     uid=affected_block.uid,
                     size=affected_block.size,
-                    delete_candidate=DELETE_CANDIDATE_MAYBE,
                 )
                 self.session.add(deleted_block)
         affected_blocks.delete()
@@ -493,48 +493,12 @@ class MetaBackend(_MetaBackend):
     def import_(self, f):
         _csv = csv.reader(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         signature = next(_csv)
-        if signature[0] == 'backy2 Version 2.1 metadata dump':
-            self.import_2_1(_csv)
-        elif signature[0] == 'backy2 Version 2.2 metadata dump':
-            self.import_2_2(_csv)
+        if signature[0] == 'backy2 Version 2.2-1.0 metadata dump':
+            self.import_2_2_1_0(_csv)
         else:
             raise ValueError('Wrong import format.')
 
-
-    def import_2_1(self, _csv):
-        version_uid, version_date, version_name, version_size, version_size_bytes, version_valid = next(_csv)
-        try:
-            self.get_version(version_uid)
-        except KeyError:
-            pass  # does not exist
-        else:
-            raise KeyError('Version {} already exists and cannot be imported.'.format(version_uid))
-        version = Version(
-            uid=version_uid,
-            date=datetime.datetime.strptime(version_date, '%Y-%m-%d %H:%M:%S'),
-            name=version_name,
-            snapshot_name='',
-            size=version_size,
-            size_bytes=version_size_bytes,
-            valid=version_valid,
-            protected=0,
-            )
-        self.session.add(version)
-        for uid, version_uid, id, date, checksum, size, valid in _csv:
-            block = Block(
-                uid=uid,
-                version_uid=version_uid,
-                id=id,
-                date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
-                checksum=checksum,
-                size=size,
-                valid=valid,
-            )
-            self.session.add(block)
-        self.session.commit()
-
-
-    def import_2_2(self, _csv):
+    def import_2_2_1_0(self, _csv):
         version_uid, version_date, version_name, version_snapshot_name, version_size, version_size_bytes, version_valid, version_protected = next(_csv)
         try:
             self.get_version(version_uid)
