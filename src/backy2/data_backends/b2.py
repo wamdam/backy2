@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-from backy2.data_backends import ROSDataBackend
+from backy2.data_backends import DataBackend as _DataBackend
 global b2
 import b2
 import b2.api
@@ -9,7 +9,7 @@ from b2.download_dest import DownloadDestBytes
 import b2.file_version
 from b2.exception import B2Error, FileNotPresent, UnknownError
 
-class DataBackend(ROSDataBackend):
+class DataBackend(_DataBackend):
     """ A DataBackend which stores its data in a BackBlaze (B2) file store."""
 
     WRITE_QUEUE_LENGTH = 20
@@ -33,14 +33,14 @@ class DataBackend(ROSDataBackend):
     def _write_raw(self, uid, data, metadata):
         self.bucket.upload_bytes(data, uid, file_infos=metadata)
 
-    def _read_raw(self, block_uid):
+    def _read_raw(self, uid, offset=0, length=None):
         data_io = DownloadDestBytes()
         try:
-            self.bucket.download_file_by_name(block_uid, data_io)
+            self.bucket.download_file_by_name(uid, data_io)
         except B2Error as e:
             #if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
             if isinstance(e, FileNotPresent):
-                raise FileNotFoundError('UID {} not found.'.format(block_uid))
+                raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
                 raise e
 

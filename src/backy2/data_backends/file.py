@@ -41,51 +41,6 @@ class DataBackend(_DataBackend):
 
         self.path = config.get('path')
 
-    def _writer(self, id_=0):
-        """ A threaded background writer """
-        while True:
-            entry = self._write_queue.get()
-            if entry is None:
-                logger.debug("Writer {} finishing.".format(id_))
-                break
-            uid, data = entry
-            path = os.path.join(self.path, self._path(uid))
-            filename = self._filename(uid)
-            time.sleep(self.write_throttling.consume(len(data)))
-            t1 = time.time()
-            try:
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-            except FileNotFoundError:
-                makedirs(path)
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-            t2 = time.time()
-            assert r == len(data)
-            self._write_queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
-
-
-    def _reader(self, id_):
-        """ A threaded background reader """
-        while True:
-            d = self._read_queue.get()  # contains block, offset, length
-            if d is None:
-                logger.debug("Reader {} finishing.".format(id_))
-                break
-            block, offset, length = d
-            t1 = time.time()
-            try:
-                data = self._read_raw(block.uid, offset, length)
-            except FileNotFoundError:
-                self._read_data_queue.put((block, offset, length, None))  # catch this!
-            else:
-                time.sleep(self.read_throttling.consume(len(data)))
-                self._read_data_queue.put((block, offset, length, data))
-                t2 = time.time()
-                self._read_queue.task_done()
-                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
-
     def _path(self, uid):
         """ Returns a generated path (depth = self.DEPTH) from a uid.
         Example uid=831bde887afc11e5b45aa44e314f9270 and depth=2, then
@@ -101,13 +56,34 @@ class DataBackend(_DataBackend):
         path = os.path.join(self.path, self._path(uid))
         return os.path.join(path, uid + self.SUFFIX)
 
+    def _write_raw(self, uid, data, metadata):
+        path = os.path.join(self.path, self._path(uid))
+        filename = self._filename(uid)
+        try:
+            with open(filename, 'wb') as f:
+                r = f.write(data)
+        except FileNotFoundError:
+            makedirs(path)
+            with open(filename, 'wb') as f:
+                r = f.write(data)
 
-    def save(self, data, _sync=False):
-        uid = self._uid()
-        self._write_queue.put((uid, data))
-        if _sync:
-            self._write_queue.join()
-        return uid
+    def _read_raw(self, uid, offset=0, length=None):
+        filename = self._filename(uid)
+        if not os.path.exists(filename):
+            raise FileNotFoundError('File {} not found.'.format(filename))
+        if offset==0 and length is None:
+            with open(filename, 'rb') as f:
+                data = f.read()
+            return data, {}
+        else:
+            with open(filename, 'rb') as f:
+                if offset:
+                    f.seek(offset)
+                if length:
+                    data = f.read(length)
+                else:
+                    data = f.read()
+            return data, {}
 
     def update(self, uid, data, offset=0):
         with open(self._filename(uid), 'r+b') as f:
@@ -131,41 +107,6 @@ class DataBackend(_DataBackend):
             except FileNotFoundError:
                 _no_del.append(uid)
         return _no_del
-
-    def read(self, block, sync=False, offset=0, length=None):
-        self._read_queue.put((block, offset, length))
-        if sync:
-            rblock, offset, length, data = self.read_get()
-            assert offset == offset
-            assert length == length
-            if rblock.id != block.id:
-                raise RuntimeError('Do not mix threaded reading with sync reading!')
-            if data is None:
-                raise FileNotFoundError('UID {} not found.'.format(block.uid))
-            return data
-
-    def read_get(self, qblock=True, qtimeout=None):
-        block, offset, length, data = self._read_data_queue.get(block=qblock, timeout=qtimeout)
-        self._read_data_queue.task_done()
-        return block, offset, length, data
-
-    def _read_raw(self, uid, offset=0, length=None):
-        filename = self._filename(uid)
-        if not os.path.exists(filename):
-            raise FileNotFoundError('File {} not found.'.format(filename))
-        if offset==0 and length is None:
-            with open(filename, 'rb') as f:
-                data = f.read()
-            return data
-        else:
-            with open(filename, 'rb') as f:
-                if offset:
-                    f.seek(offset)
-                if length:
-                    data = f.read(length)
-                else:
-                    data = f.read()
-            return data
 
     def get_all_blob_uids(self, prefix=None):
         if prefix:

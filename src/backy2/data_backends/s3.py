@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.data_backends import ROSDataBackend
+from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 from backy2.utils import TokenBucket
 import boto.exception
@@ -15,7 +15,7 @@ import threading
 import time
 
 
-class DataBackend(ROSDataBackend):
+class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
@@ -68,10 +68,10 @@ class DataBackend(ROSDataBackend):
         # to shutdown. Hard to reproduce because the writer must write
         # in exactly this moment.
 
-    def _read_raw(self, block_uid):
-        key = self.bucket.get_key(block_uid)
+    def _read_raw(self, uid, offset=0, length=None):
+        key = self.bucket.get_key(uid)
         if not key:
-            raise FileNotFoundError('UID {} not found.'.format(block_uid))
+            raise FileNotFoundError('UID {} not found.'.format(uid))
         while True:
             try:
                 data = key.get_contents_as_string()

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-from backy2.data_backends import ROSDataBackend
+from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 from backy2.utils import TokenBucket
 import boto3
@@ -14,7 +14,7 @@ import socket
 import threading
 import time
 
-class DataBackend(ROSDataBackend):
+class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
@@ -88,15 +88,15 @@ class DataBackend(ROSDataBackend):
         object = self.bucket.Object(uid)
         object.put(Body=data, Metadata=metadata)
 
-    def _read_raw(self, block_uid):
-        object = self.bucket.Object(block_uid)
+    def _read_raw(self, uid, offset=0, length=None):
+        object = self.bucket.Object(uid)
         while True:
             try:
                 object = object.get()
                 data = object['Body'].read()
             except ClientError as e:
                 if e.response['Error']['Code'] == 'NoSuchKey':
-                    raise FileNotFoundError('UID {} not found.'.format(block_uid))
+                    raise FileNotFoundError('UID {} not found.'.format(uid))
                 else:
                     raise e
             except socket.timeout:
