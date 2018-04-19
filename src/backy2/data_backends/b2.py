@@ -15,8 +15,9 @@ class DataBackend(ROSDataBackend):
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
-    _SUPPORTS_PARTIAL_READS = False
-    _SUPPORTS_PARTIAL_WRITES = False
+    SUPPORTS_PARTIAL_READS = False
+    SUPPORTS_PARTIAL_WRITES = False
+    SUPPORTS_METADATA = True
 
     def __init__(self, config):
         super().__init__(config)

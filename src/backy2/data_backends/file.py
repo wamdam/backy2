@@ -32,9 +32,9 @@ class DataBackend(_DataBackend):
     WRITE_QUEUE_LENGTH = 10
     READ_QUEUE_LENGTH = 20
 
-    _SUPPORTS_PARTIAL_READS = True
-    _SUPPORTS_PARTIAL_WRITES = True
-
+    SUPPORTS_PARTIAL_READS = True
+    SUPPORTS_PARTIAL_WRITES = True
+    SUPPORTS_METADATA = True
 
     def __init__(self, config):
         super().__init__(config)

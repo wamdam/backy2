@@ -20,11 +20,12 @@ class DataBackend():
     """ Holds BLOBs
     """
 
-    # Does this filestore support partial reads of blocks?
-    #
-    # # Does this filestore support partial reads of blocks?
-    _SUPPORTS_PARTIAL_READS = False
-    _SUPPORTS_PARTIAL_WRITES = False
+    # Does this data store support partial reads of blocks?
+    SUPPORTS_PARTIAL_READS = False
+    # Does this data store support partial reads of blocks?
+    SUPPORTS_PARTIAL_WRITES = False
+    # Does this data store support saving metadata?
+    SUPPORTS_METADATA = False
 
     _COMPRESSION_HEADER = "x-backy2-comp-type"
     _ENCRYPTION_HEADER = "x-backy2-enc-type"
@@ -49,6 +50,8 @@ class DataBackend():
 
         encryption_default = config.get('encryption_default', '')
         if encryption_default != '' and encryption_default != 'none':
+            if not self.SUPPORTS_METADATA:
+                raise NotImplementedError('data store doesn\'t support metadata, no encryption possible')
             if encryption_default in self.encryption:
                 self.encryption_default = self.encryption[encryption_default]
             else:
@@ -68,6 +71,8 @@ class DataBackend():
 
         compression_default = config.get('compression_default', '')
         if compression_default != '' and compression_default != 'none':
+            if not self.SUPPORTS_METADATA:
+                raise NotImplementedError('data store doesn\'t support metadata, no compression possible')
             if compression_default in self.compression:
                 self.compression_default = self.compression[compression_default]
             else:

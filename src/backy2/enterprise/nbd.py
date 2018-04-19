@@ -69,7 +69,7 @@ class BackyStore():
 
 
     def _read(self, block_uid, offset=0, length=None):
-        if self.backy.data_backend._SUPPORTS_PARTIAL_READS:
+        if self.backy.data_backend.SUPPORTS_PARTIAL_READS:
             return self.backy.data_backend.read_raw(block_uid, offset=offset, length=length)
         else:
             if block_uid not in self.block_cache:
@@ -106,7 +106,7 @@ class BackyStore():
 
     def _update(self, block_uid, data, offset=0):
         # update a given block_uid
-        if self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+        if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
             return self.backy.data_backend.update(block_uid, data, offset)
         else:
             # update local copy
@@ -117,7 +117,7 @@ class BackyStore():
 
     def _save(self, data):
         # update a given block_uid
-        if self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+        if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
             return self.backy.data_backend.save(data, _sync=True)  # returns block uid
         else:
             new_uid = self.backy.data_backend._uid()
@@ -167,7 +167,7 @@ class BackyStore():
             logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
             data = self._read(block_uid)
             checksum = self.hash_function(data).hexdigest()
-            if not self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+            if not self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
                 # dump changed data
                 new_uid = self.backy.data_backend.save(data, _sync=True)
                 logger.debug('Stored block {} with local uid {} to uid {}'.format(block_id, block_uid, new_uid))
@@ -178,7 +178,7 @@ class BackyStore():
         self.backy.meta_backend._commit()
         logger.info('Fixation done. Deleting temporary data (PLEASE WAIT)')
         # TODO: Delete COW blocks and also those from block_cache
-        if self.backy.data_backend._SUPPORTS_PARTIAL_WRITES:
+        if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
             for block_uid in self.block_cache:
                 # TODO if this block is in the current version (and in no other?)
                 # rm this block from cache
