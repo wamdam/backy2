@@ -352,7 +352,7 @@ class MetaBackend(_MetaBackend):
         self.session.query(Block).filter_by(uid=block_uid, checksum=checksum).update({'valid': 0}, synchronize_session='fetch')
         self.session.commit()
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
-            uid,
+            block_uid,
             checksum,
             ', '.join(affected_version_uids)
             ))
