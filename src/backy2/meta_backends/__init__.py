@@ -29,27 +29,27 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def set_version_invalid(self, uid):
+    def set_version_invalid(self, version_uid):
         """ Mark a version as invalid """
         raise NotImplementedError()
 
 
-    def set_version_valid(self, uid):
+    def set_version_valid(self, version_uid):
         """ Mark a version as valid """
         raise NotImplementedError()
 
 
-    def get_version(self, uid):
+    def get_version(self, version_uid):
         """ Returns a version as a dict """
         raise NotImplementedError()
 
 
-    def protect_version(self, uid):
+    def protect_version(self, version_uid):
         """ Protect a version """
         raise NotImplementedError()
 
 
-    def unprotect_version(self, uid):
+    def unprotect_version(self, version_uid):
         """ Unprotect a version """
         raise NotImplementedError()
 
@@ -79,7 +79,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def set_blocks_invalid(self, uid, checksum):
+    def set_blocks_invalid(self, block_uid, checksum):
         """ Set blocks pointing to this block uid with the given checksum invalid.
         This happens, when a block is found invalid during read or scrub.
         """
@@ -91,7 +91,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def get_block(self, uid):
+    def get_block(self, block_uid):
         """ Get a block by its uid """
         raise NotImplementedError()
 
