@@ -12,6 +12,7 @@ import importlib
 from functools import partial
 
 from backy2.logging import logger
+from backy2.meta_backends import MetaBackend
 
 
 def hints_from_rbd_diff(rbd_diff):
@@ -35,7 +36,14 @@ def parametrized_hash_function(config_hash_function):
     if hash_args is not None:
         kwargs = dict((k, literal_eval(v)) for k, v in (pair.split('=') for pair in hash_args.split(',')))
     logger.info('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
-    return hash_function(**kwargs)
+    hash_function_w_kwargs = hash_function(**kwargs)
+
+    if (len(hash_function_w_kwargs.digest()) > MetaBackend.MAXIMUM_CHECKSUM_LENGTH):
+        raise RuntimeError('Specified hash function exceeds maximum digest length of {}'
+                           .format(MetaBackend.MAXIMUM_CHECKSUM_LENGTH))
+
+    return hash_function_w_kwargs
+
 
 def backy_from_config(Config):
     """ Create a partial backy class from a given Config object
