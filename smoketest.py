@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
-import os
-import shutil
-import random
 import json
-import hashlib
-from backy2.scripts.backy import hints_from_rbd_diff
-from backy2.logging import init_logging
-from backy2.utils import backy_from_config
-from backy2.config import Config as _Config
-from functools import partial
 import logging
+
+import hashlib
+import os
+import random
+import shutil
+from functools import partial
+
+from backy2.config import Config as _Config
+from backy2.logging import init_logging
+from backy2.scripts.backy import hints_from_rbd_diff
+from backy2.utils import backy_from_config
 
 kB = 1024
 MB = kB * 1024

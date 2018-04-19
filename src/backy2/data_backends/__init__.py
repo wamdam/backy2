@@ -1,15 +1,12 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import hashlib
+import json
 import queue
 import threading
 import time
 
-import os
-
+import hashlib
 import importlib
-import json
-
 import shortuuid
 
 from backy2.logging import logger

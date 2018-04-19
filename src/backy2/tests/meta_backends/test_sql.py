@@ -1,13 +1,12 @@
 import logging
+import string
+from binascii import hexlify
+from unittest import TestCase
 
 import importlib
 import os
-import string
-from unittest import TestCase, skip
-
 import random
 import shutil
-from binascii import hexlify
 
 from backy2.config import Config
 from backy2.logging import init_logging

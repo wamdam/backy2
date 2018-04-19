@@ -1,18 +1,19 @@
 # -*- encoding: utf-8 -*-
 
+import datetime
+import math
+import sys
+import time
+from urllib import parse
+
+import importlib
+import random
+from dateutil.relativedelta import relativedelta
+
 from backy2 import notify
-from backy2.logging import logger
 from backy2.locking import Locking
 from backy2.locking import find_other_procs
-from backy2.utils import grouper
-from dateutil.relativedelta import relativedelta
-from urllib import parse
-import datetime
-import importlib
-import math
-import random
-import time
-import sys
+from backy2.logging import logger
 
 
 def blocks_from_hints(hints, block_size):

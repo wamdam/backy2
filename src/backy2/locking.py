@@ -1,8 +1,7 @@
-import ctypes
 import fcntl
+
 import os
 import psutil
-import sys
 
 
 class Locking:

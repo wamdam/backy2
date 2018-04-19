@@ -5,20 +5,20 @@ Copyright 2011, Hannu Valtonen <hannu.valtonen@ormod.com>
 
 licensed under the LGPL version 2.1, source: https://github.com/dcoles/ceph
 """
+import ctypes
+import errno
+import sys
+import threading
+import time
+from collections import Iterator
 from ctypes import CDLL, c_char_p, c_size_t, c_void_p, c_char, c_int, c_long, \
     c_ulong, create_string_buffer, byref, Structure, c_uint64, c_ubyte, \
     pointer, CFUNCTYPE, c_int64, c_uint32, c_uint8
 from ctypes.util import find_library
-import ctypes
-import errno
-import threading
-import time
-import sys
-
-from collections import Iterator
 from datetime import datetime
-from functools import wraps
 from itertools import chain
+
+from functools import wraps
 
 ANONYMOUS_AUID = 0xffffffffffffffff
 ADMIN_AUID = 0

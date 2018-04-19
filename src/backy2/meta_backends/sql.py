@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-from backy2.logging import logger
-from backy2.meta_backends import MetaBackend as _MetaBackend
+import csv
+import datetime
+import sys
+import time
+from binascii import hexlify, unhexlify
 from collections import namedtuple
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, SmallInteger
+
+import os
+import sqlalchemy
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime, TypeDecorator
-from binascii import hexlify, unhexlify
-import csv
-import datetime
-import os
-import sqlalchemy
-import sys
-import time
-import uuid
 
+from backy2.logging import logger
+from backy2.meta_backends import MetaBackend as _MetaBackend
 
 METADATA_VERSION = '2.2-1.0'
 

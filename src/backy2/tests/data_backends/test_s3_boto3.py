@@ -2,6 +2,7 @@ import unittest
 
 from . import DatabackendTestCase
 
+
 class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
         [DEFAULTS]

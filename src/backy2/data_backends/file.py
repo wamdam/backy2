@@ -1,16 +1,10 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.data_backends import DataBackend as _DataBackend
-from backy2.logging import logger
-from backy2.utils import TokenBucket
 import fnmatch
-import hashlib
 import os
-import queue
-import shortuuid
-import threading
-import time
+
+from backy2.data_backends import DataBackend as _DataBackend
 
 
 def makedirs(path):

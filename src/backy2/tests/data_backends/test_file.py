@@ -2,6 +2,7 @@ import unittest
 
 from . import DatabackendTestCase
 
+
 class test_file(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
         [DEFAULTS]

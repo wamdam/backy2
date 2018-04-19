@@ -1,18 +1,15 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import socket
+import time
+
+import boto3
+from botocore.client import Config
+from botocore.exceptions import ClientError
+
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
-from backy2.utils import TokenBucket
-import boto3
-from botocore.exceptions import ClientError
-from botocore.client import Config
-import hashlib
-import os
-import queue
-import shortuuid
-import socket
-import threading
-import time
+
 
 class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are

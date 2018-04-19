@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.io.lib import rados  # XXX use default rados lib?
-from backy2.io.lib import rbd    # XXX use default rbd lib?
-from backy2.logging import logger
-from backy2.io import IO as _IO
-from functools import reduce
-from operator import or_
 import queue
-import re
 import threading
 import time
+
+import re
+from functools import reduce
+from operator import or_
+
+from backy2.io import IO as _IO
+from backy2.io.lib import rados  # XXX use default rados lib?
+from backy2.io.lib import rbd  # XXX use default rbd lib?
+from backy2.logging import logger
+
 
 class IO(_IO):
     simultaneous_reads = 10

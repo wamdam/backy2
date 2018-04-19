@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
+import glob
 from configparser import ConfigParser, NoSectionError, NoOptionError
+
 from io import StringIO
 from os.path import expanduser
-import glob
-
 
 default_config = """
 [DEFAULTS]

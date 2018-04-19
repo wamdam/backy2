@@ -1,19 +1,17 @@
 import logging
 import string
 from queue import Empty
-
-import importlib
-import random
-
-import shutil
-import unittest
 from unittest.mock import Mock
 
+import importlib
 import os
+import random
+import shutil
 
-from backy2.logging import init_logging
 from backy2.config import Config
+from backy2.logging import init_logging
 from backy2.meta_backends.sql import Block
+
 
 class DatabackendTestCase(object):
     @classmethod

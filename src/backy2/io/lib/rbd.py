@@ -12,15 +12,15 @@ method.
 
 licensed under the LGPL version 2.1, source: https://github.com/dcoles/ceph
 """
+import ctypes
+import errno
+import sys
 # Copyright 2011 Josh Durgin
 from collections import Iterable
 from ctypes import CDLL, c_char, c_char_p, c_size_t, c_void_p, c_int, \
     create_string_buffer, byref, Structure, c_uint64, c_int64, c_uint8, \
     CFUNCTYPE
 from ctypes.util import find_library
-import ctypes
-import errno
-import sys
 
 from backy2.io.lib.rados import cstr, decode_cstr
 

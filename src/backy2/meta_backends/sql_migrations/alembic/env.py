@@ -1,9 +1,10 @@
 from __future__ import with_statement
+
 from alembic import context
-from sqlalchemy import create_engine, engine_from_config, pool
-from logging.config import fileConfig
+from sqlalchemy import create_engine
 
 from backy2.config import Config as _backy_config
+
 backy_config = _backy_config(section='MetaBackend', conf_name='backy')
 engine_url = backy_config.get('engine')
 

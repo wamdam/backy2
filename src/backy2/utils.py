@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from functools import partial
-from time import time
-from threading import Lock
-from ast import literal_eval
 import itertools
+import json
+from ast import literal_eval
+from threading import Lock
+from time import time
+
 import hashlib
 import importlib
-import json
+from functools import partial
 
 from backy2.logging import logger
 

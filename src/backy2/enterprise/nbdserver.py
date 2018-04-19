@@ -26,12 +26,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import struct
+import asyncio
 import logging
 import math
-
 import signal
-import asyncio
+
+import struct
+
 
 class AbortedNegotiationError(IOError):
     pass

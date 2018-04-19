@@ -7,7 +7,8 @@ import b2.api
 import b2.account_info
 from b2.download_dest import DownloadDestBytes
 import b2.file_version
-from b2.exception import B2Error, FileNotPresent, UnknownError
+from b2.exception import B2Error, FileNotPresent
+
 
 class DataBackend(_DataBackend):
     """ A DataBackend which stores its data in a BackBlaze (B2) file store."""

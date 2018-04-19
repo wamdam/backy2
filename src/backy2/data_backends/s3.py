@@ -1,18 +1,13 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.data_backends import DataBackend as _DataBackend
-from backy2.logging import logger
-from backy2.utils import TokenBucket
+import socket
+
 import boto.exception
 import boto.s3.connection
-import hashlib
-import os
-import queue
-import shortuuid
-import socket
-import threading
-import time
+
+from backy2.data_backends import DataBackend as _DataBackend
+from backy2.logging import logger
 
 
 class DataBackend(_DataBackend):

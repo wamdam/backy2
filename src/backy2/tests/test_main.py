@@ -1,11 +1,13 @@
-import pytest
-import os
 import sys
-import backy2.backy
-import shutil
-#import time
-import random
 import uuid
+
+import os
+import pytest
+# import time
+import random
+import shutil
+
+import backy2.backy
 
 BLOCK_SIZE = 1024*4096
 
