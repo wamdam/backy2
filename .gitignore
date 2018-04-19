@@ -51,3 +51,4 @@ debian/debhelper-build-stamp
 dist
 .github-access-token
 debian/.debhelper
+*~
