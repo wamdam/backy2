@@ -1,55 +1,11 @@
-import logging
-import string
 from queue import Empty
 from unittest.mock import Mock
 
-import importlib
-import os
-import random
-import shutil
-
-from backy2.config import Config
-from backy2.logging import init_logging
 from backy2.meta_backends.sql import Block
+from backy2.tests.testcase import BackyTestCase
 
 
-class DatabackendTestCase(object):
-    @classmethod
-    def random_string(self, length):
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
-
-    @classmethod
-    def random_bytes(self, length):
-        return bytes(random.getrandbits(8) for _ in range(length))
-
-    class TestPath():
-        def __init__(self):
-            self.path = 'backy2-test_' + DatabackendTestCase.random_string(16)
-            os.mkdir(self.path)
-            os.mkdir(self.path + '/data')
-
-        def close(self):
-            pass
-            shutil.rmtree(self.path)
-
-    def setUp(self, config):
-        self.testpath = self.TestPath()
-        init_logging(None, logging.INFO)
-
-        config = self.CONFIG.format(testpath=self.testpath.path)
-        self.config_DataBackend = Config(cfg=config, section='DataBackend')
-        try:
-            DataBackendLib = importlib.import_module(self.config_DataBackend.get('type'))
-        except ImportError:
-            raise NotImplementedError('DataBackend type {} unsupported.'.format(self.config_DataBackend.get('type')))
-        else:
-            self.data_backend = DataBackendLib.DataBackend(self.config_DataBackend)
-
-        self.data_backend.rm_many(self.data_backend.get_all_blob_uids())
-
-    def tearDown(self):
-        self.data_backend.close()
-        self.testpath.close()
+class DatabackendTestCase(BackyTestCase):
 
     def test_save_rm_sync(self):
         NUM_BLOBS = 15

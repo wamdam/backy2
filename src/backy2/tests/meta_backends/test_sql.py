@@ -1,18 +1,9 @@
-import logging
-import string
-from binascii import hexlify
 from unittest import TestCase
 
-import importlib
-import os
-import random
-import shutil
-
-from backy2.config import Config
-from backy2.logging import init_logging
+from backy2.tests.testcase import BackyTestCase
 
 
-class test_sql(TestCase):
+class test_sql(BackyTestCase, TestCase):
 
     CONFIG = """
         [MetaBackend]
@@ -20,44 +11,8 @@ class test_sql(TestCase):
         engine: sqlite:///{testpath}/backy.sqlite
 
         """
-
-    @classmethod
-    def random_string(self, length):
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
-
-    @classmethod
-    def random_hex(self, length):
-        return hexlify(bytes(random.getrandbits(8) for _ in range(length)))
-
-    class TestPath():
-        def __init__(self):
-            self.path = 'backy2-test_' + test_sql.random_string(16)
-            os.mkdir(self.path)
-
-        def close(self):
-            pass
-            shutil.rmtree(self.path)
-
     def setUp(self):
-        self.testpath = self.TestPath()
-        init_logging(None, logging.INFO)
-
-        config = self.CONFIG.format(testpath=self.testpath.path)
-
-        config_MetaBackend = Config(cfg=config, section='MetaBackend')
-        try:
-            MetaBackendLib = importlib.import_module(config_MetaBackend.get('type'))
-        except ImportError:
-            raise NotImplementedError('MetaBackend type {} unsupported.'.format(config_MetaBackend.get('type')))
-        else:
-            meta_backend = MetaBackendLib.MetaBackend(config_MetaBackend)
-
-        meta_backend.initdb()
-        self.meta_backend = meta_backend.open()
-
-    def tearDown(self):
-        self.meta_backend.close()
-        self.testpath.close()
+        super().setUp(self.CONFIG)
 
     def test_version(self):
 
