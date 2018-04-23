@@ -4,6 +4,8 @@
 class MetaBackend():
     """ Holds meta data """
 
+    MAXIMUM_CHECKSUM_LENGTH = 64
+
     def __init__(self):
         pass
 

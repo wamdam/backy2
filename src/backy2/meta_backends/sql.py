@@ -97,7 +97,7 @@ class Block(Base):
     version_uid = Column(VersionUid, ForeignKey('versions.uid'), primary_key=True, nullable=False)
     id = Column(Integer, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    checksum = Column(Checksum(64), index=True, nullable=True)
+    checksum = Column(Checksum(_MetaBackend.MAXIMUM_CHECKSUM_LENGTH), index=True, nullable=True)
     size = Column(Integer, nullable=True)
     valid = Column(Boolean, nullable=False)
 
