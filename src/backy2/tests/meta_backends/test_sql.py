@@ -1,9 +1,9 @@
 from unittest import TestCase
 
-from backy2.tests.testcase import BackyTestCase
+from backy2.tests.testcase import BackendTestCase
 
 
-class test_sql(BackyTestCase, TestCase):
+class test_sql(BackendTestCase, TestCase):
 
     CONFIG = """
         [MetaBackend]

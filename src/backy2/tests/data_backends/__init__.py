@@ -2,10 +2,10 @@ from queue import Empty
 from unittest.mock import Mock
 
 from backy2.meta_backends.sql import Block
-from backy2.tests.testcase import BackyTestCase
+from backy2.tests.testcase import BackendTestCase
 
 
-class DatabackendTestCase(BackyTestCase):
+class DatabackendTestCase(BackendTestCase):
 
     def test_save_rm_sync(self):
         NUM_BLOBS = 15

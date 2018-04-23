@@ -6,11 +6,11 @@ from unittest.mock import Mock
 
 import backy2.backy
 from backy2.meta_backends.sql import Block
-from backy2.tests.testcase import BackyTestCase
+from backy2.tests.testcase import BackendTestCase
 
 BLOCK_SIZE = 1024*4096
 
-class MiscTestCase(BackyTestCase, TestCase):
+class MiscTestCase(BackendTestCase, TestCase):
     CONFIG = """
         [DEFAULTS]
         logfile: /dev/stderr
