@@ -11,8 +11,6 @@ class test_sql(BackyTestCase, TestCase):
         engine: sqlite:///{testpath}/backy.sqlite
 
         """
-    def setUp(self):
-        super().setUp(self.CONFIG)
 
     def test_version(self):
 

@@ -40,8 +40,6 @@ class MiscTestCase(BackyTestCase, TestCase):
         ceph_conffile: /etc/ceph/ceph.conf
         simultaneous_reads: 10
         """
-    def setUp(self):
-        super().setUp(self.CONFIG)
 
     def test_blocks_from_hints(self):
         hints = [

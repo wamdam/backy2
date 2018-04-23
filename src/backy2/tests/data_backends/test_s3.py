@@ -42,8 +42,5 @@ class test_s3(DatabackendTestCase, unittest.TestCase):
         simultaneous_reads: 10
         """
 
-    def setUp(self):
-        super().setUp(self.CONFIG)
-
 if __name__ == '__main__':
     unittest.main()

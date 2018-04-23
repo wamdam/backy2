@@ -2,6 +2,7 @@ import unittest
 
 from . import DatabackendTestCase
 
+
 class test_b2(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
         [DEFAULTS]
@@ -44,9 +45,6 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
         ceph_conffile: /etc/ceph/ceph.conf
         simultaneous_reads: 10
         """
-
-    def setUp(self):
-        super().setUp(self.CONFIG)
 
 if __name__ == '__main__':
     unittest.main()
