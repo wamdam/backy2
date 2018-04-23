@@ -14,6 +14,7 @@ from backy2 import notify
 from backy2.locking import Locking
 from backy2.locking import find_other_procs
 from backy2.logging import logger
+from backy2.utils import data_hexdigest
 
 
 def blocks_from_hints(hints, block_size):
@@ -213,7 +214,7 @@ class Backy():
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 state = False
                 continue
-            data_checksum = self.hash_function(data).hexdigest()
+            data_checksum = data_hexdigest(self.hash_function, data)
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during scrub for block '
                     '{} (UID {}) (is: {} should-be: {}).'.format(
@@ -235,7 +236,7 @@ class Backy():
                         'wrong.'.format(
                             block.id,
                             block.uid,
-                            self.hash_function(source_data).hexdigest(),
+                            data_hexdigest(self.hash_function, source_data),
                             data_checksum,
                             ))
                     state = False
@@ -293,7 +294,7 @@ class Backy():
         for i in range(read_jobs):
             block, offset, length, data = self.data_backend.read_get()
             assert len(data) == block.size
-            data_checksum = self.hash_function(data).hexdigest()
+            data_checksum = data_hexdigest(self.hash_function, data)
             io.write(block, data)
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during restore for block '

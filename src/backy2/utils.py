@@ -44,6 +44,10 @@ def parametrized_hash_function(config_hash_function):
 
     return hash_function_w_kwargs
 
+def data_hexdigest(hash_function, data):
+    hash = hash_function.copy()
+    hash.update(data)
+    return hash.hexdigest()
 
 def backy_from_config(Config):
     """ Create a partial backy class from a given Config object

@@ -10,6 +10,7 @@ import re
 
 from backy2.io import IO as _IO
 from backy2.logging import logger
+from backy2.utils import data_hexdigest
 
 if hasattr(os, 'posix_fadvise'):
     posix_fadvise = os.posix_fadvise
@@ -107,7 +108,7 @@ class IO(_IO):
                 if not data:
                     raise RuntimeError('EOF reached on source when there should be data.')
 
-                data_checksum = self.hash_function(data).hexdigest()
+                data_checksum = data_hexdigest(self.hash_function, data)
                 if not block.valid:
                     logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
                 else:

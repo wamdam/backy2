@@ -5,6 +5,7 @@ import os
 from io import BytesIO
 
 from backy2.logging import logger
+from backy2.utils import data_hexdigest
 
 
 class BackyStore():
@@ -167,7 +168,7 @@ class BackyStore():
         for block_id, block_uid in self.cow[cow_version_uid].items():
             logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
             data = self._read(block_uid)
-            checksum = self.hash_function(data).hexdigest()
+            checksum = data_hexdigest(self.hash_function, data)
             if not self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
                 # dump changed data
                 new_uid = self.backy.data_backend.save(data, _sync=True)
