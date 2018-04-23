@@ -113,7 +113,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
         block_uid = 'asdfgh'
-        checksum = b'1234567890'
+        checksum = '1234567890'
         size = 5000
         id = 0
         version_uid = backend.set_version(name, snapshot_name, 10, 5000, 1)
@@ -134,7 +134,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         snapshot_name = 'snapname'
         version_uid = backend.set_version(version_name, snapshot_name, TESTLEN, 5000, 1)
         block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
-        checksums = [bytes(uuid.uuid1().hex, encoding='ascii') for i in range(TESTLEN)]
+        checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
         size = 5000
 
         for id in range(TESTLEN):

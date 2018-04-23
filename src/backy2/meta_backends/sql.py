@@ -35,10 +35,16 @@ class Checksum(TypeDecorator):
     impl = LargeBinary
 
     def process_bind_param(self, value, dialect):
-        return unhexlify(value)
+        if value is not None:
+            return unhexlify(value)
+        else:
+            return None
 
     def process_result_value(self, value, dialect):
-        return hexlify(value)
+        if value is not None:
+            return hexlify(value).decode('ascii')
+        else:
+            return None
 
 Base = declarative_base()
 
