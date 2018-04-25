@@ -12,37 +12,7 @@ kB = 1024
 MB = kB * 1024
 GB = MB * 1024
 
-class SmokeTestCase(BackyTestCase, TestCase):
-
-    CONFIG = """
-            [DEFAULTS]
-            logfile: /var/log/backy.log
-            block_size: 4096
-            hash_function: blake2b,digest_size=32
-            lock_dir: {testpath}/lock
-            process_name: backy2
-
-            [MetaBackend]
-            type: backy2.meta_backends.sql
-            engine: sqlite:///{testpath}/backy.sqlite
-
-            [DataBackend]
-            type: backy2.data_backends.file
-            path: {testpath}/data
-            simultaneous_writes: 5
-            bandwidth_read: 100000
-            bandwidth_write: 100000
-
-            [NBD]
-            cachedir: /tmp
-
-            [io_file]
-            simultaneous_reads: 5
-
-            [io_rbd]
-            ceph_conffile: /etc/ceph/ceph.conf
-            simultaneous_reads: 10
-            """
+class SmokeTestCase():
 
     @classmethod
     def patch(self, path, filename, offset, data=None):
@@ -134,3 +104,66 @@ class SmokeTestCase(BackyTestCase, TestCase):
                 backy = self.backyOpen(initdb=initdb)
                 backy.cleanup_fast(dt=0)
                 backy.close()
+
+class SmokeTestCaseSQLLite(SmokeTestCase, BackyTestCase, TestCase):
+
+    CONFIG = """
+            [DEFAULTS]
+            logfile: /var/log/backy.log
+            block_size: 4096
+            hash_function: blake2b,digest_size=32
+            lock_dir: {testpath}/lock
+            process_name: backy2
+
+            [MetaBackend]
+            type: backy2.meta_backends.sql
+            engine: sqlite:///{testpath}/backy.sqlite
+
+            [DataBackend]
+            type: backy2.data_backends.file
+            path: {testpath}/data
+            simultaneous_writes: 5
+            bandwidth_read: 100000
+            bandwidth_write: 100000
+
+            [NBD]
+            cachedir: /tmp
+
+            [io_file]
+            simultaneous_reads: 5
+
+            [io_rbd]
+            ceph_conffile: /etc/ceph/ceph.conf
+            simultaneous_reads: 10
+            """
+class SmokeTestCasePostgreSQL(SmokeTestCase, BackyTestCase, TestCase):
+
+    CONFIG = """
+            [DEFAULTS]
+            logfile: /var/log/backy.log
+            block_size: 4096
+            hash_function: blake2b,digest_size=32
+            lock_dir: {testpath}/lock
+            process_name: backy2
+
+            [MetaBackend]
+            type: backy2.meta_backends.sql
+            engine: postgresql://backy2:verysecret@localhost:15432/backy2
+
+            [DataBackend]
+            type: backy2.data_backends.file
+            path: {testpath}/data
+            simultaneous_writes: 5
+            bandwidth_read: 100000
+            bandwidth_write: 100000
+
+            [NBD]
+            cachedir: /tmp
+
+            [io_file]
+            simultaneous_reads: 5
+
+            [io_rbd]
+            ceph_conffile: /etc/ceph/ceph.conf
+            simultaneous_reads: 10
+            """
