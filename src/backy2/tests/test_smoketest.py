@@ -105,7 +105,7 @@ class SmokeTestCase():
                 backy.cleanup_fast(dt=0)
                 backy.close()
 
-class SmokeTestCaseSQLLite(SmokeTestCase, BackyTestCase, TestCase):
+class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
             [DEFAULTS]
@@ -136,7 +136,7 @@ class SmokeTestCaseSQLLite(SmokeTestCase, BackyTestCase, TestCase):
             ceph_conffile: /etc/ceph/ceph.conf
             simultaneous_reads: 10
             """
-class SmokeTestCasePostgreSQL(SmokeTestCase, BackyTestCase, TestCase):
+class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
             [DEFAULTS]
@@ -157,6 +157,129 @@ class SmokeTestCasePostgreSQL(SmokeTestCase, BackyTestCase, TestCase):
             bandwidth_read: 100000
             bandwidth_write: 100000
 
+            [NBD]
+            cachedir: /tmp
+
+            [io_file]
+            simultaneous_reads: 5
+
+            [io_rbd]
+            ceph_conffile: /etc/ceph/ceph.conf
+            simultaneous_reads: 10
+            """
+class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
+
+    CONFIG = """
+            [DEFAULTS]
+            logfile: /var/log/backy.log
+            block_size: 4096
+            hash_function: blake2b,digest_size=32
+            lock_dir: {testpath}/lock
+            process_name: backy2
+
+            [MetaBackend]
+            type: backy2.meta_backends.sql
+            engine: postgresql://backy2:verysecret@localhost:15432/backy2
+
+            [DataBackend]
+            type: backy2.data_backends.s3
+            
+            aws_access_key_id: minio
+            aws_secret_access_key: minio123
+            host: 127.0.0.1
+            port: 9901
+            is_secure: false
+            bucket_name: backy2
+            
+            simultaneous_writes: 5
+            simultaneous_reads: 5
+    
+            bandwidth_read: 78643200
+            bandwidth_write: 78643200
+            [NBD]
+            cachedir: /tmp
+
+            [io_file]
+            simultaneous_reads: 5
+
+            [io_rbd]
+            ceph_conffile: /etc/ceph/ceph.conf
+            simultaneous_reads: 10
+            """
+
+class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
+
+    CONFIG = """
+            [DEFAULTS]
+            logfile: /var/log/backy.log
+            block_size: 4096
+            hash_function: blake2b,digest_size=32
+            lock_dir: {testpath}/lock
+            process_name: backy2
+
+            [MetaBackend]
+            type: backy2.meta_backends.sql
+            engine: postgresql://backy2:verysecret@localhost:15432/backy2
+
+            [DataBackend]
+            type: backy2.data_backends.s3_boto3
+            
+            compression: backy2.data_backends.compression.zstd
+            compression_default: zstd
+            
+            encryption: backy2.data_backends.encryption.aws_s3_cse
+            encryption_materials: {{"MasterKey": "0000000000000000"}}
+            encryption_default: aws_s3_cse
+            
+            aws_access_key_id: minio
+            aws_secret_access_key: minio123
+            host: 127.0.0.1
+            port: 9901
+            is_secure: false
+            bucket_name: backy2
+            
+            simultaneous_writes: 5
+            simultaneous_reads: 5
+    
+            bandwidth_read: 78643200
+            bandwidth_write: 78643200            
+            [NBD]
+            cachedir: /tmp
+
+            [io_file]
+            simultaneous_reads: 5
+
+            [io_rbd]
+            ceph_conffile: /etc/ceph/ceph.conf
+            simultaneous_reads: 10
+            """
+
+class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
+
+    CONFIG = """
+            [DEFAULTS]
+            logfile: /var/log/backy.log
+            block_size: 4096
+            hash_function: blake2b,digest_size=32
+            lock_dir: {testpath}/lock
+            process_name: backy2
+
+            [MetaBackend]
+            type: backy2.meta_backends.sql
+            engine: postgresql://backy2:verysecret@localhost:15432/backy2
+
+            [DataBackend]
+            type: backy2.data_backends.b2
+            
+            account_id: **************
+            application_key: **************
+            bucket_name: **************
+            
+            simultaneous_writes: 5
+            simultaneous_reads: 5
+    
+            bandwidth_read: 78643200
+            bandwidth_write: 78643200       
             [NBD]
             cachedir: /tmp
 
