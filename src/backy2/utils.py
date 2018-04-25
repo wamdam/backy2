@@ -27,7 +27,7 @@ def parametrized_hash_function(config_hash_function):
     hash_args = None
     try:
         hash_name, hash_args = config_hash_function.split(',', 1)
-    except:
+    except ValueError:
         hash_name = config_hash_function
     hash_function = getattr(hashlib, hash_name)
     if hash_function is None:
