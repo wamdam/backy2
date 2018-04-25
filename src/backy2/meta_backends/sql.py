@@ -182,7 +182,11 @@ class MetaBackend(_MetaBackend):
             command.upgrade(alembic_cfg, "head")
 
 
-    def initdb(self):
+    def initdb(self, _destroydb=False):
+        # This is dangerous and is only used by the test suite to get a clean slate
+        if _destroydb:
+            Base.metadata.drop_all(self.engine)
+
         # this will create all tables. It will NOT delete any tables or data.
         # Instead, it will raise when something can't be created.
         # TODO: explicitly check if the database is empty

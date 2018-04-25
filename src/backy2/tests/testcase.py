@@ -13,7 +13,7 @@ from backy2.logging import init_logging
 from backy2.utils import backy_from_config
 
 
-class TestCase(object):
+class TestCase():
     @classmethod
     def random_string(self, length):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -85,5 +85,5 @@ class BackyTestCase(TestCase):
         self.testpath.close()
 
     def backyOpen(self, initdb=False):
-        self.backy = backy_from_config(self.Config)(initdb=initdb)
+        self.backy = backy_from_config(self.Config)(initdb=initdb, _destroydb=initdb)
         return self.backy

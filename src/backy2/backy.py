@@ -41,14 +41,14 @@ class Backy():
 
     def __init__(self, meta_backend, data_backend, config, block_size=None,
             hash_function=None, lock_dir=None, process_name='backy2',
-            initdb=False):
+            initdb=False, _destroydb=False):
         if block_size is None:
             block_size = 1024*4096  # 4MB
         if hash_function is None:
             import hashlib
             hash_function = hashlib.sha512
         if initdb:
-            meta_backend.initdb()
+            meta_backend.initdb(_destroydb=_destroydb)
         self.meta_backend = meta_backend.open()
         self.data_backend = data_backend
         self.config = config
