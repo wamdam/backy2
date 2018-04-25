@@ -105,8 +105,12 @@ class DataBackend():
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
 
+    def _init_worker_thread(self, id_):
+        pass
+
     def _writer(self, id_):
         """ A threaded background writer """
+        self._init_worker_thread(id_)
         while True:
             entry = self._write_queue.get()
             if entry is None:
@@ -130,6 +134,7 @@ class DataBackend():
 
     def _reader(self, id_):
         """ A threaded background reader """
+        self._init_worker_thread(id_)
         while True:
             entry = self._read_queue.get()
             if entry is None:

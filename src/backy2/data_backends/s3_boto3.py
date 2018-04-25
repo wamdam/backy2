@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import socket
+import threading
 import time
 from itertools import islice
 
@@ -25,31 +26,29 @@ class DataBackend(_DataBackend):
 
     def __init__(self, config):
 
-        super().__init__(config)
-
         aws_access_key_id = config.get('aws_access_key_id')
         aws_secret_access_key = config.get('aws_secret_access_key')
         host = config.get('host')
         port = config.getint('port')
         is_secure = config.getboolean('is_secure')
-        bucket_name = config.get('bucket_name', 'backy2')
 
+        self._bucket_name = config.get('bucket_name', 'backy2')
         self.multi_delete = config.getboolean('multi_delete', True)
 
-        session = boto3.session.Session()
+        self._resource_config = {
+            'aws_access_key_id': aws_access_key_id,
+            'aws_secret_access_key': aws_secret_access_key,
+            'endpoint_url': 'http{}://{}:{}'.format('s' if is_secure else '', host, port),
+            'config': Config(s3={'addressing_style': 'path'})
+        }
 
-        self.conn = session.resource(
-                's3',
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                endpoint_url='http{}://{}:{}'.format('s' if is_secure else '', host, port),
-                config=Config(s3={'addressing_style': 'path'})
-            )
+        self._local = threading.local()
+        self._local.resource = boto3.session.Session().resource('s3', **self._resource_config)
 
         # create our bucket
         exists = True
         try:
-            self.conn.meta.client.head_bucket(Bucket=bucket_name)
+            self._local.resource.meta.client.head_bucket(Bucket=self._bucket_name)
         except ClientError as e:
             error_code = int(e.response['Error']['Code'])
             if error_code == 404:
@@ -70,7 +69,7 @@ class DataBackend(_DataBackend):
 
         if not exists:
             try:
-                self.conn.create_bucket(Bucket=bucket_name)
+                self._local.resource.create_bucket(Bucket=self._bucket_name)
             except (
                     OSError,
                     ClientError,
@@ -80,14 +79,20 @@ class DataBackend(_DataBackend):
                 print('Fatal error: {}'.format(e))
                 exit(10)
 
-        self.bucket = self.conn.Bucket(bucket_name)
+        self._local.bucket = self._local.resource.Bucket(self._bucket_name)
+
+        super().__init__(config)
+
+    def _init_worker_thread(self, id_):
+        self._local.resource = boto3.session.Session().resource('s3', **self._resource_config)
+        self._local.bucket = self._local.resource.Bucket(self._bucket_name)
 
     def _write_raw(self, uid, data, metadata):
-        object = self.bucket.Object(uid)
+        object = self._local.bucket.Object(uid)
         object.put(Body=data, Metadata=metadata)
 
     def _read_raw(self, uid, offset=0, length=None):
-        object = self.bucket.Object(uid)
+        object = self._local.bucket.Object(uid)
         while True:
             try:
                 object = object.get()
@@ -108,7 +113,7 @@ class DataBackend(_DataBackend):
 
     def rm(self, uid):
         # delete() always returns 204 even when key doesn't exist, so check for existence
-        object = self.bucket.Object(uid)
+        object = self._local.bucket.Object(uid)
         try:
             object.load()
         except ClientError as e:
@@ -127,13 +132,12 @@ class DataBackend(_DataBackend):
         if self.multi_delete:
             # Amazon (at least) only handles 1000 deletes at a time
             # Split list into parts of at most 1000 elements
-            #uids_parts = [uids[i:i+1000] for i  in range(0, len(uids), 1000)]
             uids_parts = [islice(uids, i, i+1000) for i  in range(0, len(uids), 1000)]
 
             errors = []
             for part in uids_parts:
-                response = self.conn.meta.client.delete_objects(
-                    Bucket=self.bucket.name,
+                response = self._local.resource.meta.client.delete_objects(
+                    Bucket=self._local.bucket.name,
                     Delete={
                         'Objects': [{'Key': uid} for uid in part],
                         }
@@ -144,7 +148,7 @@ class DataBackend(_DataBackend):
             errors = []
             for uid in uids:
                 try:
-                    self.bucket.Object(uid).delete()
+                    self._local.bucket.Object(uid).delete()
                 except ClientError as e:
                     errors.append(uid)
 
@@ -155,6 +159,6 @@ class DataBackend(_DataBackend):
 
     def get_all_blob_uids(self, prefix=None):
         if prefix is None:
-            return [object.key for object in self.bucket.objects.filter()]
+            return [object.key for object in self._local.bucket.objects.filter()]
         else:
-            return [object.key for object in self.bucket.objects.filter(Prefix=prefix)]
+            return [object.key for object in self._local.bucket.objects.filter(Prefix=prefix)]
