@@ -90,6 +90,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         uid = backend.save(b'test', _sync=True)
         block = Mock(Block, uid=uid)
         self.assertEqual(backend.read(block, sync=True), b'test')
+        backend.rm(uid)
 
     def test_metabackend_set_version(self):
         backend = self.meta_backend
