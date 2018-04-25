@@ -35,7 +35,7 @@ def parametrized_hash_function(config_hash_function):
     kwargs = {}
     if hash_args is not None:
         kwargs = dict((k, literal_eval(v)) for k, v in (pair.split('=') for pair in hash_args.split(',')))
-    logger.info('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
+    logger.debug('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
     hash_function_w_kwargs = hash_function(**kwargs)
 
     if (len(hash_function_w_kwargs.digest()) > MetaBackend.MAXIMUM_CHECKSUM_LENGTH):
