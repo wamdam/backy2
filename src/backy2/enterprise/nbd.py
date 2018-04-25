@@ -175,7 +175,7 @@ class BackyStore():
                 logger.debug('Stored block {} with local uid {} to uid {}'.format(block_id, block_uid, new_uid))
                 block_uid = new_uid
 
-            self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=1, _commit=False)
+            self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=True, _commit=False)
         self.backy.meta_backend.set_version_valid(cow_version_uid)
         self.backy.meta_backend._commit()
         logger.info('Fixation done. Deleting temporary data (PLEASE WAIT)')

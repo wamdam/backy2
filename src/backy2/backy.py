@@ -78,7 +78,7 @@ class Backy():
             old_blocks = None
         size = math.ceil(size_bytes / self.block_size)
         # we always start with invalid versions, then validate them after backup
-        version_uid = self.meta_backend.set_version(name, snapshot_name, size, size_bytes, 0)
+        version_uid = self.meta_backend.set_version(name, snapshot_name, size, size_bytes, False)
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
         for id in range(size):
@@ -89,7 +89,7 @@ class Backy():
                     uid = None
                     checksum = None
                     block_size = self.block_size
-                    valid = 1
+                    valid = True
                 else:
                     assert old_block.id == id
                     uid = old_block.uid
@@ -100,7 +100,7 @@ class Backy():
                 uid = None
                 checksum = None
                 block_size = self.block_size
-                valid = 1
+                valid = True
 
             # the last block can differ in size, so let's check
             _offset = id * self.block_size
@@ -110,7 +110,7 @@ class Backy():
                 block_size = new_block_size
                 uid = None
                 checksum = None
-                valid = 1
+                valid = True
 
             self.meta_backend.set_block(
                 id,
@@ -495,12 +495,12 @@ class Backy():
             elif block.id in sparse_blocks:
                 # This "elif" is very important. Because if the block is in read_blocks
                 # AND sparse_blocks, it *must* be read.
-                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
+                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True, _commit=False)
                 stats['blocks_sparse'] += 1
                 stats['bytes_sparse'] += block.size
                 logger.debug('Skipping block (sparse) {}'.format(block.id))
             else:
-                #self.meta_backend.set_block(block.id, version_uid, block.uid, block.checksum, block.size, valid=1, _commit=False)
+                #self.meta_backend.set_block(block.id, version_uid, block.uid, block.checksum, block.size, valid=True, _commit=False)
                 logger.debug('Keeping block {}'.format(block.id))
 
         # now use the readers and write
@@ -519,16 +519,16 @@ class Backy():
                 stats['blocks_sparse'] += 1
                 stats['bytes_sparse'] += block.size
                 logger.debug('Skipping block (detected sparse) {}'.format(block.id))
-                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=1, _commit=False)
+                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True, _commit=False)
             elif existing_block and existing_block.size == len(data):
-                self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=1, _commit=False)
+                self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=True, _commit=False)
                 stats['blocks_found_dedup'] += 1
                 stats['bytes_found_dedup'] += len(data)
                 logger.debug('Found existing block for id {} with uid {})'.format
                         (block.id, existing_block.uid))
             else:
                 block_uid = self.data_backend.save(data)
-                self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=1, _commit=False)
+                self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=True, _commit=False)
                 stats['blocks_written'] += 1
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))

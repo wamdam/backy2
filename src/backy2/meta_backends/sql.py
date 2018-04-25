@@ -201,7 +201,7 @@ class MetaBackend(_MetaBackend):
         self.session.commit()
 
 
-    def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=0):
+    def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=False):
         version = Version(
             name=version_name,
             snapshot_name=snapshot_name,
@@ -258,7 +258,7 @@ class MetaBackend(_MetaBackend):
 
     def set_version_invalid(self, uid):
         version = self.get_version(uid)
-        version.valid = 0
+        version.valid = False
         self.session.commit()
         logger.info('Marked version invalid (UID {})'.format(
             uid,
@@ -267,7 +267,7 @@ class MetaBackend(_MetaBackend):
 
     def set_version_valid(self, uid):
         version = self.get_version(uid)
-        version.valid = 1
+        version.valid = True
         self.session.commit()
         logger.debug('Marked version valid (UID {})'.format(
             uid,
@@ -283,7 +283,7 @@ class MetaBackend(_MetaBackend):
 
     def protect_version(self, uid):
         version = self.get_version(uid)
-        version.protected = 1
+        version.protected = True
         self.session.commit()
         logger.debug('Marked version protected (UID {})'.format(
             uid,
@@ -292,7 +292,7 @@ class MetaBackend(_MetaBackend):
 
     def unprotect_version(self, uid):
         version = self.get_version(uid)
-        version.protected = 0
+        version.protected = False
         self.session.commit()
         logger.debug('Marked version unprotected (UID {})'.format(
             uid,
@@ -322,7 +322,6 @@ class MetaBackend(_MetaBackend):
         """ Upsert a block (or insert only when _upsert is False - this is only
         a performance improvement)
         """
-        valid = 1 if valid else 0
         block = None
         if _upsert:
             block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
@@ -356,7 +355,7 @@ class MetaBackend(_MetaBackend):
     def set_blocks_invalid(self, block_uid, checksum):
         _affected_version_uids = self.session.query(distinct(Block.version_uid)).filter_by(uid=block_uid, checksum=checksum).all()
         affected_version_uids = [v[0] for v in _affected_version_uids]
-        self.session.query(Block).filter_by(uid=block_uid, checksum=checksum).update({'valid': 0}, synchronize_session='fetch')
+        self.session.query(Block).filter_by(uid=block_uid, checksum=checksum).update({'valid': False}, synchronize_session='fetch')
         self.session.commit()
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             block_uid,
@@ -373,7 +372,7 @@ class MetaBackend(_MetaBackend):
 
 
     def get_block_by_checksum(self, checksum):
-        return self.session.query(Block).filter_by(checksum=checksum, valid=1).first()
+        return self.session.query(Block).filter_by(checksum=checksum, valid=True).first()
 
 
     def get_blocks_by_version(self, version_uid):
@@ -480,8 +479,8 @@ class MetaBackend(_MetaBackend):
             version.snapshot_name,
             version.size,
             version.size_bytes,
-            version.valid,
-            version.protected,
+            int(version.valid),
+            int(version.protected),
             ])
         for block in blocks:
             _csv.writerow([
@@ -491,7 +490,7 @@ class MetaBackend(_MetaBackend):
                 block.date.strftime('%Y-%m-%d %H:%M:%S'),
                 block.checksum,
                 block.size,
-                block.valid,
+                int(block.valid),
                 ])
         return _csv
 
@@ -519,8 +518,8 @@ class MetaBackend(_MetaBackend):
             snapshot_name=version_snapshot_name,
             size=version_size,
             size_bytes=version_size_bytes,
-            valid=version_valid,
-            protected=version_protected,
+            valid=bool(version_valid),
+            protected=bool(version_protected),
             )
         self.session.add(version)
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -547,7 +546,7 @@ class MetaBackend(_MetaBackend):
                     date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
                     checksum=checksum,
                     size=size,
-                    valid=valid,
+                    valid=bool(valid),
                 )
                 self.session.add(block)
         except:  # see above

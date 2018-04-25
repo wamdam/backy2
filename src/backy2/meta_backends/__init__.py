@@ -9,7 +9,7 @@ class MetaBackend():
     def __init__(self):
         pass
 
-    def set_version(self, version_name, snapshot_name, size, size_bytes):
+    def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=False):
         """ Creates a new version with a given name and snapshot_name.
         size is the number of blocks this version will contain.
         Returns a uid for this version.
@@ -71,7 +71,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size, _commit=True):
+    def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):
         """ Set a block to <id> for a version's uid (which must exist) and
         store it's uid (which points to the data BLOB).
         checksum is the block's checksum

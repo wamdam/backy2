@@ -95,14 +95,14 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.meta_backend
         name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        uid = backend.set_version(name, snapshot_name, 10, 5000, 1)
+        uid = backend.set_version(name, snapshot_name, 10, 5000, True)
         self.assertIsNotNone(uid)
         version = backend.get_version(uid)
         self.assertEqual(version.name, name)
         self.assertEqual(version.size, 10)
         self.assertEqual (version.size_bytes, 5000)
         self.assertEqual(version.uid, uid)
-        self.assertEqual(version.valid,1)
+        self.assertTrue(version.valid)
 
     def test_metabackend_version_not_found(self):
         backend = self.meta_backend
@@ -116,8 +116,8 @@ class MiscTestCase(BackendTestCase, TestCase):
         checksum = '1234567890'
         size = 5000
         id = 0
-        version_uid = backend.set_version(name, snapshot_name, 10, 5000, 1)
-        backend.set_block(id, version_uid, block_uid, checksum, size, 1)
+        version_uid = backend.set_version(name, snapshot_name, 10, 5000, True)
+        backend.set_block(id, version_uid, block_uid, checksum, size, True)
 
         block = backend.get_block(block_uid)
 
@@ -132,13 +132,13 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.meta_backend
         version_name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        version_uid = backend.set_version(version_name, snapshot_name, TESTLEN, 5000, 1)
+        version_uid = backend.set_version(version_name, snapshot_name, TESTLEN, 5000, True)
         block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
         checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
         size = 5000
 
         for id in range(TESTLEN):
-            backend.set_block(id, version_uid, block_uids[id], checksums[id], size, 1)
+            backend.set_block(id, version_uid, block_uids[id], checksums[id], size, True)
 
         blocks = backend.get_blocks_by_version(version_uid)
         self.assertEqual(len(blocks), TESTLEN)

@@ -18,7 +18,7 @@ class test_sql(BackendTestCase, TestCase):
                                           'snapshot-name',
                                           4,
                                           4 * 1024 * 4096,
-                                          0)
+                                          False)
             self.meta_backend._commit()
 
             version = self.meta_backend.get_version(version_uid)
@@ -26,28 +26,28 @@ class test_sql(BackendTestCase, TestCase):
             self.assertEqual('snapshot-name', version.snapshot_name)
             self.assertEqual(4, version.size)
             self.assertEqual(4 * 1024 * 4096, version.size_bytes)
-            self.assertEqual(0, version.valid)
-            self.assertEqual(0, version.protected)
+            self.assertFalse(version.valid)
+            self.assertFalse(version.protected)
 
             self.meta_backend.set_version_valid(version_uid)
             self.meta_backend._commit()
             version = self.meta_backend.get_version(version_uid)
-            self.assertEqual(1, version.valid)
+            self.assertTrue(version.valid)
 
             self.meta_backend.set_version_invalid(version_uid)
             self.meta_backend._commit()
             version = self.meta_backend.get_version(version_uid)
-            self.assertEqual(0, version.valid)
+            self.assertFalse(version.valid)
 
             self.meta_backend.protect_version(version_uid)
             self.meta_backend._commit()
             version = self.meta_backend.get_version(version_uid)
-            self.assertEqual(1, version.protected)
+            self.assertTrue(version.protected)
 
             self.meta_backend.unprotect_version(version_uid)
             self.meta_backend._commit()
             version = self.meta_backend.get_version(version_uid)
-            self.assertEqual(0, version.protected)
+            self.assertFalse(version.protected)
 
             self.meta_backend.add_tag(version_uid, 'tag-123')
             self.meta_backend._commit()
@@ -67,7 +67,7 @@ class test_sql(BackendTestCase, TestCase):
                                                             'snapshot-name',
                                                             4,
                                                             4 * 1024 * 4096,
-                                                            0)
+                                                            False)
                 version = self.meta_backend.get_version(version_uid)
                 self.assertNotIn(version.uid, version_uids)
                 version_uids[version.uid] = True
@@ -79,7 +79,7 @@ class test_sql(BackendTestCase, TestCase):
                                       'snapshot-name-' + self.random_string(12),
                                       4,
                                       4 * 1024 * 4096,
-                                      0)
+                                      False)
         self.meta_backend._commit()
 
         checksums = []
@@ -94,7 +94,7 @@ class test_sql(BackendTestCase, TestCase):
                 uids[id],
                 checksums[id],
                 1024 * 4096,
-                1,
+                True,
                 _commit=False,
                 _upsert=False)
         self.meta_backend._commit()
@@ -106,7 +106,7 @@ class test_sql(BackendTestCase, TestCase):
             self.assertEqual(uids[id], block.uid)
             self.assertEqual(checksum, block.checksum)
             self.assertEqual(1024 * 4096, block.size)
-            self.assertEqual(1, block.valid)
+            self.assertTrue(block.valid)
 
         for id, uid in enumerate(uids):
             block = self.meta_backend.get_block(uid)
@@ -115,7 +115,7 @@ class test_sql(BackendTestCase, TestCase):
             self.assertEqual(uid, block.uid)
             self.assertEqual(checksums[id], block.checksum)
             self.assertEqual(1024 * 4096, block.size)
-            self.assertEqual(1, block.valid)
+            self.assertTrue(block.valid)
 
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         self.assertEqual(num_blocks, len(blocks))
@@ -125,7 +125,7 @@ class test_sql(BackendTestCase, TestCase):
             self.assertEqual(uids[id], block.uid)
             self.assertEqual(checksums[id], block.checksum)
             self.assertEqual(1024 * 4096, block.size)
-            self.assertEqual(1, block.valid)
+            self.assertTrue(block.valid)
 
         for id, block in enumerate(blocks):
             dereferenced_block = block.deref()
@@ -134,7 +134,7 @@ class test_sql(BackendTestCase, TestCase):
             self.assertEqual(uids[id], dereferenced_block.uid)
             self.assertEqual(checksums[id], dereferenced_block.checksum)
             self.assertEqual(1024 * 4096, dereferenced_block.size)
-            self.assertEqual(1, dereferenced_block.valid)
+            self.assertTrue(dereferenced_block.valid)
 
         uids_all = self.meta_backend.get_all_block_uids()
         for uid in uids_all:
