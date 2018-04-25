@@ -83,15 +83,19 @@ class DataBackend(_DataBackend):
 
         super().__init__(config)
 
-    def _init_worker_thread(self, id_):
-        self._local.resource = boto3.session.Session().resource('s3', **self._resource_config)
-        self._local.bucket = self._local.resource.Bucket(self._bucket_name)
+    def _init_connection(self):
+        if not hasattr(self._local, 'resource'):
+            logger.debug('Initializing S3 session and resource for {}'.format(threading.current_thread().name))
+            self._local.resource = boto3.session.Session().resource('s3', **self._resource_config)
+            self._local.bucket = self._local.resource.Bucket(self._bucket_name)
 
     def _write_raw(self, uid, data, metadata):
+        self._init_connection()
         object = self._local.bucket.Object(uid)
         object.put(Body=data, Metadata=metadata)
 
     def _read_raw(self, uid, offset=0, length=None):
+        self._init_connection()
         object = self._local.bucket.Object(uid)
         while True:
             try:
@@ -112,6 +116,7 @@ class DataBackend(_DataBackend):
         return data, object['Metadata']
 
     def rm(self, uid):
+        self._init_connection()
         # delete() always returns 204 even when key doesn't exist, so check for existence
         object = self._local.bucket.Object(uid)
         try:
@@ -128,7 +133,7 @@ class DataBackend(_DataBackend):
         """ Deletes many uids from the data backend and returns a list
         of uids that couldn't be deleted.
         """
-
+        self._init_connection()
         if self.multi_delete:
             # Amazon (at least) only handles 1000 deletes at a time
             # Split list into parts of at most 1000 elements
@@ -158,6 +163,7 @@ class DataBackend(_DataBackend):
             return errors
 
     def get_all_blob_uids(self, prefix=None):
+        self._init_connection()
         if prefix is None:
             return [object.key for object in self._local.bucket.objects.filter()]
         else:
