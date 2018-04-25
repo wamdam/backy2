@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-import itertools
 import json
 from ast import literal_eval
 from threading import Lock
@@ -87,16 +86,6 @@ def backy_from_config(Config):
             process_name=process_name,
             )
     return backy
-
-
-def grouper(n, iterable):
-    it = iter(iterable)
-    while True:
-       chunk = tuple(itertools.islice(it, n))
-       if not chunk:
-           return
-       yield chunk
-
 
 # token_bucket.py
 class TokenBucket:
