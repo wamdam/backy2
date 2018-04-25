@@ -67,6 +67,8 @@ class BackendTestCase(TestCase):
 
     def tearDown(self):
         if hasattr(self, 'data_backend'):
+            uids = self.data_backend.get_all_blob_uids()
+            self.assertEqual(0, len(uids))
             self.data_backend.close()
         if hasattr(self, 'meta_backend'):
             self.meta_backend.close()
