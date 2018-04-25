@@ -57,7 +57,7 @@ class SmokeTestCase():
                     self.patch(testpath, 'image', offset, data)
                     hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
             # truncate?
-            with open(os.path.join(testpath, 'image'), 'r+b') as f:
+            with open(os.path.join(testpath, 'image'), 'a+b') as f:
                 f.truncate(size)
 
             print('  Applied {} changes, size is {}.'.format(len(hints), size))
