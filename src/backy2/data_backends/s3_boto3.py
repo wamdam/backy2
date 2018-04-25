@@ -2,6 +2,7 @@
 # -*- encoding: utf-8 -*-
 import socket
 import time
+from itertools import islice
 
 import boto3
 from botocore.client import Config
@@ -126,7 +127,8 @@ class DataBackend(_DataBackend):
         if self.multi_delete:
             # Amazon (at least) only handles 1000 deletes at a time
             # Split list into parts of at most 1000 elements
-            uids_parts = [uids[i:i+1000] for i  in range(0, len(uids), 1000)]
+            #uids_parts = [uids[i:i+1000] for i  in range(0, len(uids), 1000)]
+            uids_parts = [islice(uids, i, i+1000) for i  in range(0, len(uids), 1000)]
 
             errors = []
             for part in uids_parts:
