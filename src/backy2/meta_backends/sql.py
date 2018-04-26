@@ -148,22 +148,25 @@ class DeletedBlock(Base):
 class MetaBackend(_MetaBackend):
     """ Stores meta data in an sql database """
 
+    NAME = 'sql'
+
     FLUSH_EVERY_N_BLOCKS = 1000
 
     def __init__(self, config):
         _MetaBackend.__init__(self)
-        # engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
-        self.engine = sqlalchemy.create_engine(config.get('engine'))
 
+        our_config = config.get('metaBackend.{}'.format(self.NAME), types=dict)
+        self.engine = sqlalchemy.create_engine(config.get_from_dict(our_config, 'engine', types=str))
 
-    def open(self):
-        try:
-            self.migrate_db(self.engine)
-        #except sqlalchemy.exc.OperationalError:
-        except:
-            logger.error('Invalid database ({}). Please run initdb first.'.format(self.engine.url))
-            sys.exit(1)  # TODO: Return something (or raise)
-            #raise RuntimeError('Invalid database')
+    def open(self, _migratedb=True):
+        if _migratedb:
+            try:
+                self.migrate_db()
+            #except sqlalchemy.exc.OperationalError:
+            except:
+                logger.error('Invalid database ({}). Please run initdb first.'.format(self.engine.url))
+                sys.exit(1)  # TODO: Return something (or raise)
+                #raise RuntimeError('Invalid database')
 
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
@@ -171,7 +174,8 @@ class MetaBackend(_MetaBackend):
         return self
 
 
-    def migrate_db(self, engine):
+    def migrate_db(self):
+        # FIXME: fix to use supplied config
         # migrate the db to the lastest version
         from alembic.config import Config
         from alembic import command
@@ -182,7 +186,7 @@ class MetaBackend(_MetaBackend):
             command.upgrade(alembic_cfg, "head")
 
 
-    def initdb(self, _destroydb=False):
+    def initdb(self, _destroydb=False, _migratedb=True):
         # This is dangerous and is only used by the test suite to get a clean slate
         if _destroydb:
             Base.metadata.drop_all(self.engine)
@@ -192,13 +196,15 @@ class MetaBackend(_MetaBackend):
         # TODO: explicitly check if the database is empty
         Base.metadata.create_all(self.engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
 
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-        with self.engine.begin() as connection:
-            alembic_cfg.attributes['connection'] = connection
-            # mark the version table, "stamping" it with the most recent rev:
-            command.stamp(alembic_cfg, "head")
+        # FIXME: fix to use supplied config
+        if _migratedb:
+            from alembic.config import Config
+            from alembic import command
+            alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
+            with self.engine.begin() as connection:
+                alembic_cfg.attributes['connection'] = connection
+                # mark the version table, "stamping" it with the most recent rev:
+                command.stamp(alembic_cfg, "head")
 
 
     def _commit(self):

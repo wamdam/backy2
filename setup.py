@@ -43,10 +43,12 @@ Topic :: System :: Archiving :: Backup
         'setproctitle>=1.1.8',
         'python-dateutil>=2.6.0',
         'alembic',
+        'ruamel.yaml>=0.15.37',
         #'boto>=2.38.0',
         #'boto3>=1.6.16',
         #'psycopg2>=2.7.4',
         #'pex==1.1.0',
+        #'aws_s3_cse>=0.2',
         ],
     # tests_require=[
         # 'pytest-cov',

@@ -11,7 +11,6 @@ import importlib
 from functools import partial
 
 from backy2.logging import logger
-from backy2.meta_backends import MetaBackend
 
 
 def hints_from_rbd_diff(rbd_diff):
@@ -37,55 +36,60 @@ def parametrized_hash_function(config_hash_function):
     logger.debug('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
     hash_function_w_kwargs = hash_function(**kwargs)
 
-    if (len(hash_function_w_kwargs.digest()) > MetaBackend.MAXIMUM_CHECKSUM_LENGTH):
+    from backy2.meta_backends import MetaBackend
+    if len(hash_function_w_kwargs.digest()) > MetaBackend.MAXIMUM_CHECKSUM_LENGTH:
         raise RuntimeError('Specified hash function exceeds maximum digest length of {}'
                            .format(MetaBackend.MAXIMUM_CHECKSUM_LENGTH))
 
     return hash_function_w_kwargs
+
 
 def data_hexdigest(hash_function, data):
     hash = hash_function.copy()
     hash.update(data)
     return hash.hexdigest()
 
-def backy_from_config(Config):
+
+def backy_from_config(config):
     """ Create a partial backy class from a given Config object
     """
-    config_DEFAULTS = Config(section='DEFAULTS')
-    block_size = config_DEFAULTS.getint('block_size')
-    hash_function = parametrized_hash_function(config_DEFAULTS.get('hash_function', 'sha512'))
-    lock_dir = config_DEFAULTS.get('lock_dir', None)
-    process_name = config_DEFAULTS.get('process_name', 'backy2')
+    block_size = config.get('blockSize', types=int)
+    hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
+    lock_dir = config.get('lockDirectory', types=str)
+    process_name = config.get('processName', types=str)
 
-    # configure meta backend
-    config_MetaBackend = Config(section='MetaBackend')
-    try:
-        MetaBackendLib = importlib.import_module(config_MetaBackend.get('type'))
-    except ImportError:
-        raise NotImplementedError('MetaBackend type {} unsupported.'.format(config_MetaBackend.get('type')))
-    else:
-        meta_backend = MetaBackendLib.MetaBackend(config_MetaBackend)
+    from backy2.data_backends import DataBackend
+    name = config.get('dataBackend.type', None, types=str)
+    if name is not None:
+        try:
+            DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
+        except ImportError:
+            raise NotImplementedError('Data backend type {} unsupported'.format(name))
+        else:
+            data_backend = DataBackendLib.DataBackend(config)
 
-    # configure file backend
-    config_DataBackend = Config(section='DataBackend')
-    try:
-        DataBackendLib = importlib.import_module(config_DataBackend.get('type'))
-    except ImportError:
-        raise NotImplementedError('DataBackend type {} unsupported.'.format(config_DataBackend.get('type')))
-    else:
-        data_backend = DataBackendLib.DataBackend(config_DataBackend)
+    from backy2.meta_backends import MetaBackend
+    name = config.get('metaBackend.type', None, types=str)
+    if name is not None:
+        try:
+            MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
+        except ImportError:
+            raise NotImplementedError('Meta backend type {} unsupported'.format(name))
+        else:
+            meta_backend = MetaBackendLib.MetaBackend(config)
 
     from backy2.backy import Backy
     backy = partial(Backy,
-            meta_backend=meta_backend,
-            data_backend=data_backend,
-            config=Config,
-            block_size=block_size,
-            hash_function=hash_function,
-            lock_dir=lock_dir,
-            process_name=process_name,
+                    meta_backend=meta_backend,
+                    data_backend=data_backend,
+                    config=config,
+                    block_size=block_size,
+                    hash_function=hash_function,
+                    lock_dir=lock_dir,
+                    process_name=process_name,
             )
     return backy
+
 
 # token_bucket.py
 class TokenBucket:

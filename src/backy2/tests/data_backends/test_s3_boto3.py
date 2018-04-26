@@ -5,48 +5,43 @@ from . import DatabackendTestCase
 
 class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
-        [DEFAULTS]
-        logfile: /dev/stderr
-        block_size: 4096
-        hash_function: sha512
-        lock_dir: /tmp
-        process_name: backy2-test
-
-        [MetaBackend]
-        type: backy2.meta_backends.sql
-        engine: sqlite:///{testpath}/backy.sqlite
-
-        [DataBackend]
-        type: backy2.data_backends.s3_boto3
-        
         compression: backy2.data_backends.compression.zstd
         compression_default: zstd
-        
         encryption: backy2.data_backends.encryption.aws_s3_cse
         encryption_materials: {{"MasterKey": "0000000000000000"}}
         encryption_default: aws_s3_cse
-        
-        aws_access_key_id: minio
-        aws_secret_access_key: minio123
-        host: 127.0.0.1
-        port: 9901
-        is_secure: false
-        bucket_name: backy2
-        
-        simultaneous_writes: 5
-        simultaneous_reads: 5
+        configurationVersion: '0.1'
+        logFile: /dev/stderr
+        lockDirectory: {testpath}/lock
+        hashFunction: blake2b,digest_size=32
+        dataBackend:
+          type: s3_boto3
+          s3_boto3:
+            awsAccessKeyId: minio
+            awsSecretAccessKey: minio123
+            host: 127.0.0.1
+            port: 9901
+            isSecure: False
+            bucketName: backy2
+            multiDelete: true
+            
+            compression:
+              - name: zstd
+                materials:
+                  level: 1
+                active: true
+                  
+            encryption:
+              - name: aws_s3_cse
+                materials:
+                  masterKey: !!binary |
+                    e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+                active: true
 
-        bandwidth_read: 78643200
-        bandwidth_write: 78643200
-        [NBD]
-        cachedir: /tmp
-
-        [io_file]
-        simultaneous_reads: 5
-
-        [io_rbd]
-        ceph_conffile: /etc/ceph/ceph.conf
-        simultaneous_reads: 10
+          simultaneousWrites: 1
+          simultaneousReads: 1
+          bandwidthRead: 0
+          bandwidthWrite: 0           
         """
 if __name__ == '__main__':
     unittest.main()

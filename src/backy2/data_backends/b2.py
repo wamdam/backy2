@@ -13,6 +13,8 @@ from b2.exception import B2Error, FileNotPresent
 class DataBackend(_DataBackend):
     """ A DataBackend which stores its data in a BackBlaze (B2) file store."""
 
+    NAME = 'b2'
+
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
@@ -23,9 +25,10 @@ class DataBackend(_DataBackend):
     def __init__(self, config):
         super().__init__(config)
 
-        account_id = config.get('account_id')
-        application_key = config.get('application_key')
-        bucket_name = config.get('bucket_name')
+        our_config = config.get('dataBackend.{}'.format(self.NAME), types=dict)
+        account_id = config.get_from_dict(our_config, 'accountId', types=str)
+        application_key = config.get_from_dict(our_config, 'applicationKey', types=str)
+        bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
 
         self.service = b2.api.B2Api(b2.account_info.InMemoryAccountInfo())
         self.service.authorize_account('production', account_id, application_key)

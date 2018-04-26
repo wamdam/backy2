@@ -26,12 +26,16 @@ else:  # pragma: no cover
 
 
 class IO(_IO):
+
+    NAME = 'file'
+
     simultaneous_reads = 1
     mode = None
     _writer = None
 
     def __init__(self, config, block_size, hash_function):
-        self.simultaneous_reads = config.getint('simultaneous_reads')
+        our_config = config.get('io.{}'.format(self.NAME), types=dict)
+        self.simultaneous_reads = config.get_from_dict(our_config, 'simultaneousReads', types=int)
         self.block_size = block_size
         self.hash_function = hash_function
 

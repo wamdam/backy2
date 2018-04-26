@@ -41,15 +41,15 @@ class Backy():
 
     def __init__(self, meta_backend, data_backend, config, block_size=None,
             hash_function=None, lock_dir=None, process_name='backy2',
-            initdb=False, _destroydb=False):
+            initdb=False, _destroydb=False, _migratedb=True):
         if block_size is None:
             block_size = 1024*4096  # 4MB
         if hash_function is None:
             import hashlib
             hash_function = hashlib.sha512
         if initdb:
-            meta_backend.initdb(_destroydb=_destroydb)
-        self.meta_backend = meta_backend.open()
+            meta_backend.initdb(_destroydb=_destroydb,_migratedb=_migratedb)
+        self.meta_backend = meta_backend.open(_migratedb=_migratedb)
         self.data_backend = data_backend
         self.config = config
         self.block_size = block_size
@@ -147,17 +147,22 @@ class Backy():
 
     def get_io_by_source(self, source):
         res = parse.urlparse(source)
+
         if res.params or res.query or res.fragment:
             raise ValueError('Invalid URL.')
+
         scheme = res.scheme
         if not scheme:
             raise ValueError('Invalid URL. You must provide the type (e.g. file://)')
-        # import io with name == scheme
-        # and pass config section io_<scheme>
-        IOLib = importlib.import_module('backy2.io.{}'.format(scheme))
-        config = self.config(section='io_{}'.format(scheme))
+
+        try:
+            from backy2.io import IO
+            IOLib = importlib.import_module('{}.{}'.format(IO.PACKAGE_PREFIX, scheme))
+        except ImportError:
+            raise NotImplementedError('IO scheme {} not supported'.format(scheme))
+
         return IOLib.IO(
-                config=config,
+                config=self.config,
                 block_size=self.block_size,
                 hash_function=self.hash_function,
                 )

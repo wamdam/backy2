@@ -20,6 +20,8 @@ class DataBackend(_DataBackend):
     starting with the bytes of the generated uid. The depth of this structure
     is configurable via the DEPTH parameter, which defaults to 2. """
 
+    NAME = 'file'
+
     DEPTH = 2
     SPLIT = 2
     SUFFIX = '.blob'
@@ -33,7 +35,8 @@ class DataBackend(_DataBackend):
     def __init__(self, config):
         super().__init__(config)
 
-        self.path = config.get('path')
+        our_config = config.get('dataBackend.{}'.format(self.NAME), types=dict)
+        self.path = config.get_from_dict(our_config, 'path', types=str)
 
     def _path(self, uid):
         """ Returns a generated path (depth = self.DEPTH) from a uid.
