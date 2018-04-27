@@ -19,11 +19,11 @@ class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
           s3_boto3:
             awsAccessKeyId: minio
             awsSecretAccessKey: minio123
-            host: 127.0.0.1
-            port: 9901
-            isSecure: False
+            endpointUrl: http://127.0.0.1:9901/
             bucketName: backy2
             multiDelete: true
+            addressingStyle: path
+            disableEncodingType: true
             
             compression:
               - name: zstd

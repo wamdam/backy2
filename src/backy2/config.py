@@ -39,6 +39,9 @@ class Config():
       bandwidthWrite: 0
       s3_boto3:
         multiDelete: true
+        useSsl: true
+        addressingStyle: path
+        disableEncodingType: false
     nbd:
       cacheDir: /tmp
     io:

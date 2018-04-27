@@ -62,11 +62,14 @@ dataBackend:
   #s3_boto3:
   #  awsAccessKeyId: ********
   #  awsSecretAccessKey: ********
-  #  host: www.example.com
-  #  port: 80
-  #  isSecure: false
+  #  regionName: (optional)
+  #  endpointUrl: (optional)
+  #  signatureVersion: (optional)
+  #  useSsl: true or false (default is true, ignored when endpointUrl is set)
   #  bucketName: backy2
-  #  multiDelete: true
+  #  multiDelete: true or false (default is true)
+  #  addressingStyle: path, virtual or auto (default is path)
+  #  disableEncodingType: true or false (default is false)
 
   #b2:
   #   accountId: ***********

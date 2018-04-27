@@ -102,7 +102,7 @@ class DatabackendTestCase(BackendTestCase):
         self._test_rm_many()
 
     def test_rm_many_wo_multidelete(self):
-        if hasattr(self.data_backend, 'multi_delete') and self.data_backend.multi_delete:
+        if hasattr(self.data_backend, '_multi_delete') and self.data_backend._multi_delete:
             self.data_backend.multi_delete = False
             self._test_rm_many()
         else:
