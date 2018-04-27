@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import json
 import queue
 import threading
 import time
@@ -27,58 +26,62 @@ class DataBackend():
     _COMPRESSION_HEADER = "x-backy2-comp-type"
     _ENCRYPTION_HEADER = "x-backy2-enc-type"
 
+    PACKAGE_PREFIX = 'backy2.data_backends'
+    _ENCRYPTION_PACKAGE_PREFIX = PACKAGE_PREFIX + '.encryption'
+    _COMPRESSION_PACKAGE_PREFIX = PACKAGE_PREFIX + '.compression'
+
     def __init__(self, config):
         self.encryption = {}
         self.compression = {}
-        self.encryption_default = None
-        self.compression_default = None
+        self.encryption_active = None
+        self.compression_active = None
 
-        encryption_types = config.get('encryption', '')
-        if encryption_types != '':
-            encryption_types = [type.strip() for type in encryption_types.split(',')]
-            for encryption_type in encryption_types:
-                materials = json.loads(config.get('encryption_materials', '{}'))
+        encryption_modules = config.get('dataBackend.{}.encryption'.format(self.NAME), None, types=list)
+        if encryption_modules is not None:
+            for encryption_module_dict in encryption_modules:
+                name = config.get_from_dict(encryption_module_dict, 'name', types=(str,))
+                materials = config.get_from_dict(encryption_module_dict, 'materials', types=dict)
                 try:
-                    encryption_module = importlib.import_module(encryption_type)
+                    encryption_module = importlib.import_module('{}.{}'.format(self._ENCRYPTION_PACKAGE_PREFIX, name))
                 except ImportError:
-                    raise NotImplementedError('encryption type {} is not supported'.format(encryption_type))
+                    raise NotImplementedError('Encryption type {} is not supported'.format(name))
                 else:
-                    self.encryption[encryption_module.Encryption.NAME] = encryption_module.Encryption(materials)
+                    if (name != encryption_module.Encryption.NAME):
+                        raise RuntimeError('Encryption module file name and name don\'t agree ({} != {})'
+                                         .format(name, encryption_module.Encryption.NAME))
 
-        encryption_default = config.get('encryption_default', '')
-        if encryption_default != '' and encryption_default != 'none':
-            if not self.SUPPORTS_METADATA:
-                raise NotImplementedError('data store doesn\'t support metadata, no encryption possible')
-            if encryption_default in self.encryption:
-                self.encryption_default = self.encryption[encryption_default]
-            else:
-                raise NotImplementedError('encryption default {} is not supported'.format(encryption_type))
+                    self.encryption[name] = encryption_module.Encryption(materials)
+                    
+                if config.get_from_dict(encryption_module_dict, 'active', types=bool):
+                    if self.encryption_active is not None:
+                        raise RuntimeError('Only one encryption module can be active')
+                    self.encryption_active = self.encryption[name]
 
-        compression_types = config.get('compression', '')
-        if compression_types != '':
-            compression_types = [type.strip() for type in compression_types.split(',')]
-            for compression_type in compression_types:
-                materials = json.loads(config.get('compression_materials', '{}'))
+        compression_modules = config.get('dataBackend.{}.compression'.format(self.NAME), None, types=list)
+        if compression_modules is not None:
+            for compression_module_dict in compression_modules:
+                name = config.get_from_dict(compression_module_dict, 'name', types=str)
+                materials = config.get_from_dict(compression_module_dict, 'materials', None, types=dict)
                 try:
-                    compression_module = importlib.import_module(compression_type)
+                    compression_module = importlib.import_module('{}.{}'.format(self._COMPRESSION_PACKAGE_PREFIX, name))
                 except ImportError:
-                    raise NotImplementedError('compression type {} is not supported'.format(compression_type))
+                    raise NotImplementedError('Compression type {} is not supported'.format(name))
                 else:
-                    self.compression[compression_module.Compression.NAME] = compression_module.Compression(materials)
+                    if (name != compression_module.Compression.NAME):
+                        raise RuntimeError('Compression module file name and name don\'t agree ({} != {})'
+                                           .format(name, compression_module.Compression.NAME))
 
-        compression_default = config.get('compression_default', '')
-        if compression_default != '' and compression_default != 'none':
-            if not self.SUPPORTS_METADATA:
-                raise NotImplementedError('data store doesn\'t support metadata, no compression possible')
-            if compression_default in self.compression:
-                self.compression_default = self.compression[compression_default]
-            else:
-                raise NotImplementedError('compression default {} is not supported'.format(compression_type))
+                    self.compression[name] = compression_module.Compression(materials)
 
-        simultaneous_writes = config.getint('simultaneous_writes', 1)
-        simultaneous_reads = config.getint('simultaneous_reads', 1)
-        bandwidth_read = config.getint('bandwidth_read', 0)
-        bandwidth_write = config.getint('bandwidth_write', 0)
+                if config.get_from_dict(compression_module_dict, 'active', types=bool):
+                    if self.compression_active is not None:
+                        raise RuntimeError('Only one compression module can be active')
+                    self.compression_active = self.compression[name]
+
+        simultaneous_writes = config.get('dataBackend.simultaneousWrites', types=int)
+        simultaneous_reads = config.get('dataBackend.simultaneousReads', types=int)
+        bandwidth_read = config.get('dataBackend.bandwidthRead', types=int)
+        bandwidth_write = config.get('dataBackend.bandwidthWrite', types=int)
 
         self.read_throttling = TokenBucket()
         self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
@@ -218,28 +221,28 @@ class DataBackend():
         raise NotImplementedError()
 
     def encrypt(self, data):
-        if self.encryption_default is not None:
-            data, metadata = self.encryption_default.encrypt(data)
-            metadata[self._ENCRYPTION_HEADER] = self.encryption_default.NAME
+        if self.encryption_active is not None:
+            data, metadata = self.encryption_active.encrypt(data)
+            metadata[self._ENCRYPTION_HEADER] = self.encryption_active.NAME
             return data, metadata
         else:
             return data, {}
 
     def decrypt(self, data, metadata):
         if self._ENCRYPTION_HEADER in metadata:
-            type = metadata[self._ENCRYPTION_HEADER]
-            if type in self.encryption:
-                return self.encryption[type].decrypt(data, metadata)
+            name = metadata[self._ENCRYPTION_HEADER]
+            if name in self.encryption:
+                return self.encryption[name].decrypt(data, metadata)
             else:
-                raise IOError('unsupported encryption type {}'.format(type))
+                raise IOError('Unsupported encryption type {}'.format(name))
         else:
             return data
 
     def compress(self, data):
-        if self.compression_default is not None:
-            compressed_data, metadata = self.compression_default.compress(data)
+        if self.compression_active is not None:
+            compressed_data, metadata = self.compression_active.compress(data)
             if len(compressed_data) < len(data):
-                metadata[self._COMPRESSION_HEADER] = self.compression_default.NAME
+                metadata[self._COMPRESSION_HEADER] = self.compression_active.NAME
                 return compressed_data, metadata
             else:
                 return data, {}
@@ -248,11 +251,11 @@ class DataBackend():
 
     def uncompress(self, data, metadata):
         if self._COMPRESSION_HEADER in metadata:
-            type = metadata[self._COMPRESSION_HEADER]
-            if type in self.compression:
-                return self.compression[type].uncompress(data, metadata)
+            name = metadata[self._COMPRESSION_HEADER]
+            if name in self.compression:
+                return self.compression[name].uncompress(data, metadata)
             else:
-                raise IOError('unsupported compression type {}'.format(type))
+                raise IOError('Unsupported compression type {}'.format(name))
         else:
             return data
 

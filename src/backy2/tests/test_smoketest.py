@@ -108,185 +108,140 @@ class SmokeTestCase():
 class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            [DEFAULTS]
-            logfile: /var/log/backy.log
-            block_size: 4096
-            hash_function: blake2b,digest_size=32
-            lock_dir: {testpath}/lock
-            process_name: backy2
-
-            [MetaBackend]
-            type: backy2.meta_backends.sql
-            engine: sqlite:///{testpath}/backy.sqlite
-
-            [DataBackend]
-            type: backy2.data_backends.file
-            path: {testpath}/data
-            simultaneous_writes: 5
-            bandwidth_read: 100000
-            bandwidth_write: 100000
-
-            [NBD]
-            cachedir: /tmp
-
-            [io_file]
-            simultaneous_reads: 5
-
-            [io_rbd]
-            ceph_conffile: /etc/ceph/ceph.conf
-            simultaneous_reads: 10
+            configurationVersion: '0.1'
+            processName: backy2
+            logFile: /dev/stderr
+            lockDirectory: {testpath}/lock
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4096
+            io:
+              file:
+                simultaneousReads: 5
+            dataBackend:
+              type: file
+              file:
+                path: {testpath}/data
+              simultaneousWrites: 5
+              simultaneousReads: 5
+              bandwidthRead: 0
+              bandwidthWrite: 0
+            metaBackend: 
+              type: sql
+              sql:
+                engine: sqlite:///{testpath}/backy.sqlite
             """
 class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            [DEFAULTS]
-            logfile: /var/log/backy.log
-            block_size: 4096
-            hash_function: blake2b,digest_size=32
-            lock_dir: {testpath}/lock
-            process_name: backy2
-
-            [MetaBackend]
-            type: backy2.meta_backends.sql
-            engine: postgresql://backy2:verysecret@localhost:15432/backy2
-
-            [DataBackend]
-            type: backy2.data_backends.file
-            path: {testpath}/data
-            simultaneous_writes: 5
-            bandwidth_read: 100000
-            bandwidth_write: 100000
-
-            [NBD]
-            cachedir: /tmp
-
-            [io_file]
-            simultaneous_reads: 5
-
-            [io_rbd]
-            ceph_conffile: /etc/ceph/ceph.conf
-            simultaneous_reads: 10
+            configurationVersion: '0.1'
+            processName: backy2
+            logFile: /dev/stderr
+            lockDirectory: {testpath}/lock
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4096
+            io:
+              file:
+                simultaneousReads: 5
+            dataBackend:
+              type: file
+              file:
+                path: {testpath}/data
+              simultaneousWrites: 5
+              simultaneousReads: 5
+              bandwidthRead: 0
+              bandwidthWrite: 0
+            metaBackend: 
+              type: sql
+              sql:
+                engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
 class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            [DEFAULTS]
-            logfile: /var/log/backy.log
-            block_size: 4096
-            hash_function: blake2b,digest_size=32
-            lock_dir: {testpath}/lock
-            process_name: backy2
-
-            [MetaBackend]
-            type: backy2.meta_backends.sql
-            engine: postgresql://backy2:verysecret@localhost:15432/backy2
-
-            [DataBackend]
-            type: backy2.data_backends.s3
-            
-            aws_access_key_id: minio
-            aws_secret_access_key: minio123
-            host: 127.0.0.1
-            port: 9901
-            is_secure: false
-            bucket_name: backy2
-            
-            simultaneous_writes: 5
-            simultaneous_reads: 5
-    
-            bandwidth_read: 78643200
-            bandwidth_write: 78643200
-            [NBD]
-            cachedir: /tmp
-
-            [io_file]
-            simultaneous_reads: 5
-
-            [io_rbd]
-            ceph_conffile: /etc/ceph/ceph.conf
-            simultaneous_reads: 10
+            configurationVersion: '0.1'
+            processName: backy2
+            logFile: /dev/stderr
+            lockDirectory: {testpath}/lock
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4096
+            io:
+              file:
+                simultaneousReads: 5
+            dataBackend:
+              type: s3
+              s3:
+                awsAccessKeyId: minio
+                awsSecretAccessKey: minio123
+                host: 127.0.0.1
+                port: 9901
+                isSecure: False
+                bucketName: backy2
+              simultaneousWrites: 5
+              simultaneousReads: 5
+              bandwidthRead: 0
+              bandwidthWrite: 0
+            metaBackend: 
+              type: sql
+              sql:
+                engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
 
 class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            [DEFAULTS]
-            logfile: /var/log/backy.log
-            block_size: 4096
-            hash_function: blake2b,digest_size=32
-            lock_dir: {testpath}/lock
-            process_name: backy2
-
-            [MetaBackend]
-            type: backy2.meta_backends.sql
-            engine: postgresql://backy2:verysecret@localhost:15432/backy2
-
-            [DataBackend]
-            type: backy2.data_backends.s3_boto3
-            
-            compression: backy2.data_backends.compression.zstd
-            compression_default: zstd
-            
-            encryption: backy2.data_backends.encryption.aws_s3_cse
-            encryption_materials: {{"MasterKey": "0000000000000000"}}
-            encryption_default: aws_s3_cse
-            
-            aws_access_key_id: minio
-            aws_secret_access_key: minio123
-            host: 127.0.0.1
-            port: 9901
-            is_secure: false
-            bucket_name: backy2
-            
-            simultaneous_writes: 5
-            simultaneous_reads: 5
-    
-            bandwidth_read: 78643200
-            bandwidth_write: 78643200            
-            [NBD]
-            cachedir: /tmp
-
-            [io_file]
-            simultaneous_reads: 5
-
-            [io_rbd]
-            ceph_conffile: /etc/ceph/ceph.conf
-            simultaneous_reads: 10
+            configurationVersion: '0.1'
+            processName: backy2
+            logFile: /dev/stderr
+            lockDirectory: {testpath}/lock
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4096
+            io:
+              file:
+                simultaneousReads: 5
+            dataBackend:
+              type: s3_boto3
+              s3_boto3:
+                awsAccessKeyId: minio
+                awsSecretAccessKey: minio123
+                host: 127.0.0.1
+                port: 9901
+                isSecure: False
+                bucketName: backy2
+                multiDelete: true
+              simultaneousWrites: 5
+              simultaneousReads: 5
+              bandwidthRead: 0
+              bandwidthWrite: 0
+            metaBackend: 
+              type: sql
+              sql:
+                engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
 
 class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            [DEFAULTS]
-            logfile: /var/log/backy.log
-            block_size: 4096
-            hash_function: blake2b,digest_size=32
-            lock_dir: {testpath}/lock
-            process_name: backy2
-
-            [MetaBackend]
-            type: backy2.meta_backends.sql
-            engine: postgresql://backy2:verysecret@localhost:15432/backy2
-
-            [DataBackend]
-            type: backy2.data_backends.b2
-            
-            account_id: **************
-            application_key: **************
-            bucket_name: **************
-            
-            simultaneous_writes: 5
-            simultaneous_reads: 5
-    
-            bandwidth_read: 78643200
-            bandwidth_write: 78643200       
-            [NBD]
-            cachedir: /tmp
-
-            [io_file]
-            simultaneous_reads: 5
-
-            [io_rbd]
-            ceph_conffile: /etc/ceph/ceph.conf
-            simultaneous_reads: 10
+            configurationVersion: '0.1'
+            processName: backy2
+            logFile: /dev/stderr
+            lockDirectory: {testpath}/lock
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4096
+            io:
+              file:
+                simultaneousReads: 5
+            dataBackend:
+              type: b2
+              b2:
+                 accountId: **************
+                 applicationKey: **************
+                 bucketName: backy2
+              simultaneousWrites: 5
+              simultaneousReads: 5
+              bandwidthRead: 0
+              bandwidthWrite: 0
+            metaBackend: 
+              type: sql
+              sql:
+                engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """

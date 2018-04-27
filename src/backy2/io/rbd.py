@@ -17,6 +17,9 @@ from backy2.utils import data_hexdigest
 
 
 class IO(_IO):
+
+    NAME = 'rbd'
+
     simultaneous_reads = 10
     pool_name = None
     image_name = None
@@ -25,8 +28,9 @@ class IO(_IO):
     _writer = None
 
     def __init__(self, config, block_size, hash_function):
-        self.simultaneous_reads = config.getint('simultaneous_reads')
-        ceph_conffile = config.get('ceph_conffile')
+        our_config = config.get('io.{}'.format(self.NAME), types=dict)
+        self.simultaneous_reads = config.get_from_dict(our_config, 'simultaneousReads', types=int)
+        ceph_conffile = config.get_from_dict(our_config, 'cephConfigFile', types=str)
         self.block_size = block_size
         self.hash_function = hash_function
         self._reader_threads = []
@@ -35,7 +39,7 @@ class IO(_IO):
         self.cluster = rados.Rados(conffile=ceph_conffile)
         self.cluster.connect()
         # create a bitwise or'd list of the configured features
-        self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.getlist('new_image_features')])
+        self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.get_from_dict(our_config, 'newImageFeatures', types=list)])
 
 
     def open_r(self, io_name):

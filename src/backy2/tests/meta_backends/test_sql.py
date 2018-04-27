@@ -6,14 +6,17 @@ from backy2.tests.testcase import BackendTestCase
 class test_sql(BackendTestCase, TestCase):
 
     CONFIG = """
-        [MetaBackend]
-        type: backy2.meta_backends.sql
-        engine: sqlite:///{testpath}/backy.sqlite
-
+        configurationVersion: '0.1'
+        logFile: /dev/stderr
+        lockDirectory: {testpath}/lock
+        hashFunction: blake2b,digest_size=32
+        metaBackend: 
+          type: sql
+          sql:
+            engine: sqlite:///{testpath}/backy.sqlite
         """
 
     def test_version(self):
-
             version_uid = self.meta_backend.set_version('backup-name',
                                           'snapshot-name',
                                           4,
@@ -74,7 +77,6 @@ class test_sql(BackendTestCase, TestCase):
 
 
     def test_block(self):
-
         version_uid = self.meta_backend.set_version('name-' + self.random_string(12),
                                       'snapshot-name-' + self.random_string(12),
                                       4,
@@ -152,6 +154,3 @@ class test_sql(BackendTestCase, TestCase):
                 self.assertIn(uid, uids)
                 count += 1
         self.assertEqual(num_blocks, count)
-
-    def test_stats(self):
-        pass

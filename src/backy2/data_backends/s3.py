@@ -14,6 +14,8 @@ class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
+    NAME = 's3'
+
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
@@ -25,12 +27,13 @@ class DataBackend(_DataBackend):
 
         super().__init__(config)
 
-        aws_access_key_id = config.get('aws_access_key_id')
-        aws_secret_access_key = config.get('aws_secret_access_key')
-        host = config.get('host')
-        port = config.getint('port')
-        is_secure = config.getboolean('is_secure')
-        bucket_name = config.get('bucket_name', 'backy2')
+        our_config = config.get('dataBackend.{}'.format(self.NAME), types=dict)
+        aws_access_key_id = config.get_from_dict(our_config, 'awsAccessKeyId', types=str)
+        aws_secret_access_key = config.get_from_dict(our_config, 'awsSecretAccessKey', types=str)
+        host = config.get_from_dict(our_config, 'host', types=str)
+        port = config.get_from_dict(our_config, 'port', types=int)
+        is_secure = config.get_from_dict(our_config, 'isSecure', types=bool)
+        bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
         calling_format=boto.s3.connection.OrdinaryCallingFormat()
 
         self.conn = boto.connect_s3(

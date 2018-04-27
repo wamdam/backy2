@@ -7,11 +7,10 @@ import logging
 import sys
 
 import pkg_resources
-from functools import partial
 from io import StringIO
 from prettytable import PrettyTable
 
-from backy2.config import Config as _Config
+from backy2.config import Config
 from backy2.logging import logger, init_logging
 from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_hash_function
 
@@ -21,10 +20,10 @@ __version__ = pkg_resources.get_distribution('backy2').version
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, machine_output, Config):
+    def __init__(self, machine_output, config):
         self.machine_output = machine_output
-        self.Config = Config
-        self.backy = backy_from_config(Config)
+        self.config = config
+        self.backy = backy_from_config(config)
 
 
     def backup(self, name, snapshot_name, source, rbd, from_version, tag=None):
@@ -56,8 +55,7 @@ class Commands():
 
 
     def rm(self, version_uid, force):
-        config_DEFAULTS = self.Config(section='DEFAULTS')
-        disallow_rm_when_younger_than_days = int(config_DEFAULTS.get('disallow_rm_when_younger_than_days', '0'))
+        disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
         backy = self.backy()
         backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
         backy.close()
@@ -301,13 +299,9 @@ class Commands():
         from backy2.enterprise.nbdserver import Server as NbdServer
         from backy2.enterprise.nbd import BackyStore
         backy = self.backy()
-        config_NBD = self.Config(section='NBD')
-        config_DEFAULTS = self.Config(section='DEFAULTS')
-        hash_function = parametrized_hash_function(config_DEFAULTS.get('hash_function', 'sha512'))
-        store = BackyStore(
-                backy, cachedir=config_NBD.get('cachedir'),
-                hash_function=hash_function,
-                )
+        hash_function = parametrized_hash_function(self.get('hashFunction', types=str))
+        cache_dir = self.config.get('nbd.cacheDirectory', types=str)
+        store = BackyStore(backy, cachedir=cache_dir, hash_function=hash_function)
         addr = (bind_address, bind_port)
         server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
@@ -556,18 +550,17 @@ def main():
         except FileNotFoundError:
             logger.error('File not found: {}'.format(args.configfile))
             sys.exit(1)
-        Config = partial(_Config, cfg=cfg)
+        config = Config(cfg=cfg)
     else:
-        Config = partial(_Config, conf_name='backy')
-    config = Config(section='DEFAULTS')
+        config = Config()
 
     # logging ERROR only when machine output is selected
     if args.machine_output:
-        init_logging(config.get('logfile'), logging.ERROR)
+        init_logging(config.get('logFile', types=str), logging.ERROR)
     else:
-        init_logging(config.get('logfile'), console_level)
+        init_logging(config.get('logFile', types=str), console_level)
 
-    commands = Commands(args.machine_output, Config)
+    commands = Commands(args.machine_output, config)
     func = getattr(commands, args.func)
 
     # Pass over to function

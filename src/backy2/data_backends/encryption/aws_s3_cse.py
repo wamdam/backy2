@@ -5,12 +5,10 @@ class Encryption:
     NAME = 'aws_s3_cse'
 
     def __init__(self, materials):
+        if 'masterKey' not in materials:
+            raise KeyError('required key masterKey is missing in encryption materials')
 
-        if 'MasterKey' not in materials:
-            raise KeyError('required field MasterKey is missing in encryption materials')
-        master_key = materials['MasterKey'].encode('utf-8')
-
-        self.delegate = CSE(MasterKey=master_key)
+        self.delegate = CSE(master_key=materials['masterKey'])
 
     def encrypt(self, data):
         return self.delegate.encrypt_object(data)

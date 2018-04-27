@@ -17,6 +17,8 @@ class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
+    NAME = 's3_boto3'
+
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
@@ -26,14 +28,15 @@ class DataBackend(_DataBackend):
 
     def __init__(self, config):
 
-        aws_access_key_id = config.get('aws_access_key_id')
-        aws_secret_access_key = config.get('aws_secret_access_key')
-        host = config.get('host')
-        port = config.getint('port')
-        is_secure = config.getboolean('is_secure')
-
-        self._bucket_name = config.get('bucket_name', 'backy2')
-        self.multi_delete = config.getboolean('multi_delete', True)
+        our_config = config.get('dataBackend.{}'.format(self.NAME), types=dict)
+        aws_access_key_id = config.get_from_dict(our_config, 'awsAccessKeyId', types=str)
+        aws_secret_access_key = config.get_from_dict(our_config, 'awsSecretAccessKey', types=str)
+        host = config.get_from_dict(our_config, 'host', types=str)
+        port = config.get_from_dict(our_config, 'port', types=int)
+        is_secure = config.get_from_dict(our_config, 'isSecure', types=bool)
+        
+        self._bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
+        self.multi_delete = config.get_from_dict(our_config, 'multiDelete', types=bool)
 
         self._resource_config = {
             'aws_access_key_id': aws_access_key_id,

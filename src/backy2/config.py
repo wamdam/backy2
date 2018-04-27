@@ -1,102 +1,132 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-import glob
-from configparser import ConfigParser, NoSectionError, NoOptionError
-
+import operator
+import os
+from functools import reduce
 from io import StringIO
 from os.path import expanduser
+from ruamel.yaml import YAML
 
-default_config = """
-[DEFAULTS]
-logfile: /tmp/backy.log
-block_size: 4194304
-hash_function: sha512
-disallow_rm_when_younger_than_days: 0
-lock_dir: /tmp
+from backy2.logging import logger
 
-[MetaBackend]
-type: backy2.meta_backends.sql
-engine: sqlite:////tmp/backy.sqlite
 
-[DataBackend]
-type: backy2.data_backends.file
-path: /tmp
-simultaneous_writes: 1
-simultaneous_reads: 1
+class Config():
 
-[NBD]
-cachedir: /tmp
+    CONFIG_VERSION = '0.1'
 
-[io_file]
-simultaneous_reads: 1
+    CONFIG_DIR = 'backy2'
+    CONFIG_FILE = 'backy2.yaml'
 
-[io_rbd]
-simultaneous_reads: 1
-"""
+    DEFAULT_CONFIG = """
+    logFile: /tmp/backy.log
+    blockSize: 4194304
+    hashFunction: blake2b,digest_size=32
+    lockDirectory: /tmp
+    process_name: backy2
+    disallowRemoveWhenYounger: 6
+    metaBackend:
+      type: sql
+      sql:
+        engine: sqlite:////tmp/backy.sqlite
+    dataBackend:
+      type: file
+      file:
+        path: /var/lib/backy2/data
+      simultaneousWrites: 1
+      simultaneousReads: 1
+      bandwidthRead: 0
+      bandwidthWrite: 0
+      s3_boto3:
+        multiDelete: true
+    nbd:
+      cacheDir: /tmp
+    io:
+      file:
+        simultaneousReads: 1
+      rbd:
+        cephConfigFile: /etc/ceph/ceph.conf
+        simultaneousReads: 1
+    """
 
-class Config(object):
-    """A ConfigParser wrapper to support defaults when calling instance
-    methods, and also tied to a single section"""
+    # Source: https://stackoverflow.com/questions/823196/yaml-merge-in-python
+    @classmethod
+    def _merge_dicts(cls, user, default):
+        if isinstance(user,dict) and isinstance(default,dict):
+            for k,v in default.items():
+                if k not in user:
+                    user[k] = v
+                else:
+                    user[k] = cls._merge_dicts(user[k],v)
+        return user
 
-    SECTION = 'DEFAULTS'
+    def __init__(self, cfg=None, merge_defaults=True):
+        yaml = YAML(typ='safe', pure=True)
+        default_config = yaml.load(self.DEFAULT_CONFIG)
 
-    def __init__(self, cfg=None, extra_sources=(), section=None, conf_name=None):
-        """
-            cfg may be a string containing a configuration.
-            extra_sources is a list of explicit filenames to parse.
-            section initializes this class to default to this section.
-            conf_name, if given, is resolved to {conf_name}.cfg in several places (see _getsources)
-        """
-        if section is not None:
-            self.SECTION = section
         if cfg is None:
-            self.cp = ConfigParser()
-            self.cp.read_file(StringIO(default_config))
-            if conf_name:
-                sources = self._getsources(conf_name)
-                self.cp.read(sources)
-            for fp in extra_sources:
-                self.cp.read_file(fp)
+            sources = self._get_sources()
+            for source in sources:
+                if os.path.isfile(source):
+                    config = yaml.load(source)
+                    if config is None:
+                        raise ValueError('Configuration file {} is empty'.format(source))
+                    break
+            raise RuntimeError('No configuration file found (locations: {})'.format(', '.join(sources)))
         else:
-            self.cp = ConfigParser()
-            self.cp.read_file(StringIO(cfg))
+            config = yaml.load(cfg)
+            if config is None:
+                raise ValueError('Configuration string is empty')
 
-    def _getsources(self, conf_name):
-        sources = ['/etc/{name}.cfg'.format(name=conf_name)]
-        sources.append('/etc/{name}/{name}.cfg'.format(name=conf_name))
-        sources.extend(sorted(glob.glob('/etc/{name}/conf.d/*'.format(name=conf_name))))
-        sources.append(expanduser('~/.{name}.cfg'.format(name=conf_name)))
-        sources.append(expanduser('~/{name}.cfg'.format(name=conf_name)))
+        if 'configurationVersion' not in config or type(config['configurationVersion']) is not str:
+            raise ValueError('Configuration version is missing or not a string')
+
+        if config['configurationVersion'] != self.CONFIG_VERSION:
+            raise ValueError('Unknown configuration version')
+
+        if merge_defaults:
+            self._merge_dicts(config, default_config)
+
+        with StringIO() as loaded_config:
+            yaml.dump(config, loaded_config)
+            logger.debug('Loaded configuration: {}'.format(loaded_config.getvalue()))
+
+        self.config = config
+
+    def _get_sources(self):
+        sources = ['/etc/{file}'.format(file=self.CONFIG_FILE)]
+        sources.append('/etc/{dir}/{file}'.format(dir=self.CONFIG_DIR, file=self.CONFIG_FILE))
+        sources.append(expanduser('~/.{file}'.format(file=self.CONFIG_FILE)))
+        sources.append(expanduser('~/{file}'.format(file=self.CONFIG_FILE)))
         return sources
 
-    def _getany(self, method, option, default):
+    @staticmethod
+    def _get(dict_, name, *args, types=None):
+        if '__position' in dict_:
+            full_name = '{}.{}'.format(dict_['__position'], name)
+        else:
+            full_name = name
+
+        if len(args) > 1:
+            raise RuntimeError('Called with more than two arguments for key {}'.format(full_name))
+
         try:
-            return method(self.SECTION, option)
-        except (NoSectionError, NoOptionError):
-            if default is not None:
-                return default
-            raise
+            value = reduce(operator.getitem, name.split('.'), dict_)
+            if types is not None and not isinstance(value, types):
+                raise TypeError('Config value {} has wrong type {}, expected {}'.format(full_name, type(value), types))
+            if isinstance(value, dict):
+                value['__position'] = name
+            return value
+        except KeyError as e:
+            if len(args) == 1:
+                return args[0]
+            else:
+                raise KeyError('Config value {} is missing'.format(full_name)) from e
 
-    def get(self, option, default=None):
-        return self._getany(self.cp.get, option, default)
+    def get(self, name, *args, **kwargs):
+        return Config._get(self.config, name, *args, **kwargs)
 
-    def getlist(self, option, default=None):
-        return self._getany(self.cp.get, option, default).split()
+    @staticmethod
+    def get_from_dict(dict_, name, *args, **kwargs):
+        return Config._get(dict_, name, *args, **kwargs)
 
-    def getint(self, option, default=None):
-        return self._getany(self.cp.getint, option, default)
-
-    def getfloat(self, option, default=None):
-        return self._getany(self.cp.getfloat, option, default)
-
-    def getboolean(self, option, default=None):
-        return self._getany(self.cp.getboolean, option, default)
-
-    def items(self, section, default=None):
-        try:
-            return self.cp.items(section)
-        except (NoSectionError, NoOptionError):
-            if default is not None:
-                return default
-            raise

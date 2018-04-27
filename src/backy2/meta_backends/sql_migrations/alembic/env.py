@@ -5,8 +5,8 @@ from sqlalchemy import create_engine
 
 from backy2.config import Config as _backy_config
 
-backy_config = _backy_config(section='MetaBackend', conf_name='backy')
-engine_url = backy_config.get('engine')
+backy_config = _backy_config()
+engine_url = backy_config.get('metadataBackend.sql.engine', types=str)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

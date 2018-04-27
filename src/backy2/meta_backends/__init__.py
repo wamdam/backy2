@@ -6,6 +6,8 @@ class MetaBackend():
 
     MAXIMUM_CHECKSUM_LENGTH = 64
 
+    PACKAGE_PREFIX = 'backy2.meta_backends'
+
     def __init__(self):
         pass
 

@@ -3,6 +3,8 @@
 
 class IO():
 
+    PACKAGE_PREFIX = 'backy2.io'
+
     def __init__(self, config, block_size, hash_function):
         pass
 
