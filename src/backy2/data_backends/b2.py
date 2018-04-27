@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import logging
+
+from b2.account_info.exception import MissingAccountData
 from backy2.data_backends import DataBackend as _DataBackend
+
 global b2
 import b2
 import b2.api
-import b2.account_info
+from b2.account_info.in_memory import InMemoryAccountInfo
+from b2.account_info.sqlite_account_info import SqliteAccountInfo
 from b2.download_dest import DownloadDestBytes
 import b2.file_version
 from b2.exception import B2Error, FileNotPresent
@@ -29,9 +34,26 @@ class DataBackend(_DataBackend):
         account_id = config.get_from_dict(our_config, 'accountId', types=str)
         application_key = config.get_from_dict(our_config, 'applicationKey', types=str)
         bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
+        account_info_file = config.get_from_dict(our_config, 'accountInfoFile', None, types=str)
 
-        self.service = b2.api.B2Api(b2.account_info.InMemoryAccountInfo())
-        self.service.authorize_account('production', account_id, application_key)
+        if account_info_file is not None:
+            account_info = SqliteAccountInfo(file_name=account_info_file)
+        else:
+            account_info = InMemoryAccountInfo()
+
+        self.service = b2.api.B2Api(account_info)
+        if account_info_file is not None:
+            try:
+                # This temporarily disables all logging as the b2 library does some very verbose logging
+                # of the exception we're trying to catch here...
+                logging.disable(logging.ERROR)
+                _ = self.service.get_account_id()
+                logging.disable(logging.NOTSET)
+            except MissingAccountData:
+                self.service.authorize_account('production', account_id, application_key)
+        else:
+            self.service.authorize_account('production', account_id, application_key)
+            
         self.bucket = self.service.get_bucket_by_name(bucket_name)
 
     def _write_raw(self, uid, data, metadata):

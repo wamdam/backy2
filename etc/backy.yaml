@@ -72,6 +72,7 @@ dataBackend:
   #   accountId: ***********
   #   applicationKey: *************
   #   bucketName: backy2
+  #   accountInfoFile: .... (optional)
 
   # How many writes to perform in parallel. This is useful if your backup space
   # can perform parallel writes faster than serial ones.

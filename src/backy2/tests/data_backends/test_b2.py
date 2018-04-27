@@ -15,6 +15,7 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
              accountId: ********
              applicationKey: *******************************
              bucketName: backy2
+             accountInfoFile: {testpath}/b2_account_info
           simultaneousWrites: 1
           simultaneousReads: 1
           bandwidthRead: 0
