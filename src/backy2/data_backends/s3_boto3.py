@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import socket
 import threading
 import time
 from itertools import islice
@@ -124,20 +123,14 @@ class DataBackend(_DataBackend):
     def _read_raw(self, uid, offset=0, length=None):
         self._init_connection()
         object = self._local.bucket.Object(uid)
-        while True:
-            try:
-                object = object.get()
-                data = object['Body'].read()
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'NoSuchKey':
-                    raise FileNotFoundError('UID {} not found.'.format(uid))
-                else:
-                    raise e
-            except socket.timeout:
-                logger.error('Timeout while fetching from s3, trying again.')
-                pass
+        try:
+            object = object.get()
+            data = object['Body'].read()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
-                break
+                raise e
         time.sleep(self.read_throttling.consume(len(data)))
 
         return data, object['Metadata']
