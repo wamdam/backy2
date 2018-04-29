@@ -76,7 +76,8 @@ class BackyStore():
         else:
             if block.uid not in self.block_cache:
                 data = self.backy.data_backend.read(block, sync=True)
-                open(os.path.join(self.cachedir, block.uid), 'wb').write(data)
+                with open(os.path.join(self.cachedir, block.uid), 'wb') as f:
+                    f.write(data)
                 self.block_cache.add(block.uid)
             with open(os.path.join(self.cachedir, block.uid), 'rb') as f:
                 f.seek(offset)

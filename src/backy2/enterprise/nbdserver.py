@@ -78,6 +78,8 @@ class Server(object):
         self.store = store
         self.read_only = read_only
 
+        if asyncio.get_event_loop().is_closed():
+            asyncio.set_event_loop(asyncio.new_event_loop())
         self.loop = asyncio.get_event_loop()
 
 
@@ -280,4 +282,5 @@ class Server(object):
         loop.close()
         
     def stop(self):
-        self.loop.call_soon_threadsafe(self.loop.stop)
+        if not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(self.loop.stop)

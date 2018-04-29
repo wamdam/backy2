@@ -463,14 +463,14 @@ class Backy():
             # don't, either hints are wrong (e.g. from a wrong snapshot diff)
             # or source doesn't match. In any case, the resulting backup won't
             # be good.
-            logger.info('Starting sanity check with 1% of the blocks. Reading...')
-            ignore_blocks = list(set(range(size)) - read_blocks - sparse_blocks)
-            random.shuffle(ignore_blocks)
-            num_check_blocks = 10
+            logger.info('Starting sanity check with 0.1% of the ignored blocks. Reading...')
+            ignore_blocks = sorted(set(range(size)) - read_blocks - sparse_blocks)
+            num_check_blocks = max(10, len(ignore_blocks) // 1000)
             # 50% from the start
-            check_block_ids = ignore_blocks[:num_check_blocks//2]
+            check_block_ids = ignore_blocks[:num_check_blocks // 2]
             # and 50% from random locations
-            check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_check_blocks//2))
+            num_sampled = min(len(ignore_blocks), num_check_blocks // 2)
+            check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_sampled))
             num_reading = 0
             for block in blocks:
                 if block.id in check_block_ids and block.uid:  # no uid = sparse block in backup. Can't check.
