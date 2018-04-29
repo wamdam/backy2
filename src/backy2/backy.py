@@ -19,13 +19,27 @@ from backy2.utils import data_hexdigest
 
 def blocks_from_hints(hints, block_size):
     """ Helper method """
-    blocks = set()
+    sparse_blocks = set()
+    read_blocks = set()
     for offset, length, exists in hints:
         start_block = math.floor(offset / block_size)
-        end_block = math.ceil((offset + length) / block_size)
-        for i in range(start_block, end_block):
-            blocks.add(i)
-    return blocks
+        end_block = math.floor((offset + length - 1) / block_size)
+        if exists:
+            for i in range(start_block, end_block + 1):
+                read_blocks.add(i)
+        else:
+            if offset % block_size > 0:
+                # Start block is only partially sparse, make sure it es read
+                read_blocks.add(start_block)
+
+            if (offset + length) % block_size > 0:
+                # End block is only partially sparse, make sure it es read
+                read_blocks.add(end_block)
+
+            for i in range(start_block, end_block + 1):
+                sparse_blocks.add(i)
+
+    return sparse_blocks, read_blocks
 
 
 class LockError(Exception):
@@ -428,8 +442,7 @@ class Backy():
                 raise ValueError('Hints have higher offsets than source file.')
 
         if hints is not None:
-            sparse_blocks = blocks_from_hints([hint for hint in hints if not hint[2]], self.block_size)
-            read_blocks = blocks_from_hints([hint for hint in hints if hint[2]], self.block_size)
+            sparse_blocks, read_blocks = blocks_from_hints(hints, self.block_size)
         else:
             sparse_blocks = []
             read_blocks = range(size)
