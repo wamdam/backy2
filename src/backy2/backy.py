@@ -320,6 +320,7 @@ class Backy():
             notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+        io.close()
         self.locking.unlock(version_uid)
 
 
