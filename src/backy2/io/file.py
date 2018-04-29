@@ -146,7 +146,7 @@ class IO(_IO):
         offset = block.id * self.block_size
         self._writer.seek(offset)
         written = self._writer.write(data)
-        posix_fadvise(self._writer.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+        posix_fadvise(self._writer.fileno(), offset, len(data), os.POSIX_FADV_DONTNEED)
         assert written == len(data)
 
 
