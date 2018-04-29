@@ -1,4 +1,5 @@
 # This is an port and update of the original smoketest.py
+import binascii
 import json
 import subprocess
 import threading
@@ -20,25 +21,26 @@ GB = MB * 1024
 class NbdTestCase():
 
     @classmethod
-    def patch(self, path, filename, offset, data=None):
+    def patch(self, filename, offset, data=None):
         """ write data into a file at offset """
-        filename = os.path.join(path, filename)
-        with open(filename, 'a+b') as f:
+        if not os.path.exists(filename):
+            open(filename, 'wb').close()
+        with open(filename, 'r+b') as f:
             f.seek(offset)
             f.write(data)
 
     @classmethod
-    def same(self, f1, f2):
-        """ returns False if files differ, True if they are the same """
-        d1 = open(f1, 'rb').read()
-        d2 = open(f1, 'rb').read()
-        return d1 == d2
+    def read_file(self, file1):
+        with open(file1, 'rb') as f1:
+            data = f1.read()
+        return data
 
     def generate_versions(self, testpath):
         from_version = None
         version_uids = []
         old_size = 0
         initdb = True
+        image_filename = os.path.join(testpath, 'image')
         for i in range(self.VERSIONS):
             print('Run {}'.format(i+1))
             hints = []
@@ -50,7 +52,7 @@ class NbdTestCase():
                 for j in range(random.randint(0, 10)):  # up to 10 changes
                     if random.randint(0, 1):
                         patch_size = random.randint(0, 4*kB)
-                        data = os.urandom(patch_size)
+                        data = self.random_bytes(patch_size)
                         exists = "true"
                     else:
                         patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
@@ -58,10 +60,12 @@ class NbdTestCase():
                         exists = "false"
                     offset = random.randint(0, size-1-patch_size)
                     print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
-                    self.patch(testpath, 'image', offset, data)
+                    self.patch(image_filename, offset, data)
                     hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
             # truncate?
-            with open(os.path.join(testpath, 'image'), 'a+b') as f:
+            if not os.path.exists(image_filename):
+                open(image_filename, 'wb').close()
+            with open(image_filename, 'r+b') as f:
                 f.truncate(size)
 
             print('  Applied {} changes, size is {}.'.format(len(hints), size))
@@ -74,7 +78,7 @@ class NbdTestCase():
                 version_uid = backy.backup(
                     'data-backup',
                     'snapshot-name',
-                    'file://'+os.path.join(testpath, 'image'),
+                    'file://' + image_filename,
                     hints_from_rbd_diff(hints.read()),
                     from_version
                 )
@@ -98,12 +102,12 @@ class NbdTestCase():
         hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
         cache_dir = self.config.get('nbd.cacheDirectory', types=str)
         store = BackyStore(backy, cachedir=cache_dir, hash_function=hash_function)
-        addr = ('127.0.0.1', 1313)
+        addr = ('127.0.0.1', self.SERVER_PORT)
         read_only = False
         self.nbd_server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
 
-        self.nbd_client_thread = threading.Thread(target=self.nbd_client, args=(self.version_uids,))
+        self.nbd_client_thread = threading.Thread(target=self.nbd_client, daemon=True, args=(self.version_uids,))
         self.nbd_client_thread.start()
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
@@ -126,22 +130,32 @@ class NbdTestCase():
 
 
     def nbd_client(self, version_uids):
-        self.subprocess_run(args=['sudo', 'nbd-client', '127.0.0.1', '-p', '1313', '-l'],
+        self.subprocess_run(args=['sudo', 'nbd-client', '127.0.0.1', '-p', str(self.SERVER_PORT), '-l'],
                             success_regexp='^Negotiation: ..\n{}\n$'.format('\n'.join([tuple[0] for tuple in version_uids])))
 
         for i in range(self.VERSIONS):
             version_uid, size = version_uids[i]
-            self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid, '127.0.0.1', '-p', '1313', self.NBD_DEVICE],
+            self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid, '127.0.0.1', '-p', str(self.SERVER_PORT), self.NBD_DEVICE],
                                 success_regexp='^Negotiation: ..size = \d+MB\nbs=1024, sz=\d+ bytes\n$')
 
             count = 0
+            nbd_data = bytearray()
             with open(self.NBD_DEVICE, 'rb') as f:
                 while True:
                     data = f.read(1024 * 1024)
                     if not data:
                         break
                     count += len(data)
+                    if i == self.VERSIONS - 1:
+                        nbd_data += data
             self.assertEqual(size + 4096 - size % 4096, count)
+
+            if i == self.VERSIONS - 1:
+                image_data = self.read_file(self.testpath.path + '/image')
+                logger.info('image_data size {}, nbd_data size {}'.format(len(image_data), len(nbd_data)))
+                logger.info(binascii.hexlify(image_data))
+                logger.info(binascii.hexlify(nbd_data))
+                self.assertEqual(image_data, nbd_data[:len(image_data)])
 
             self.subprocess_run(args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE],
                                 success_regexp='^disconnect, sock, done\n$')
@@ -151,6 +165,8 @@ class NbdTestCase():
 
 
 class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
+
+    SERVER_PORT = 1315
 
     VERSIONS = 10
 
@@ -162,7 +178,7 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
-            blockSize: 131072
+            blockSize: 4096
             io:
               file:
                 simultaneousReads: 5
@@ -182,7 +198,10 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
               cacheDirectory: {testpath}/nbd/cache
             """
 
-class NbdTestCasePostgreSQL_S3(NbdTestCase, BackyTestCase):
+
+class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
+
+    SERVER_PORT = 1315
 
     VERSIONS = 10
 
@@ -194,23 +213,38 @@ class NbdTestCasePostgreSQL_S3(NbdTestCase, BackyTestCase):
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
-            blockSize: 131072
+            blockSize: 4096
             io:
               file:
                 simultaneousReads: 5
             dataBackend:
-              type: s3
-              s3:
+              type: s3_boto3
+              s3_boto3:
                 awsAccessKeyId: minio
                 awsSecretAccessKey: minio123
-                host: 127.0.0.1
-                port: 9901
-                isSecure: False
+                endpointUrl: http://127.0.0.1:9901/
                 bucketName: backy2
-              simultaneousWrites: 5
-              simultaneousReads: 5
+                multiDelete: true
+                addressingStyle: path
+                disableEncodingType: true
+                
+                compression:
+                  - name: zstd
+                    materials:
+                      level: 1
+                    active: true
+                      
+                encryption:
+                  - name: aws_s3_cse
+                    materials:
+                      masterKey: !!binary |
+                        e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+                    active: true
+                    
+              simultaneousWrites: 1
+              simultaneousReads: 1
               bandwidthRead: 0
-              bandwidthWrite: 0
+              bandwidthWrite: 0   
             metaBackend: 
               type: sql
               sql:
