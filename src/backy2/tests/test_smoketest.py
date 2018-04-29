@@ -4,7 +4,6 @@ from unittest import TestCase
 
 import os
 import random
-from shutil import copyfile
 
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.tests.testcase import BackyTestCase
@@ -16,10 +15,11 @@ GB = MB * 1024
 class SmokeTestCase():
 
     @classmethod
-    def patch(self, path, filename, offset, data=None):
+    def patch(self, filename, offset, data=None):
         """ write data into a file at offset """
-        filename = os.path.join(path, filename)
-        with open(filename, 'a+b') as f:
+        if not os.path.exists(filename):
+            open(filename, 'wb').close()
+        with open(filename, 'r+b') as f:
             f.seek(offset)
             f.write(data)
 
@@ -37,6 +37,7 @@ class SmokeTestCase():
         version_uids = []
         old_size = 0
         initdb = True
+        image_filename = os.path.join(testpath, 'image')
         for i in range(100):
             print('Run {}'.format(i+1))
             hints = []
@@ -47,20 +48,24 @@ class SmokeTestCase():
                 old_size = size
                 for j in range(random.randint(0, 10)):  # up to 10 changes
                     if random.randint(0, 1):
-                        patch_size = random.randint(0, 4*kB)
-                        data = os.urandom(patch_size)
+                        patch_size = random.randint(0, 4*4*kB)
+                        data = self.random_bytes(patch_size)
                         exists = "true"
                     else:
                         patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
                         data = b'\0' * patch_size
                         exists = "false"
-                    offset = random.randint(0, size-1-patch_size)
-                    print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
-                    self.patch(testpath, 'image', offset, data)
+                    offset = random.randint(0, size - patch_size - 1)
+                    print('    Applied change at {}({}):{}, exists {}'.format(offset, int(offset / 4096), patch_size, exists))
+                    self.patch(image_filename, offset, data)
                     hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
             # truncate?
-            with open(os.path.join(testpath, 'image'), 'a+b') as f:
+            if not os.path.exists(image_filename):
+                open(image_filename, 'wb').close()
+            with open(image_filename, 'r+b') as f:
                 f.truncate(size)
+
+            #copyfile(image_filename, '{}.{}'.format(image_filename, i + 1))
 
             print('  Applied {} changes, size is {}.'.format(len(hints), size))
             with open(os.path.join(testpath, 'hints'), 'w') as f:
@@ -72,10 +77,10 @@ class SmokeTestCase():
                 version_uid = backy.backup(
                     'data-backup',
                     'snapshot-name',
-                    'file://'+os.path.join(testpath, 'image'),
+                    'file://' + image_filename,
                     hints_from_rbd_diff(hints.read()),
                     from_version
-                    )
+                )
             backy.close()
             version_uids.append(version_uid)
 
@@ -84,14 +89,15 @@ class SmokeTestCase():
             backy.close()
             print('  Scrub successful')
             backy = self.backyOpen(initdb=initdb)
-            self.assertTrue(backy.scrub(version_uid, 'file://'+os.path.join(testpath, 'image')))
+            self.assertTrue(backy.scrub(version_uid, 'file://' + image_filename))
             backy.close()
             print('  Deep scrub successful')
             backy = self.backyOpen(initdb=initdb)
-            backy.restore(version_uid, 'file://'+os.path.join(testpath, 'restore'), sparse=False, force=False)
+            restore_filename = os.path.join(testpath, 'restore.{}'.format(i + 1))
+            backy.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
             backy.close()
-            self.assertTrue(self.same(os.path.join(testpath, 'image'), os.path.join(testpath, 'restore')))
-            os.unlink(os.path.join(testpath, 'restore'))
+            self.assertTrue(self.same(image_filename, restore_filename))
+            os.unlink(restore_filename)
             print('  Restore successful')
 
             from_version = version_uid
