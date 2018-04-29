@@ -82,8 +82,8 @@ class DataBackend(_DataBackend):
                     data = f.read()
             return data, {}
 
-    def update(self, uid, data, offset=0):
-        with open(self._filename(uid), 'r+b') as f:
+    def update(self, block, data, offset=0):
+        with open(self._filename(block.uid), 'r+b') as f:
             f.seek(offset)
             return f.write(data)
 

@@ -27,6 +27,7 @@ THE SOFTWARE.
 """
 
 import asyncio
+import errno
 import logging
 import math
 import signal
@@ -76,6 +77,8 @@ class Server(object):
         self.address = addr
         self.store = store
         self.read_only = read_only
+
+        self.loop = asyncio.get_event_loop()
 
 
     @asyncio.coroutine
@@ -220,7 +223,7 @@ class Server(object):
                     # TODO: Fix exception
                     except Exception as ex:
                         self.log.error("[%s:%s] %s" % (host, port, ex))
-                        yield from self.nbd_response(writer, handle, error=ex.errno)
+                        yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle)
@@ -234,7 +237,7 @@ class Server(object):
                     # TODO: Fix exception
                     except Exception as ex:
                         self.log.error("[%s:%s] %s" % (host, port, ex))
-                        yield from self.nbd_response(writer, handle, error=ex.errno)
+                        yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle, data=data)
@@ -263,7 +266,7 @@ class Server(object):
         """Create and run the asyncio loop"""
         addr, port = self.address
 
-        loop = asyncio.get_event_loop()
+        loop = self.loop
         coro = asyncio.start_server(self.handler, addr, port, loop=loop)
         server = loop.run_until_complete(coro)
 
@@ -275,4 +278,6 @@ class Server(object):
         server.close()
         loop.run_until_complete(server.wait_closed())
         loop.close()
-
+        
+    def stop(self):
+        self.loop.call_soon_threadsafe(self.loop.stop)

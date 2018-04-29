@@ -182,8 +182,8 @@ class DataBackend():
 
         return uid
 
-    def read(self, block, sync=False):
-        self._read_queue.put((block, 0, None))
+    def read(self, block, offset=0, length=None, sync=False):
+        self._read_queue.put((block, offset, length))
         if sync:
             rblock, offset, length, data = self.read_get()
             if rblock.id != block.id:
@@ -200,7 +200,7 @@ class DataBackend():
                 raise RuntimeError('Reader failed for {}'.format(block.uid)) from exception
         return block, offset, length, data
 
-    def update(self, uid, data, offset=0):
+    def update(self, block, data, offset=0):
         """ Updates data, returns written bytes.
             This is only available on *some* data backends.
         """

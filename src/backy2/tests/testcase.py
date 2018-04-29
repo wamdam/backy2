@@ -30,9 +30,8 @@ class TestCase():
     class TestPath():
         def __init__(self):
             self.path = 'backy2-test_' + TestCase.random_string(16)
-            os.mkdir(self.path)
-            os.mkdir(self.path + '/data')
-            os.mkdir(self.path + '/lock')
+            for dir in [self.path, self.path + '/data', self.path + '/lock', self.path + '/nbd', self.path + '/nbd/cache']:
+                os.mkdir(dir)
 
         def close(self):
             pass
