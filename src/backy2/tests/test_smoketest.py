@@ -4,6 +4,7 @@ from unittest import TestCase
 
 import os
 import random
+from shutil import copyfile
 
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.tests.testcase import BackyTestCase
@@ -23,10 +24,11 @@ class SmokeTestCase():
             f.write(data)
 
     @classmethod
-    def same(self, f1, f2):
+    def same(self, file1, file2):
         """ returns False if files differ, True if they are the same """
-        d1 = open(f1, 'rb').read()
-        d2 = open(f1, 'rb').read()
+        with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
+            d1 = f1.read()
+            d2 = f2.read()
         return d1 == d2
 
     def test(self):
