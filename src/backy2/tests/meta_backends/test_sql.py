@@ -17,18 +17,20 @@ class test_sql(BackendTestCase, TestCase):
         """
 
     def test_version(self):
-            version_uid = self.meta_backend.set_version('backup-name',
-                                          'snapshot-name',
-                                          4,
-                                          4 * 1024 * 4096,
-                                          False)
+            version_uid = self.meta_backend.set_version(
+                version_name='backup-name',
+                snapshot_name='snapshot-name',
+                size=16 * 1024 * 4096,
+                block_size=4 * 1024 * 4096,
+                valid=False
+            )
             self.meta_backend._commit()
 
             version = self.meta_backend.get_version(version_uid)
             self.assertEqual('backup-name', version.name)
             self.assertEqual('snapshot-name', version.snapshot_name)
-            self.assertEqual(4, version.size)
-            self.assertEqual(4 * 1024 * 4096, version.size_bytes)
+            self.assertEqual(16 * 1024 * 4096, version.size)
+            self.assertEqual(4 * 1024 * 4096, version.block_size)
             self.assertFalse(version.valid)
             self.assertFalse(version.protected)
 
@@ -66,22 +68,26 @@ class test_sql(BackendTestCase, TestCase):
 
             version_uids = {}
             for _ in range(256):
-                version_uid = self.meta_backend.set_version('backup-name',
-                                                            'snapshot-name',
-                                                            4,
-                                                            4 * 1024 * 4096,
-                                                            False)
+                version_uid = self.meta_backend.set_version(
+                    version_name='backup-name',
+                    snapshot_name='snapshot-name',
+                    size=16 * 1024 * 4096,
+                    block_size=4 * 1024 * 4096,
+                    valid=False
+                )
                 version = self.meta_backend.get_version(version_uid)
                 self.assertNotIn(version.uid, version_uids)
                 version_uids[version.uid] = True
 
 
     def test_block(self):
-        version_uid = self.meta_backend.set_version('name-' + self.random_string(12),
-                                      'snapshot-name-' + self.random_string(12),
-                                      4,
-                                      4 * 1024 * 4096,
-                                      False)
+        version_uid = self.meta_backend.set_version(
+            version_name='name-' + self.random_string(12),
+            snapshot_name='snapshot-name-' + self.random_string(12),
+            size=256 * 1024 * 4096,
+            block_size=1024 * 4096,
+            valid=False
+        )
         self.meta_backend._commit()
 
         checksums = []

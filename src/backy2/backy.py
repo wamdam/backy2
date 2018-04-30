@@ -78,7 +78,7 @@ class Backy():
         self.locking.unlock('backy')
 
 
-    def _prepare_version(self, name, snapshot_name, size_bytes, from_version_uid=None):
+    def _prepare_version(self, name, snapshot_name, size, from_version_uid=None):
         """ Prepares the metadata for a new version.
         If from_version_uid is given, this is taken as the base, otherwise
         a pure sparse version is created.
@@ -86,16 +86,23 @@ class Backy():
         if from_version_uid:
             old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
             if not old_version.valid:
-                raise RuntimeError('You cannot base on an invalid version.')
+                raise RuntimeError('You cannot base new version on an invalid one.')
+            if old_version.block_size != self.block_size:
+                raise RuntimeError('You cannot base new version on an old version with a different block size')
             old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
         else:
             old_blocks = None
-        size = math.ceil(size_bytes / self.block_size)
+        num_blocks = math.ceil(size / self.block_size)
         # we always start with invalid versions, then validate them after backup
-        version_uid = self.meta_backend.set_version(name, snapshot_name, size, size_bytes, False)
+        version_uid = self.meta_backend.set_version(
+            version_name=name,
+            snapshot_name=snapshot_name,
+            size=size,
+            block_size=self.block_size,
+            valid=False)
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
-        for id in range(size):
+        for id in range(num_blocks):
             if old_blocks:
                 try:
                     old_block = old_blocks[id]
@@ -118,7 +125,7 @@ class Backy():
 
             # the last block can differ in size, so let's check
             _offset = id * self.block_size
-            new_block_size = min(self.block_size, size_bytes - _offset)
+            new_block_size = min(self.block_size, size - _offset)
             if new_block_size != block_size:
                 # last block changed, so set back all info
                 block_size = new_block_size
@@ -135,7 +142,7 @@ class Backy():
                 valid,
                 _commit=False,
                 _upsert=False)
-            notify(self.process_name, 'Preparing Version ({}%)'.format((id + 1) // size * 100))
+            notify(self.process_name, 'Preparing Version ({}%)'.format((id + 1) // num_blocks * 100))
         self.meta_backend._commit()
         notify(self.process_name)
         #logger.info('New version: {}'.format(version_uid))
@@ -289,7 +296,7 @@ class Backy():
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
         io = self.get_io_by_source(target)
-        io.open_w(target, version.size_bytes, force)
+        io.open_w(target, version.size, force)
 
         read_jobs = 0
         for i, block in enumerate(blocks):
@@ -431,9 +438,7 @@ class Backy():
         io.open_r(source)
         source_size = io.size()
 
-        size = math.ceil(source_size / self.block_size)
-        stats['version_size_bytes'] = source_size
-        stats['version_size_blocks'] = size
+        num_blocks = math.ceil(source_size / self.block_size)
 
         # Sanity check: check hints for validity, i.e. too high offsets, ...
         if hints is not None and len(hints) > 0:
@@ -473,17 +478,17 @@ class Backy():
             # SANITY CHECK:
             # Check some blocks outside of hints if they are the same in the
             # from_version backup and in the current backup. If they
-            # don't, either hints are wrong (e.g. from a wrong snapshot diff)
+            # aren't, either hints are wrong (e.g. from a wrong snapshot diff)
             # or source doesn't match. In any case, the resulting backup won't
             # be good.
             logger.info('Starting sanity check with 0.1% of the ignored blocks. Reading...')
-            ignore_blocks = sorted(set(range(size)) - read_blocks - sparse_blocks)
+            ignore_blocks = sorted(set(range(num_blocks)) - read_blocks - sparse_blocks)
             num_check_blocks = max(10, len(ignore_blocks) // 1000)
             # 50% from the start
             check_block_ids = ignore_blocks[:num_check_blocks // 2]
             # and 50% from random locations
-            num_sampled = min(len(ignore_blocks), num_check_blocks // 2)
-            check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_sampled))
+            num_sample = min(len(ignore_blocks), num_check_blocks // 2)
+            check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_sample))
             num_reading = 0
             for block in blocks:
                 if block.id in check_block_ids and block.uid:  # no uid = sparse block in backup. Can't check.
@@ -578,8 +583,8 @@ class Backy():
         self.meta_backend.set_stats(
             version_uid=version_uid,
             version_name=name,
-            version_size_bytes=stats['version_size_bytes'],
-            version_size_blocks=stats['version_size_blocks'],
+            version_size=source_size,
+            version_block_size=self.block_size,
             bytes_read=stats['bytes_read'],
             blocks_read=stats['blocks_read'],
             bytes_written=stats['bytes_written'],

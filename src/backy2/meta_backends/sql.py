@@ -51,10 +51,11 @@ Base = declarative_base()
 class Stats(Base):
     __tablename__ = 'stats'
     date = Column("date", DateTime , default=func.now(), nullable=False)
+    # No foreign key references here, so that we can keep the stats around even when the version is deleted
     version_uid = Column(VersionUid, primary_key=True)
     version_name = Column(String, nullable=False)
-    version_size_bytes = Column(BigInteger, nullable=False)
-    version_size_blocks = Column(BigInteger, nullable=False)
+    version_size = Column(BigInteger, nullable=False)
+    version_block_size = Column(BigInteger, nullable=False)
     bytes_read = Column(BigInteger, nullable=False)
     blocks_read = Column(BigInteger, nullable=False)
     bytes_written = Column(BigInteger, nullable=False)
@@ -72,8 +73,8 @@ class Version(Base):
     date = Column("date", DateTime , default=func.now(), nullable=False)
     name = Column(String, nullable=False, default='')
     snapshot_name = Column(String, nullable=False, server_default='', default='')
-    size = Column(Integer, nullable=False)
-    size_bytes = Column(BigInteger, nullable=False)
+    size = Column(BigInteger, nullable=False)
+    block_size = Column(Integer, nullable=False)
     valid = Column(Boolean, nullable=False)
     protected = Column(Boolean, nullable=False)
     tags = sqlalchemy.orm.relationship(
@@ -211,12 +212,12 @@ class MetaBackend(_MetaBackend):
         self.session.commit()
 
 
-    def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=False):
+    def set_version(self, version_name, snapshot_name, size, block_size, valid=False, protected=False):
         version = Version(
             name=version_name,
             snapshot_name=snapshot_name,
             size=size,
-            size_bytes=size_bytes,
+            block_size=block_size,
             valid=valid,
             protected=protected,
             )
@@ -225,15 +226,15 @@ class MetaBackend(_MetaBackend):
         return version.uid
 
 
-    def set_stats(self, version_uid, version_name, version_size_bytes,
-            version_size_blocks, bytes_read, blocks_read, bytes_written,
+    def set_stats(self, version_uid, version_name, version_size,
+            version_block_size, bytes_read, blocks_read, bytes_written,
             blocks_written, bytes_found_dedup, blocks_found_dedup,
             bytes_sparse, blocks_sparse, duration_seconds):
         stats = Stats(
             version_uid=version_uid,
             version_name=version_name,
-            version_size_bytes=version_size_bytes,
-            version_size_blocks=version_size_blocks,
+            version_size=version_size,
+            version_block_size=version_block_size,
             bytes_read=bytes_read,
             blocks_read=blocks_read,
             bytes_written=bytes_written,
@@ -488,7 +489,7 @@ class MetaBackend(_MetaBackend):
             version.name,
             version.snapshot_name,
             version.size,
-            version.size_bytes,
+            version.block_size,
             int(version.valid),
             int(version.protected),
             ])
@@ -514,7 +515,7 @@ class MetaBackend(_MetaBackend):
             raise ValueError('Wrong import format.')
 
     def import_2_2_1_0(self, _csv):
-        version_uid, version_date, version_name, version_snapshot_name, version_size, version_size_bytes, version_valid, version_protected = next(_csv)
+        version_uid, version_date, version_name, version_snapshot_name, version_size, version_block_size, version_valid, version_protected = next(_csv)
         try:
             self.get_version(version_uid)
         except KeyError:
@@ -527,7 +528,7 @@ class MetaBackend(_MetaBackend):
             name=version_name,
             snapshot_name=version_snapshot_name,
             size=version_size,
-            size_bytes=version_size_bytes,
+            block_size=version_block_size,
             valid=bool(version_valid),
             protected=bool(version_protected),
             )

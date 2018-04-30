@@ -38,12 +38,14 @@ class MiscTestCase(BackendTestCase, TestCase):
             (14000, 10, True),
             (16383, 1025, True),
             (8657, 885, True),
-            #(35458871, 3624441, True),
+            (32768, 4500, False),
+            (65537, 2000, False)
         ]
-        #         0          1, 2          4, 5, 6       13,          15, 16
         block_size = 1024
-        cfh = backy2.backy.blocks_from_hints(hints, block_size)
-        self.assertEqual(sorted(list(cfh)), [0, 1, 2, 4, 5, 6, 8, 9, 13, 15, 16])
+        sparse_blocks, read_blocks = backy2.backy.blocks_from_hints(hints, block_size)
+        self.assertEqual(sparse_blocks, set([32, 33, 34, 35, 36, 64, 65]))
+        self.assertEqual(read_blocks, set([0, 1, 2, 4, 5, 6, 8, 9, 13, 15, 16, 36, 64, 65]))
+
 
     def test_FileBackend_path(self):
         uid = 'c2cac25a7afd11e5b45aa44e314f9270'
@@ -85,12 +87,12 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.meta_backend
         name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        uid = backend.set_version(name, snapshot_name, 10, 5000, True)
+        uid = backend.set_version(name, snapshot_name, 50000, 5000, True)
         self.assertIsNotNone(uid)
         version = backend.get_version(uid)
         self.assertEqual(version.name, name)
-        self.assertEqual(version.size, 10)
-        self.assertEqual (version.size_bytes, 5000)
+        self.assertEqual(version.size, 50000)
+        self.assertEqual (version.block_size, 5000)
         self.assertEqual(version.uid, uid)
         self.assertTrue(version.valid)
 
@@ -106,7 +108,13 @@ class MiscTestCase(BackendTestCase, TestCase):
         checksum = '1234567890'
         size = 5000
         id = 0
-        version_uid = backend.set_version(name, snapshot_name, 10, 5000, True)
+        version_uid = backend.set_version(
+            version_name=name,
+            snapshot_name=snapshot_name,
+            size=50000,
+            block_size=5000,
+            valid=True
+        )
         backend.set_block(id, version_uid, block_uid, checksum, size, True)
 
         block = backend.get_block(block_uid)
@@ -122,7 +130,13 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.meta_backend
         version_name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        version_uid = backend.set_version(version_name, snapshot_name, TESTLEN, 5000, True)
+        version_uid = backend.set_version(
+            version_name=version_name,
+            snapshot_name=snapshot_name,
+            size=TESTLEN * 5000,
+            block_size=5000,
+            valid=True
+        )
         block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
         checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
         size = 5000

@@ -166,8 +166,8 @@ class Server(object):
 
                     # in case size_bytes is not %4096, we need to extend it to match
                     # block sizes.
-                    size_bytes = math.ceil(version.size_bytes/4096)*4096
-                    writer.write(struct.pack('>QH', size_bytes, export_flags))
+                    size = math.ceil(version.size/4096)*4096
+                    writer.write(struct.pack('>QH', size, export_flags))
                     writer.write(b"\x00"*124)
                     yield from writer.drain()
 
