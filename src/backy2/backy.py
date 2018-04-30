@@ -449,10 +449,8 @@ class Backy():
         if hints is not None:
             sparse_blocks, read_blocks = blocks_from_hints(hints, self.block_size)
         else:
-            sparse_blocks = []
-            read_blocks = range(size)
-        sparse_blocks = set(sparse_blocks)
-        read_blocks = set(read_blocks)
+            sparse_blocks = set()
+            read_blocks = set(range(num_blocks))
 
         try:
             version_uid = self._prepare_version(name, snapshot_name, source_size, from_version)
