@@ -22,8 +22,8 @@ def blocks_from_hints(hints, block_size):
     sparse_blocks = set()
     read_blocks = set()
     for offset, length, exists in hints:
-        start_block = math.floor(offset / block_size)
-        end_block = math.floor((offset + length - 1) / block_size)
+        start_block = offset // block_size
+        end_block = (offset + length - 1) // block_size
         if exists:
             for i in range(start_block, end_block + 1):
                 read_blocks.add(i)
