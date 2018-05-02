@@ -13,7 +13,7 @@ from backy2.logging import logger
 
 class Config():
 
-    CONFIG_VERSION = '0.1'
+    CONFIG_VERSION = '1.0.0'
 
     CONFIG_DIR = 'backy2'
     CONFIG_FILE = 'backy2.yaml'

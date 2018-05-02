@@ -281,17 +281,15 @@ class Commands():
         backy.close()
 
 
-    def export(self, version_uid, filename='-'):
+    def export(self, version_uids, filename='-'):
         backy = self.backy()
         if filename == '-':
-            f = StringIO()
-            backy.export(version_uid, f)
-            f.seek(0)
-            print(f.read())
-            f.close()
+            with StringIO() as f:
+                backy.export(version_uids, f)
+                print(f.getvalue())
         else:
             with open(filename, 'w') as f:
-                backy.export(version_uid, f)
+                backy.export(version_uids, f)
         backy.close()
 
 
@@ -440,7 +438,7 @@ def main():
     p = subparsers.add_parser(
         'export',
         help="Export the metadata of a backup uid into a file.")
-    p.add_argument('version_uid')
+    p.add_argument('version_uid', dest='version_uids', action='append', help="Version UID. Can be given multiple times.")
     p.add_argument('filename', help="Export into this filename ('-' is for stdout)")
     p.set_defaults(func='export')
 

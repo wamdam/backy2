@@ -634,24 +634,18 @@ class Backy():
         logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
         self.locking.unlock('backy')
 
-
     def add_tag(self, version_uid, name):
         self.meta_backend.add_tag(version_uid, name)
 
-
     def remove_tag(self, version_uid, name):
         self.meta_backend.remove_tag(version_uid, name)
-
 
     def close(self):
         self.meta_backend.close()
         self.data_backend.close()
 
-
-    def export(self, version_uid, f):
-        self.meta_backend.export(version_uid, f)
-        return f
-
+    def export(self, version_uids, f):
+        self.meta_backend.export(version_uids, f)
 
     def import_(self, f):
         self.meta_backend.import_(f)

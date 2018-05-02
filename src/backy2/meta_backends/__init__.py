@@ -5,6 +5,7 @@ class MetaBackend():
     """ Holds meta data """
 
     MAXIMUM_CHECKSUM_LENGTH = 64
+    METADATA_VERSION = '1.0.0'
 
     PACKAGE_PREFIX = 'backy2.meta_backends'
 

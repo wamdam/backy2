@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import csv
 import datetime
+import json
 import sys
 import time
 from binascii import hexlify, unhexlify
@@ -9,16 +9,15 @@ from collections import namedtuple
 
 import os
 import sqlalchemy
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect
 from sqlalchemy import func, distinct, desc
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime, TypeDecorator
 
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 
-METADATA_VERSION = '2.2-1.0'
 
 class VersionUid(TypeDecorator):
 
@@ -78,10 +77,18 @@ class Version(Base):
     valid = Column(Boolean, nullable=False)
     protected = Column(Boolean, nullable=False)
     tags = sqlalchemy.orm.relationship(
-            "Tag",
-            backref="version",
-            cascade="all, delete, delete-orphan",  # i.e. delete when version is deleted
-            )
+        'Tag',
+        backref='version',
+        cascade='all, delete-orphan',  # i.e. delete when version is deleted
+    )
+
+    blocks = sqlalchemy.orm.relationship(
+        'Block',
+        backref='version',
+        order_by='asc(Block.id)',
+        cascade='',
+        passive_deletes=True
+    )
 
     def __repr__(self):
        return "<Version(uid='%s', name='%s', snapshot_name='%s', date='%s')>" % (
@@ -477,93 +484,108 @@ class MetaBackend(_MetaBackend):
             rows = self.session.query(distinct(Block.uid)).all()
         return [b[0] for b in rows]
 
+    # Based on: https://stackoverflow.com/questions/5022066/how-to-serialize-sqlalchemy-result-to-json/7032311,
+    # https://stackoverflow.com/questions/1958219/convert-sqlalchemy-row-object-to-python-dict
+    @staticmethod
+    def new_backy2_encoder():
+        class Backy2Encoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj.__class__, DeclarativeMeta):
+                    fields = {}
 
-    def export(self, version_uid, f):
-        blocks = self.get_blocks_by_version(version_uid)
-        _csv = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        _csv.writerow(['backy2 Version {} metadata dump'.format(METADATA_VERSION)])
-        version = self.get_version(version_uid)
-        _csv.writerow([
-            version.uid,
-            version.date.strftime('%Y-%m-%d %H:%M:%S'),
-            version.name,
-            version.snapshot_name,
-            version.size,
-            version.block_size,
-            int(version.valid),
-            int(version.protected),
-            ])
-        for block in blocks:
-            _csv.writerow([
-                block.uid,
-                block.version_uid,
-                block.id,
-                block.date.strftime('%Y-%m-%d %H:%M:%S'),
-                block.checksum,
-                block.size,
-                int(block.valid),
-                ])
-        return _csv
+                    for field in inspect(obj).mapper.column_attrs:
+                        if isinstance(obj, (Tag, Block)) and field.key == 'version_uid':
+                            continue
+                        fields[field.key] = getattr(obj, field.key)
 
+                    for relationship in inspect(obj).mapper.relationships:
+                        if isinstance(obj, (Tag, Block)) and relationship.key == 'version':
+                            continue
+                        fields[relationship.key] = getattr(obj, relationship.key)
+
+                    return fields
+
+                if isinstance(obj, datetime.datetime):
+                    return obj.isoformat(timespec='seconds')
+
+                return super().default(obj)
+        return Backy2Encoder
+
+    def export(self, version_uids, f):
+        json.dump({'metadataVersion': self.METADATA_VERSION,
+                   'versions': [self.get_version(version_uid) for version_uid in version_uids] },
+                  f,
+                  cls=self.new_backy2_encoder(),
+                  check_circular=True,
+                  indent=2,
+                  )
 
     def import_(self, f):
-        _csv = csv.reader(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        signature = next(_csv)
-        if signature[0] == 'backy2 Version 2.2-1.0 metadata dump':
-            self.import_2_2_1_0(_csv)
-        else:
+        f.seek(0)
+        json_input = json.load(f)
+        if 'metadataVersion' not in json_input:
             raise ValueError('Wrong import format.')
-
-    def import_2_2_1_0(self, _csv):
-        version_uid, version_date, version_name, version_snapshot_name, version_size, version_block_size, version_valid, version_protected = next(_csv)
-        try:
-            self.get_version(version_uid)
-        except KeyError:
-            pass  # does not exist
+        if json_input['metadataVersion'] == '1.0.0':
+            self.import_1_0_0(json_input)
         else:
-            raise KeyError('Version {} already exists and cannot be imported.'.format(version_uid))
-        version = Version(
-            uid=version_uid,
-            date=datetime.datetime.strptime(version_date, '%Y-%m-%d %H:%M:%S'),
-            name=version_name,
-            snapshot_name=version_snapshot_name,
-            size=version_size,
-            block_size=version_block_size,
-            valid=bool(version_valid),
-            protected=bool(version_protected),
-            )
-        self.session.add(version)
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # SQLAlchemy Bug
-        # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
-        #
-        # """
-        # Within the same class, the order is indeed determined by the order
-        # that add was called. However, you may see different orderings in the
-        # INSERTs between different classes. If you add object a of type A and
-        # later add object b of type B, but a turns out to have a foreign key
-        # to b, you'll see an INSERT for b before the INSERT for a.
-        # """
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.session.commit()
-        # and because of this bug we must also try/except here instead of
-        # simply leaving this to the database's transaction handling.
-        try:
-            for uid, version_uid, id, date, checksum, size, valid in _csv:
-                block = Block(
-                    uid=uid,
-                    version_uid=version_uid,
-                    id=id,
-                    date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
-                    checksum=checksum,
-                    size=size,
-                    valid=bool(valid),
+            raise ValueError('Wrong import format version {}.'.format(json_input['metadataVersion']))
+
+    def import_1_0_0(self, json_input):
+        for version_dict in json_input['versions']:
+            try:
+                self.get_version(version_dict['uid'])
+            except KeyError:
+                pass  # does not exist
+            else:
+                raise KeyError('Version {} already exists and cannot be imported.'.format(version_dict['uid']))
+            version = Version(
+                uid=version_dict['uid'],
+                date=datetime.datetime.strptime(version_dict['date'], '%Y-%m-%dT%H:%M:%S'),
+                name=version_dict['name'],
+                snapshot_name=version_dict['snapshot_name'],
+                size=version_dict['size'],
+                block_size=version_dict['block_size'],
+                valid=version_dict['valid'],
+                protected=version_dict['protected'],
                 )
-                self.session.add(block)
-        except:  # see above
-            self.rm_version(version_uid)
-        finally:
+            self.session.add(version)
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # SQLAlchemy Bug
+            # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
+            #
+            # """
+            # Within the same class, the order is indeed determined by the order
+            # that add was called. However, you may see different orderings in the
+            # INSERTs between different classes. If you add object a of type A and
+            # later add object b of type B, but a turns out to have a foreign key
+            # to b, you'll see an INSERT for b before the INSERT for a.
+            # """
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             self.session.commit()
+            # and because of this bug we must also try/except here instead of
+            # simply leaving this to the database's transaction handling.
+            try:
+                for block_dict in version_dict['blocks']:
+                    block = Block(
+                        uid=block_dict['uid'],
+                        version_uid=version_dict['uid'],
+                        id=block_dict['id'],
+                        date=datetime.datetime.strptime(block_dict['date'], '%Y-%m-%dT%H:%M:%S'),
+                        checksum=block_dict['checksum'],
+                        size=block_dict['size'],
+                        valid=block_dict['valid'],
+                    )
+                    self.session.add(block)
+                for tag_dict in version_dict['tags']:
+                    tag = Tag(
+                        version_uid=version_dict['uid'],
+                        name=tag_dict['name'],
+                    )
+                    self.session.add(tag)
+            except:  # see above
+                self.rm_version(version_dict['uid'])
+            finally:
+                self.session.commit()
 
 
     def close(self):

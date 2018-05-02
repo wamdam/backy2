@@ -5,7 +5,6 @@ from binascii import hexlify
 import importlib
 import os
 import random
-import shutil
 
 from backy2.config import Config
 from backy2.data_backends import DataBackend
@@ -35,11 +34,11 @@ class TestCase():
 
         def close(self):
             pass
-            shutil.rmtree(self.path)
+            #shutil.rmtree(self.path)
 
     def setUp(self):
         self.testpath = self.TestPath()
-        init_logging(None, logging.INFO)
+        init_logging(None, logging.DEBUG)
 
         self.config = Config(cfg=self.CONFIG.format(testpath=self.testpath.path), merge_defaults=False)
 
