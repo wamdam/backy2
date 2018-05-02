@@ -166,7 +166,7 @@ class Backy():
         return stats
 
 
-    def get_io_by_source(self, source):
+    def get_io_by_source(self, source, block_size):
         res = parse.urlparse(source)
 
         if res.params or res.query or res.fragment:
@@ -184,7 +184,7 @@ class Backy():
 
         return IOLib.IO(
                 config=self.config,
-                block_size=self.block_size,
+                block_size=block_size,
                 hash_function=self.hash_function,
                 )
 
@@ -195,10 +195,10 @@ class Backy():
         """
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
-        self.meta_backend.get_version(version_uid)  # raise if version not exists
+        version = self.meta_backend.get_version(version_uid)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
-            io = self.get_io_by_source(source)
+            io = self.get_io_by_source(source, version.block_size)
             io.open_r(source)
 
         state = True
@@ -295,7 +295,7 @@ class Backy():
         notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
-        io = self.get_io_by_source(target)
+        io = self.get_io_by_source(target, version.block_size)
         io.open_w(target, version.size, force)
 
         read_jobs = 0
@@ -434,7 +434,7 @@ class Backy():
                 'blocks_sparse': 0,
                 'start_time': time.time(),
             }
-        io = self.get_io_by_source(source)
+        io = self.get_io_by_source(source, self.block_size)
         io.open_r(source)
         source_size = io.size()
 
