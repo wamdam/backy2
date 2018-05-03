@@ -4,6 +4,7 @@ from unittest import TestCase
 
 import os
 import random
+from shutil import copyfile
 
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.tests.testcase import BackyTestCase
@@ -31,6 +32,17 @@ class SmokeTestCase():
             d2 = f2.read()
         return d1 == d2
 
+    def test_sanity(self):
+        file1 = os.path.join(self.testpath.path, 'file1')
+        file2 = os.path.join(self.testpath.path, 'file2')
+        with open(file1, 'w') as f1, open(file2, 'w') as f2:
+            f1.write('hallo' * 100)
+            f2.write('huhu' * 100)
+        self.assertTrue(self.same(file1, file1))
+        self.assertFalse(self.same(file1, file2))
+        os.unlink(file1)
+        os.unlink(file2)
+
     def test(self):
         testpath = self.testpath.path
         from_version = None
@@ -41,14 +53,15 @@ class SmokeTestCase():
         for i in range(100):
             print('Run {}'.format(i+1))
             hints = []
+            if not os.path.exists(image_filename):
+                open(image_filename, 'wb').close()
             if old_size and random.randint(0, 10) == 0:  # every 10th time or so do not apply any changes.
                 size = old_size
             else:
                 size = 32*4*kB + random.randint(-4*kB, 4*kB)
-                old_size = size
                 for j in range(random.randint(0, 10)):  # up to 10 changes
                     if random.randint(0, 1):
-                        patch_size = random.randint(0, 4*4*kB)
+                        patch_size = random.randint(0, 4*kB)
                         data = self.random_bytes(patch_size)
                         exists = "true"
                     else:
@@ -59,13 +72,20 @@ class SmokeTestCase():
                     print('    Applied change at {}({}):{}, exists {}'.format(offset, int(offset / 4096), patch_size, exists))
                     self.patch(image_filename, offset, data)
                     hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
+
             # truncate?
-            if not os.path.exists(image_filename):
-                open(image_filename, 'wb').close()
             with open(image_filename, 'r+b') as f:
                 f.truncate(size)
 
-            #copyfile(image_filename, '{}.{}'.format(image_filename, i + 1))
+            if old_size and size > old_size:
+                patch_size = size - old_size + 1
+                offset = old_size - 1
+                print('    Image got bigger at {}({}):{}, exists {}'.format(offset, int(offset / 4096), patch_size, exists))
+                hints.append({'offset': offset, 'length': patch_size, 'exists': 'true'})
+
+            old_size = size
+
+            copyfile(image_filename, '{}.{}'.format(image_filename, i + 1))
 
             print('  Applied {} changes, size is {}.'.format(len(hints), size))
             with open(os.path.join(testpath, 'hints'), 'w') as f:
@@ -97,7 +117,6 @@ class SmokeTestCase():
             backy.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
             backy.close()
             self.assertTrue(self.same(image_filename, restore_filename))
-            os.unlink(restore_filename)
             print('  Restore successful')
 
             from_version = version_uid
