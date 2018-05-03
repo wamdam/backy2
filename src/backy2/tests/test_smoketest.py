@@ -135,7 +135,7 @@ class SmokeTestCase():
 class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
@@ -160,7 +160,7 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
 class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
@@ -185,7 +185,7 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
 class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
@@ -216,7 +216,7 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
 class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
@@ -247,7 +247,7 @@ class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
 class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
