@@ -128,10 +128,11 @@ class Backy():
             new_block_size = min(self.block_size, size - _offset)
             if new_block_size != block_size:
                 # last block changed, so set back all info
+                # valid = False forces this block to be read regardless of hints
                 block_size = new_block_size
                 uid = None
                 checksum = None
-                valid = True
+                valid = False
 
             self.meta_backend.set_block(
                 id,
@@ -522,7 +523,6 @@ class Backy():
                 logger.debug('Skipping block (sparse) {}'.format(block.id))
             else:
                 # Block is already in database, no need to update it
-                #self.meta_backend.set_block(block.id, version_uid, block.uid, block.checksum, block.size, valid=True, _commit=False)
                 logger.debug('Keeping block {}'.format(block.id))
 
         # now use the readers and write
