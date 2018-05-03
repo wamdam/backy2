@@ -5,12 +5,7 @@ from . import DatabackendTestCase
 
 class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
-        compression: backy2.data_backends.compression.zstd
-        compression_default: zstd
-        encryption: backy2.data_backends.encryption.aws_s3_cse
-        encryption_materials: {{"MasterKey": "0000000000000000"}}
-        encryption_default: aws_s3_cse
-        configurationVersion: '0.1'
+        configurationVersion: '1.0.0'
         logFile: /dev/stderr
         lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32

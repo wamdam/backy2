@@ -5,7 +5,7 @@ from . import DatabackendTestCase
 
 class test_b2(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
-        configurationVersion: '0.1'
+        configurationVersion: '1.0.0'
         logFile: /dev/stderr
         lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32
