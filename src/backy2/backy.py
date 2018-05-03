@@ -440,13 +440,12 @@ class Backy():
 
         num_blocks = math.ceil(source_size / self.block_size)
 
-        # Sanity check: check hints for validity, i.e. too high offsets, ...
         if hints is not None and len(hints) > 0:
+            # Sanity check: check hints for validity, i.e. too high offsets, ...
             max_offset = max([h[0]+h[1] for h in hints])
             if max_offset > source_size:
                 raise ValueError('Hints have higher offsets than source file.')
 
-        if hints is not None:
             sparse_blocks, read_blocks = blocks_from_hints(hints, self.block_size)
         else:
             sparse_blocks = set()
@@ -522,6 +521,7 @@ class Backy():
                 stats['bytes_sparse'] += block.size
                 logger.debug('Skipping block (sparse) {}'.format(block.id))
             else:
+                # Block is already in database, no need to update it
                 #self.meta_backend.set_block(block.id, version_uid, block.uid, block.checksum, block.size, valid=True, _commit=False)
                 logger.debug('Keeping block {}'.format(block.id))
 
@@ -546,8 +546,7 @@ class Backy():
                 self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=True, _commit=False)
                 stats['blocks_found_dedup'] += 1
                 stats['bytes_found_dedup'] += len(data)
-                logger.debug('Found existing block for id {} with uid {})'.format
-                        (block.id, existing_block.uid))
+                logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
             else:
                 block_uid = self.data_backend.save(data)
                 self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=True, _commit=False)
