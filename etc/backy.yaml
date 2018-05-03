@@ -1,4 +1,4 @@
-configurationVersion: '0.1'
+configurationVersion: '1.0.0'
 
 # Where should the backy logfile be placed?
 # Backy will by default log INFO, WARNING and ERROR to this log.
