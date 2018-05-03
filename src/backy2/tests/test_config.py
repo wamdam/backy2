@@ -8,7 +8,7 @@ from backy2.logging import init_logging
 class ConfigTestCase(unittest.TestCase):
 
     CONFIG = """
-        configurationVersion: '0.1'
+        configurationVersion: '1.0.0'
         logFile: /var/log/backy.log
         blockSize: 4194304
         hashFunction: sha512
@@ -58,9 +58,6 @@ class ConfigTestCase(unittest.TestCase):
 
     def test_wrong_version(self):
         self.assertRaises(ValueError, lambda : Config(cfg='configurationVersion: \'234242.2343242\'', merge_defaults=False))
-
-    def test_float_version(self):
-        self.assertRaises(ValueError, lambda : Config(cfg='configurationVersion: {}'.format(Config.CONFIG_VERSION), merge_defaults=False))
 
     def test_missing_version(self):
         self.assertRaises(ValueError, lambda : Config(cfg='a: {b: 1, c: 2}', merge_defaults=False))
