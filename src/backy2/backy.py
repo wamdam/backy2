@@ -489,7 +489,7 @@ class Backy():
             check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_check_blocks // 2))
             num_reading = 0
             for block in blocks:
-                if block.id in check_block_ids and block.uid:  # no uid = sparse block in backup. Can't check.
+                if block.id in check_block_ids and block.uid and block.valid:  # no uid = sparse block in backup. Can't check.
                     io.read(block)
                     num_reading += 1
             for i in range(num_reading):
