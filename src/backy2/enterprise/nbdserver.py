@@ -240,7 +240,7 @@ class Server(object):
                     try:
                         self.store.write(cow_version, offset, data)
                     except Exception as ex:
-                        self.log.error("[%s:%s] %s" % (host, port, ex))
+                        self.log.error("[%s:%s] NBD_CMD_WRITE: %s\n%s" % (host, port, ex, traceback.format_exc()))
                         yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
                         continue
 
@@ -253,14 +253,20 @@ class Server(object):
                         else:
                             data = self.store.read(version, offset, length)
                     except Exception as ex:
-                        self.log.error("[%s:%s] %s" % (host, port, ex))
+                        self.log.error("[%s:%s] NBD_CMD_READ: %s\n%s" % (host, port, ex, traceback.format_exc()))
                         yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle, data=data)
 
                 elif cmd == self.NBD_CMD_FLUSH:
-                    self.store.flush()
+                    try:
+                        self.store.flush(cow_version)
+                    except Exception as ex:
+                        self.log.error("[%s:%s] NBD_CMD_FLUSH: %s\n%s" % (host, port, ex, traceback.format_exc()))
+                        yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
+                        continue
+
                     yield from self.nbd_response(writer, handle)
 
                 else:
