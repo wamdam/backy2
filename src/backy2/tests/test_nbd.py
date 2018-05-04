@@ -1,6 +1,4 @@
 # This is an port and update of the original smoketest.py
-import binascii
-import json
 import subprocess
 import threading
 from unittest import TestCase
@@ -10,7 +8,6 @@ import random
 import re
 
 from backy2.logging import logger
-from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.tests.testcase import BackyTestCase
 from backy2.utils import parametrized_hash_function
 
@@ -35,60 +32,31 @@ class NbdTestCase():
             data = f1.read()
         return data
 
-    def generate_versions(self, testpath):
-        from_version = None
-        version_uids = []
-        old_size = 0
-        initdb = True
+    def generate_version(self, testpath):
+        size = 16*MB
         image_filename = os.path.join(testpath, 'image')
-        for i in range(self.VERSIONS):
-            print('Run {}'.format(i+1))
-            hints = []
-            if old_size and random.randint(0, 10) == 0:  # every 10th time or so do not apply any changes.
-                size = old_size
-            else:
-                size = 32*4*kB + random.randint(-4*kB, 4*kB)
-                old_size = size
-                for j in range(random.randint(0, 10)):  # up to 10 changes
-                    if random.randint(0, 1):
-                        patch_size = random.randint(0, 4*kB)
-                        data = self.random_bytes(patch_size)
-                        exists = "true"
-                    else:
-                        patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
-                        data = b'\0' * patch_size
-                        exists = "false"
-                    offset = random.randint(0, size-1-patch_size)
-                    print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
-                    self.patch(image_filename, offset, data)
-                    hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
-            # truncate?
-            if not os.path.exists(image_filename):
-                open(image_filename, 'wb').close()
-            with open(image_filename, 'r+b') as f:
-                f.truncate(size)
+        with open(image_filename, 'wb') as f:
+            f.truncate(size)
+        for j in range(random.randint(10, 20)):
+            patch_size = random.randint(0, 128*kB)
+            data = self.random_bytes(patch_size)
+            offset = random.randint(0, size-1-patch_size)
+            self.patch(image_filename, offset, data)
 
-            print('  Applied {} changes, size is {}.'.format(len(hints), size))
-            with open(os.path.join(testpath, 'hints'), 'w') as f:
-                f.write(json.dumps(hints))
-
-            backy = self.backyOpen(initdb=initdb)
-            initdb = False
-            with open(os.path.join(testpath, 'hints')) as hints:
-                version_uid = backy.backup(
-                    'data-backup',
-                    'snapshot-name',
-                    'file://' + image_filename,
-                    hints_from_rbd_diff(hints.read()),
-                    from_version
-                )
-            backy.close()
-            version_uids.append((version_uid, size))
-        return version_uids
+        backy = self.backyOpen(initdb=True)
+        version_uid = backy.backup(
+            'data-backup',
+            'snapshot-name',
+            'file://' + image_filename,
+            None,
+            None
+        )
+        backy.close()
+        return version_uid, size
 
     def setUp(self):
         super().setUp()
-        self.version_uids = self.generate_versions(self.testpath.path)
+        self.version_uid = self.generate_version(self.testpath.path)
 
     def tearDown(self):
         self.subprocess_run(args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE], check=False)
@@ -107,10 +75,14 @@ class NbdTestCase():
         self.nbd_server = NbdServer(addr, store, read_only)
         logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
 
-        self.nbd_client_thread = threading.Thread(target=self.nbd_client, daemon=True, args=(self.version_uids,))
+        self.nbd_client_thread = threading.Thread(target=self.nbd_client, daemon=True, args=(self.version_uid,))
         self.nbd_client_thread.start()
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
+
+        self.assertEqual(set([self.version_uid[0], 'V0000000002']), set([version.uid for version  in backy.ls()]))
+
+        backy.close()
 
     def subprocess_run(self, args, success_regexp = None, check=True):
         completed = subprocess.run(args=args,
@@ -129,36 +101,41 @@ class NbdTestCase():
                 self.fail('command {} failed: {}'.format(' '.join(args), completed.stdout.replace('\n', '|')))
 
 
-    def nbd_client(self, version_uids):
+    def nbd_client(self, version_uid):
         self.subprocess_run(args=['sudo', 'nbd-client', '127.0.0.1', '-p', str(self.SERVER_PORT), '-l'],
-                            success_regexp='^Negotiation: ..\n{}\n$'.format('\n'.join([tuple[0] for tuple in version_uids])))
+                            success_regexp='^Negotiation: ..\n{}\n$'.format(version_uid[0]))
 
-        for i in range(self.VERSIONS):
-            version_uid, size = version_uids[i]
-            self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid, '127.0.0.1', '-p', str(self.SERVER_PORT), self.NBD_DEVICE],
-                                success_regexp='^Negotiation: ..size = \d+MB\nbs=1024, sz=\d+ bytes\n$')
+        version_uid, size = version_uid
+        self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid, '127.0.0.1', '-p', str(self.SERVER_PORT), self.NBD_DEVICE],
+                            success_regexp='^Negotiation: ..size = \d+MB\nbs=1024, sz=\d+ bytes\n$')
 
-            count = 0
-            nbd_data = bytearray()
-            with open(self.NBD_DEVICE, 'rb') as f:
-                while True:
-                    data = f.read(1024 * 1024)
-                    if not data:
-                        break
-                    count += len(data)
-                    if i == self.VERSIONS - 1:
-                        nbd_data += data
-            self.assertEqual(size + 4096 - size % 4096, count)
+        count = 0
+        nbd_data = bytearray()
+        with open(self.NBD_DEVICE, 'rb') as f:
+            while True:
+                data = f.read(1024 * 1024)
+                if not data:
+                    break
+                count += len(data)
+                nbd_data += data
+        self.assertEqual(size, count)
 
-            if i == self.VERSIONS - 1:
-                image_data = self.read_file(self.testpath.path + '/image')
-                logger.info('image_data size {}, nbd_data size {}'.format(len(image_data), len(nbd_data)))
-                logger.info(binascii.hexlify(image_data))
-                logger.info(binascii.hexlify(nbd_data))
-                self.assertEqual(image_data, nbd_data[:len(image_data)])
+        image_data = self.read_file(self.testpath.path + '/image')
+        logger.info('image_data size {}, nbd_data size {}'.format(len(image_data), len(nbd_data)))
+        self.assertEqual(image_data, bytes(nbd_data))
 
-            self.subprocess_run(args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE],
-                                success_regexp='^disconnect, sock, done\n$')
+        with open(self.NBD_DEVICE, 'r+b') as f:
+            for offset in range(0,size,4096):
+                f.seek(offset)
+                data = self.random_bytes(4096)
+                written = f.write(data)
+                self.assertEqual(len(data), written)
+                f.seek(offset)
+                read_data = f.read(4096)
+                self.assertEqual(data, read_data)
+
+        self.subprocess_run(args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE],
+                            success_regexp='^disconnect, sock, done\n$')
 
         # Signal NBD server to stop
         self.nbd_server.stop()
@@ -168,17 +145,15 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
 
     SERVER_PORT = 1315
 
-    VERSIONS = 10
-
     NBD_DEVICE = '/dev/nbd15'
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
-            blockSize: 4096
+            blockSize: 4194304
             io:
               file:
                 simultaneousReads: 5
@@ -199,21 +174,19 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
             """
 
 
-class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
+class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase):
 
     SERVER_PORT = 1315
-
-    VERSIONS = 10
 
     NBD_DEVICE = '/dev/nbd15'
 
     CONFIG = """
-            configurationVersion: '0.1'
+            configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
-            blockSize: 4096
+            blockSize: 4194304
             io:
               file:
                 simultaneousReads: 5
