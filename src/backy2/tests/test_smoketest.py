@@ -4,6 +4,8 @@ from unittest import TestCase
 
 import os
 import random
+from functools import reduce
+from operator import and_
 from shutil import copyfile
 
 from backy2.scripts.backy import hints_from_rbd_diff
@@ -103,6 +105,24 @@ class SmokeTestCase():
                 )
             backy.close()
             version_uids.append(version_uid)
+
+            backy = self.backyOpen(initdb=initdb)
+            blocks = backy.ls_version(version_uid)
+            self.assertEqual(list(range(len(blocks))), sorted([block.id for block in blocks]))
+            self.assertTrue(len(blocks) > 0)
+            self.assertTrue(reduce(and_, [block.size == backy.block_size for block in blocks[:-1]]))
+            print('  Block list successful')
+            backy.close()
+
+            backy = self.backyOpen(initdb=initdb)
+            versions = backy.ls()
+            self.assertEqual(set(), set([version.uid for version in versions]) ^ set(version_uids))
+            self.assertTrue(reduce(and_, [version.name == 'data-backup' for version in versions]))
+            self.assertTrue(reduce(and_, [version.snapshot_name == 'snapshot-name' for version in versions]))
+            self.assertTrue(reduce(and_, [version.block_size == backy.block_size for version in versions]))
+            self.assertTrue(reduce(and_, [version.size > 0 for version in versions]))
+            print('  Version list successful')
+            backy.close()
 
             backy = self.backyOpen(initdb=initdb)
             self.assertTrue(backy.scrub(version_uid))
