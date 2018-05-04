@@ -160,17 +160,14 @@ class Backy():
         versions = self.meta_backend.get_versions()
         return versions
 
-
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         return blocks
 
-
     def stats(self, version_uid=None, limit=None):
         stats = self.meta_backend.get_stats(version_uid, limit)
         return stats
-
 
     def get_io_by_source(self, source, block_size):
         res = parse.urlparse(source)
@@ -193,7 +190,6 @@ class Backy():
                 block_size=block_size,
                 hash_function=self.hash_function,
                 )
-
 
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
@@ -292,7 +288,6 @@ class Backy():
         notify(self.process_name)
         return state
 
-
     def restore(self, version_uid, target, sparse=False, force=False):
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
@@ -350,20 +345,17 @@ class Backy():
         io.close()
         self.locking.unlock(version_uid)
 
-
     def protect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
             raise ValueError('Version {} is already protected.'.format(version_uid))
         self.meta_backend.protect_version(version_uid)
 
-
     def unprotect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if not version.protected:
             raise ValueError('Version {} is not protected.'.format(version_uid))
         self.meta_backend.unprotect_version(version_uid)
-
 
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
         if not self.locking.lock(version_uid):
@@ -383,7 +375,6 @@ class Backy():
             num_blocks,
             ))
         self.locking.unlock(version_uid)
-
 
     def _generate_auto_tags(self, version_name):
         """ Generates automatic tag suggestions by looking up versions with
@@ -614,7 +605,6 @@ class Backy():
             if no_del_uids:
                 logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
         self.locking.unlock('backy-cleanup-fast')
-
 
     def cleanup_full(self, prefix=None):
         """ Delete unreferenced blob UIDs starting with <prefix> """
