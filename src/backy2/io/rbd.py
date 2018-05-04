@@ -122,25 +122,22 @@ class IO(_IO):
                     break
                 offset = block.id * self.block_size
                 t1 = time.time()
-                data = image.read(offset, self.block_size, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
+                data = image.read(offset, block.size, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
                 t2 = time.time()
                 # throw away cache
                 if not data:
                     raise RuntimeError('EOF reached on source when there should be data.')
 
                 data_checksum = data_hexdigest(self.hash_function, data)
-                if not block.valid:
-                    logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
-                else:
-                    logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s) '
-                        '(Inqueue size: {}, Outqueue size: {})'.format(
-                            id_,
-                            block.id,
-                            data_checksum[:16],
-                            t2-t1,
-                            self._inqueue.qsize(),
-                            self._outqueue.qsize()
-                            ))
+                logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s) '
+                    '(Inqueue size: {}, Outqueue size: {})'.format(
+                        id_,
+                        block.id,
+                        data_checksum[:16],
+                        t2-t1,
+                        self._inqueue.qsize(),
+                        self._outqueue.qsize()
+                        ))
 
                 self._outqueue.put((block, data, data_checksum))
                 self._inqueue.task_done()

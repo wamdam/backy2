@@ -105,18 +105,23 @@ class IO(_IO):
                 t1 = time.time()
                 source_file.seek(offset)
                 t2 = time.time()
-                data = source_file.read(self.block_size)
+                data = source_file.read(block.size)
                 t3 = time.time()
                 # throw away cache
-                posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+                posix_fadvise(source_file.fileno(), offset, block.size, os.POSIX_FADV_DONTNEED)
                 if not data:
                     raise RuntimeError('EOF reached on source when there should be data.')
 
                 data_checksum = data_hexdigest(self.hash_function, data)
-                if not block.valid:
-                    logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
-                else:
-                    logger.debug('IO {} read block {} (len {}, checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
+                logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s) '
+                             '(Inqueue size: {}, Outqueue size: {})'.format(
+                    id_,
+                    block.id,
+                    data_checksum[:16],
+                    t2-t1,
+                    self._inqueue.qsize(),
+                    self._outqueue.qsize()
+                ))
 
                 self._outqueue.put((block, data, data_checksum))
                 self._inqueue.task_done()

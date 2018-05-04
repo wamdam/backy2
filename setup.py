@@ -7,24 +7,19 @@ setup(name='backy2',
     version=version,
     description="A block / disk based backup and restore solution",
     long_description=open('README.rst', 'r', encoding='utf-8').read(),
-    classifiers="""Development Status :: 4 - Beta
+    classifiers="""Development Status :: 3 - Alpha
 Environment :: Console
 Intended Audience :: System Administrators
 License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)
 Operating System :: POSIX
-Programming Language :: Python
 Programming Language :: Python :: 3
-Programming Language :: Python :: 3.2
-Programming Language :: Python :: 3.3
-Programming Language :: Python :: 3.4
-Programming Language :: Python :: 3.5
 Programming Language :: Python :: 3.6
 Topic :: System :: Archiving :: Backup
 """[:-1].split('\n'),
     keywords='backup',
-    author='Daniel Kraft <daniel.kraft@d9t.de>',
-    author_email='daniel.kraft@d9t.de',
-    url='http://backy2.com/',
+    author='Daniel Kraft <daniel.kraft@d9t.de>, Lars Fenneberg <lf@elemental.net>',
+    author_email='daniel.kraft@d9t.de, lf@elemental.net',
+    url='https://github.com/elemental-lf/backy2',
     license='LGPL-3',
     packages=find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
     package_dir={
@@ -50,12 +45,7 @@ Topic :: System :: Archiving :: Backup
         #'pex==1.1.0',
         #'aws_s3_cse>=0.2',
         ],
-    # tests_require=[
-        # 'pytest-cov',
-        # 'pytest-capturelog',
-        # 'pytest-timeout',
-        # 'pytest',
-        # ],
+    python_requires='~=3.6',
     entry_points="""
         [console_scripts]
             backy2 = backy2.scripts.backy:main
