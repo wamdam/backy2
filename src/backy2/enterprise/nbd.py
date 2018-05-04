@@ -35,27 +35,25 @@ class BackyStore():
             self.blocks[version.uid] = [block.deref() for block in self.backy.meta_backend.get_blocks_by_version(version.uid)]
         blocks = self.blocks[version.uid]
 
-        block_number = offset // self.backy.block_size
-        block_offset = offset % self.backy.block_size
+        block_number = offset // version.block_size
+        block_offset = offset % version.block_size
 
         read_list = []
         while True:
             try:
                 block = blocks[block_number]
             except IndexError:
-                # In case the backup file is not a multiple of 4096 in size,
-                # we need to fake blocks to the end until it matches. That means,
-                # that we return b'\0' until the block size is reached.
-                # This is a nbd (or even block device) limitation
-                block = None
-                read_length = length
-                read_list.append((None, 0, length))  # hint: return \0s
+                # We round up the size reported by the NBD server to a multiple of 4096 which is the maximum
+                # block size supported by NBD. So we might need to fake up to 4095 bytes (of zeros) here.
+                if (length > 4095):
+                    raise OSError(errno.EIO)
+                read_length = min(block.size-block_offset, length)
+                read_list.append((None, 0, read_length))  # hint: return \0s
             else:
                 assert block.id == block_number
                 if block.uid is None:
-                    block = None
-                    read_length = length
-                    read_list.append((None, 0, length))  # hint: return \0s
+                    read_length = min(block.size-block_offset, length)
+                    read_list.append((None, 0, read_length))  # hint: return \0s
                 else:
                     read_length = min(block.size-block_offset, length)
                     read_list.append((block, block_offset, read_length))
@@ -128,8 +126,8 @@ class BackyStore():
         write_list = self._block_list(version, offset, len(data))
         for block, _offset, length in write_list:
             if block is None:
-                logger.warning('Tried to save data beyond device (offset {})'.format(offset))
-                continue  # raise? That'd be a write outside the device...
+                logger.warning('Tried to save data beyond device, it will be lost (offset {})'.format(offset))
+                continue
             if block.id in cow:
                 # the block is already copied, so update it.
                 self._update(cow[block.id], dataio.read(length), _offset)
