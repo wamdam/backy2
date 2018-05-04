@@ -136,7 +136,7 @@ class BackyStore():
                 logger.debug('COW: Updated block {}'.format(block.id))
             else:
                 # read the block from the original, update it and write it back
-                write_data = BytesIO(self.backy.data_backend.read(block.uid, sync=True))
+                write_data = BytesIO(self.backy.data_backend.read(block, sync=True))
                 write_data.seek(_offset)
                 write_data.write(dataio.read(length))
                 write_data.seek(0)
