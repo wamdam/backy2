@@ -516,6 +516,9 @@ class Backy():
                 # Block is already in database, no need to update it
                 logger.debug('Keeping block {}'.format(block.id))
 
+        # precompute checksum of a sparse block
+        sparse_block_checksum = data_hexdigest(self.hash_function, b'\0' * block.size)
+
         # now use the readers and write
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -527,14 +530,21 @@ class Backy():
 
             # dedup
             existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
-            if data == b'\0' * block.size:
+            if data_checksum == sparse_block_checksum and block.size == self.block_size:
                 # if the block is only \0, set it as a sparse block.
                 stats['blocks_sparse'] += 1
                 stats['bytes_sparse'] += block.size
                 logger.debug('Skipping block (detected sparse) {}'.format(block.id))
-                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True, _commit=False)
-            elif existing_block and existing_block.size == len(data):
-                self.meta_backend.set_block(block.id, version_uid, existing_block.uid, data_checksum, len(data), valid=True, _commit=False)
+                self.meta_backend.set_block(block.id, version.uid, None, None, block.size, valid=True, _commit=False)
+            # Don't try to detect sparse partial blocks as it counteracts the optimisation above
+            #elif data == b'\0' * block.size:
+            #    # if the block is only \0, set it as a sparse block.
+            #    stats['blocks_sparse'] += 1
+            #    stats['bytes_sparse'] += block.size
+            #    logger.debug('Skipping block (detected sparse) {}'.format(block.id))
+            #    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True, _commit=False)
+            elif existing_block:
+                self.meta_backend.set_block(block.id, version.uid, existing_block.uid, existing_block.checksum, existing_block.size, valid=True, _commit=False)
                 stats['blocks_found_dedup'] += 1
                 stats['bytes_found_dedup'] += len(data)
                 logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
