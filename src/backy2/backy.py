@@ -98,14 +98,14 @@ class Backy():
 
         num_blocks = math.ceil(size / self.block_size)
         # we always start with invalid versions, then validate them after backup
-        version_uid = self.meta_backend.set_version(
+        version = self.meta_backend.set_version(
             version_name=name,
             snapshot_name=snapshot_name,
             size=size,
             block_size=self.block_size,
             valid=False)
-        if not self.locking.lock(version_uid):
-            raise LockError('Version {} is locked.'.format(version_uid))
+        if not self.locking.lock(version.uid):
+            raise LockError('Version {} is locked.'.format(version.uid))
         for id in range(num_blocks):
             if old_blocks:
                 try:
@@ -139,7 +139,7 @@ class Backy():
 
             self.meta_backend.set_block(
                 id,
-                version_uid,
+                version.uid,
                 uid,
                 checksum,
                 block_size,
@@ -150,20 +150,18 @@ class Backy():
         self.meta_backend._commit()
         notify(self.process_name)
         #logger.info('New version: {}'.format(version_uid))
-        self.locking.unlock(version_uid)
-        return version_uid
+        self.locking.unlock(version.uid)
+        return version
 
     def clone_version(self, name, snapshot_name, from_version_uid):
         return self._prepare_version(name, snapshot_name, None, from_version_uid)
 
     def ls(self):
-        versions = self.meta_backend.get_versions()
-        return versions
+        return self.meta_backend.get_versions()
 
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
-        return blocks
+        return self.meta_backend.get_blocks_by_version(version_uid)
 
     def stats(self, version_uid=None, limit=None):
         stats = self.meta_backend.get_stats(version_uid, limit)
@@ -448,7 +446,7 @@ class Backy():
             read_blocks = set(range(num_blocks))
 
         try:
-            version_uid = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
+            version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
         except RuntimeError as e:
             logger.error(str(e))
             logger.error('Backy exiting.')
@@ -459,13 +457,13 @@ class Backy():
             logger.error('Backy exiting.')
             # TODO: Don't exit here, exit in Commands
             exit(99)
-        if not self.locking.lock(version_uid):
-            logger.error('Version {} is locked.'.format(version_uid))
+        if not self.locking.lock(version.uid):
+            logger.error('Version {} is locked.'.format(version.uid))
             logger.error('Backy exiting.')
             # TODO: Don't exit here, exit in Commands
             exit(99)
 
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        blocks = self.meta_backend.get_blocks_by_version(version.uid)
 
         if from_version_uid and hints:
             # SANITY CHECK:
@@ -500,7 +498,7 @@ class Backy():
                         self.block_size
                         ))
                     # remove version
-                    self.meta_backend.rm_version(version_uid)
+                    self.meta_backend.rm_version(version.uid)
                     sys.exit(5)
             logger.info('Finished sanity check. Checked {} blocks {}.'.format(num_reading, check_block_ids))
 
@@ -512,7 +510,7 @@ class Backy():
             elif block.id in sparse_blocks:
                 # This "elif" is very important. Because if the block is in read_blocks
                 # AND sparse_blocks, it *must* be read.
-                self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True, _commit=False)
+                self.meta_backend.set_block(block.id, version.uid, None, None, block.size, valid=True, _commit=False)
                 stats['blocks_sparse'] += 1
                 stats['bytes_sparse'] += block.size
                 logger.debug('Skipping block (sparse) {}'.format(block.id))
@@ -544,12 +542,12 @@ class Backy():
                 logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
             else:
                 block_uid = self.data_backend.save(data)
-                self.meta_backend.set_block(block.id, version_uid, block_uid, data_checksum, len(data), valid=True, _commit=False)
+                self.meta_backend.set_block(block.id, version.uid, block_uid, data_checksum, block.size, valid=True, _commit=False)
                 stats['blocks_written'] += 1
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
-            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
+            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version.uid, source, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
 
@@ -559,7 +557,7 @@ class Backy():
             logger.error('backy broke somewhere. Backup is invalid.')
             sys.exit(3)
 
-        self.meta_backend.set_version_valid(version_uid)
+        self.meta_backend.set_version_valid(version.uid)
 
         if tag is not None:
             if isinstance(tag, list):
@@ -570,10 +568,10 @@ class Backy():
         else:
             tags = self._generate_auto_tags(name)
         for tag in tags:
-            self.meta_backend.add_tag(version_uid, tag)
+            self.meta_backend.add_tag(version.uid, tag)
 
         self.meta_backend.set_stats(
-            version_uid=version_uid,
+            version_uid=version.uid,
             version_name=name,
             version_size=source_size,
             version_block_size=self.block_size,
@@ -587,9 +585,9 @@ class Backy():
             blocks_sparse=stats['blocks_sparse'],
             duration_seconds=int(time.time() - stats['start_time']),
             )
-        logger.info('New version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
-        self.locking.unlock(version_uid)
-        return version_uid
+        logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags)))
+        self.locking.unlock(version.uid)
+        return version.uid
 
 
     def cleanup_fast(self, dt=3600):

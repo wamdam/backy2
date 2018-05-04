@@ -108,14 +108,14 @@ class MiscTestCase(BackendTestCase, TestCase):
         checksum = '1234567890'
         size = 5000
         id = 0
-        version_uid = backend.set_version(
+        version = backend.set_version(
             version_name=name,
             snapshot_name=snapshot_name,
             size=50000,
             block_size=5000,
             valid=True
         )
-        backend.set_block(id, version_uid, block_uid, checksum, size, True)
+        backend.set_block(id, version.uid, block_uid, checksum, size, True)
 
         block = backend.get_block(block_uid)
 
@@ -123,14 +123,14 @@ class MiscTestCase(BackendTestCase, TestCase):
         self.assertEqual(block.uid, block_uid)
         self.assertEqual(block.id, id)
         self.assertEqual(block.size, size)
-        self.assertEqual(block.version_uid, version_uid)
+        self.assertEqual(block.version_uid, version.uid)
 
     def test_metabackend_blocks_by_version(self):
         TESTLEN = 10
         backend = self.meta_backend
         version_name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        version_uid = backend.set_version(
+        version = backend.set_version(
             version_name=version_name,
             snapshot_name=snapshot_name,
             size=TESTLEN * 5000,
@@ -142,9 +142,9 @@ class MiscTestCase(BackendTestCase, TestCase):
         size = 5000
 
         for id in range(TESTLEN):
-            backend.set_block(id, version_uid, block_uids[id], checksums[id], size, True)
+            backend.set_block(id, version.uid, block_uids[id], checksums[id], size, True)
 
-        blocks = backend.get_blocks_by_version(version_uid)
+        blocks = backend.get_blocks_by_version(version.uid)
         self.assertEqual(len(blocks), TESTLEN)
 
         # blocks are always ordered by id
@@ -154,4 +154,4 @@ class MiscTestCase(BackendTestCase, TestCase):
             self.assertEqual(block.checksum, checksums[id])
             self.assertEqual(block.uid, block_uids[id])
             self.assertEqual(block.size, size)
-            self.assertEqual(block.version_uid, version_uid)
+            self.assertEqual(block.version_uid, version.uid)

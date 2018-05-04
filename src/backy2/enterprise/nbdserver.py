@@ -31,6 +31,7 @@ import errno
 import logging
 import math
 import signal
+import traceback
 
 import struct
 
@@ -82,7 +83,6 @@ class Server(object):
             asyncio.set_event_loop(asyncio.new_event_loop())
         self.loop = asyncio.get_event_loop()
 
-
     @asyncio.coroutine
     def nbd_response(self, writer, handle, error=0, data=None):
         writer.write(struct.pack('>LLQ', self.NBD_RESPONSE, error, handle))
@@ -90,13 +90,12 @@ class Server(object):
             writer.write(data)
         yield from writer.drain()
 
-
     @asyncio.coroutine
     def handler(self, reader, writer):
         """Handle the connection"""
         try:
             host, port = writer.get_extra_info("peername")
-            version, cow_version_uid = None, None
+            version, cow_version = None, None
             self.log.info("Incoming connection from %s:%s" % (host,port))
 
             # initial handshake
@@ -218,11 +217,15 @@ class Server(object):
                     data = yield from reader.readexactly(length)
                     if(len(data) != length):
                         raise IOError("%s bytes expected, disconnecting" % length)
-                    if not cow_version_uid:
-                        cow_version_uid = self.store.get_cow_version(version)
+
+                    if (self.read_only):
+                        yield from self.nbd_response(writer, handle, error=errno.EPERM)
+                        continue
+
+                    if not cow_version:
+                        cow_version = self.store.get_cow_version(version)
                     try:
-                        self.store.write(cow_version_uid, offset, data)
-                    # TODO: Fix exception
+                        self.store.write(cow_version, offset, data)
                     except Exception as ex:
                         self.log.error("[%s:%s] %s" % (host, port, ex))
                         yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
@@ -232,11 +235,10 @@ class Server(object):
 
                 elif cmd == self.NBD_CMD_READ:
                     try:
-                        if cow_version_uid:
-                            data = self.store.read(cow_version_uid, offset, length)
+                        if cow_version:
+                            data = self.store.read(cow_version, offset, length)
                         else:
-                            data = self.store.read(version.uid, offset, length)
-                    # TODO: Fix exception
+                            data = self.store.read(version, offset, length)
                     except Exception as ex:
                         self.log.error("[%s:%s] %s" % (host, port, ex))
                         yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
@@ -259,8 +261,8 @@ class Server(object):
             self.log.error("[%s:%s] %s" % (host, port, ex))
 
         finally:
-            if cow_version_uid:
-                self.store.fixate(cow_version_uid)
+            if cow_version:
+                self.store.fixate(cow_version)
             writer.close()
 
 

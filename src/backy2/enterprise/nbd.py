@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import errno
 
 import os
 from io import BytesIO
@@ -21,21 +22,18 @@ class BackyStore():
         self.block_cache = set()
         self.cow = {}  # contains version_uid: dict() of block id -> block
 
-
     def get_versions(self):
         return self.backy.ls()
-
 
     def get_version(self, uid):
         return self.backy.meta_backend.get_version(uid)
 
-
-    def _block_list(self, version_uid, offset, length):
+    def _block_list(self, version, offset, length):
         # get cached blocks data
-        if not self.blocks.get(version_uid):
+        if not self.blocks.get(version.uid):
             # Only work with dereferenced blocks
-            self.blocks[version_uid] = [block.deref() for block in self.backy.meta_backend.get_blocks_by_version(version_uid)]
-        blocks = self.blocks[version_uid]
+            self.blocks[version.uid] = [block.deref() for block in self.backy.meta_backend.get_blocks_by_version(version.uid)]
+        blocks = self.blocks[version.uid]
 
         block_number = offset // self.backy.block_size
         block_offset = offset % self.backy.block_size
@@ -86,8 +84,8 @@ class BackyStore():
                 else:
                     return f.read(length)
 
-    def read(self, version_uid, offset, length):
-        read_list = self._block_list(version_uid, offset, length)
+    def read(self, version, offset, length):
+        read_list = self._block_list(version, offset, length)
         data = []
         for block, offset, length in read_list:
             logger.debug('Reading block {}:{}:{}'.format(block, offset, length))
@@ -98,11 +96,9 @@ class BackyStore():
         return b''.join(data)
 
     def get_cow_version(self, from_version):
-        cow_version_uid = self.backy._prepare_version(
-            'copy on write', from_version.uid,
-            from_version.size_bytes, from_version.uid)
-        self.cow[cow_version_uid] = {}  # contains version_uid: dict() of block id -> uid
-        return cow_version_uid
+        cow_version = self.backy.clone_version('copy on write', from_version.uid, from_version.uid)
+        self.cow[cow_version.uid] = {}  # contains version_uid: dict() of block id -> uid
+        return cow_version
 
     def _update(self, block, data, offset=0):
         # update a given block_uid
@@ -125,11 +121,11 @@ class BackyStore():
             self.block_cache.add(new_uid)
             return new_uid
 
-    def write(self, version_uid, offset, data):
+    def write(self, version, offset, data):
         """ Copy on write backup writer """
         dataio = BytesIO(data)
-        cow = self.cow[version_uid]
-        write_list = self._block_list(version_uid, offset, len(data))
+        cow = self.cow[version.uid]
+        write_list = self._block_list(version, offset, len(data))
         for block, _offset, length in write_list:
             if block is None:
                 logger.warning('Tried to save data beyond device (offset {})'.format(offset))
@@ -153,14 +149,14 @@ class BackyStore():
         # TODO: Maybe fixate partly?
         pass
 
-    def fixate(self, cow_version_uid):
+    def fixate(self, cow_version):
         # save blocks into version
         logger.info('Fixating version {} with {} blocks (PLEASE WAIT)'.format(
-            cow_version_uid,
-            len(self.cow[cow_version_uid].items())
+            cow_version.uid,
+            len(self.cow[cow_version.uid].items())
             ))
 
-        for block_id, block in self.cow[cow_version_uid].items():
+        for block_id, block in self.cow[cow_version.uid].items():
             block_uid = block.uid
             logger.debug('Fixating block {} uid {}'.format(block_id, block_uid))
             data = self._read(block)
@@ -172,9 +168,9 @@ class BackyStore():
                 block_uid = new_block_uid
 
             checksum = data_hexdigest(self.hash_function, data)
-            self.backy.meta_backend.set_block(block_id, cow_version_uid, block_uid, checksum, len(data), valid=True, _commit=False)
+            self.backy.meta_backend.set_block(block_id, cow_version.uid, block_uid, checksum, len(data), valid=True, _commit=False)
 
-        self.backy.meta_backend.set_version_valid(cow_version_uid)
+        self.backy.meta_backend.set_version_valid(cow_version.uid)
         self.backy.meta_backend._commit()
         logger.info('Fixation done. Deleting temporary data (PLEASE WAIT)')
         # TODO: Delete COW blocks and also those from block_cache
@@ -184,12 +180,12 @@ class BackyStore():
                 # rm this block from cache
                 # rm block uid from self.block_cache
                 pass
-            for block_id, block in self.cow[cow_version_uid].items():
+            for block_id, block in self.cow[cow_version.uid].items():
                 # TODO: rm block_uid from cache
                 pass
         else:
             # backends that support partial writes will be written to directly.
             # So there's no need to cleanup.
             pass
-        del(self.cow[cow_version_uid])
+        del(self.cow[cow_version.uid])
         logger.info('Finished.')

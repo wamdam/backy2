@@ -230,7 +230,7 @@ class MetaBackend(_MetaBackend):
             )
         self.session.add(version)
         self.session.commit()
-        return version.uid
+        return version
 
 
     def set_stats(self, version_uid, version_name, version_size,
