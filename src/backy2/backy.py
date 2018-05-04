@@ -77,8 +77,7 @@ class Backy():
             raise LockError('A backy is running which requires exclusive access.')
         self.locking.unlock('backy')
 
-
-    def _prepare_version(self, name, snapshot_name, size, from_version_uid=None):
+    def _prepare_version(self, name, snapshot_name, size=None, from_version_uid=None):
         """ Prepares the metadata for a new version.
         If from_version_uid is given, this is taken as the base, otherwise
         a pure sparse version is created.
@@ -88,10 +87,15 @@ class Backy():
             if not old_version.valid:
                 raise RuntimeError('You cannot base new version on an invalid one.')
             if old_version.block_size != self.block_size:
-                raise RuntimeError('You cannot base new version on an old version with a different block size')
+                raise RuntimeError('You cannot base new version on an old version with a different block size.')
             old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
+            if not size:
+                size = old_version.size
         else:
             old_blocks = None
+            if not size:
+                raise RuntimeError('Size needs to be specified if there is no base version.')
+
         num_blocks = math.ceil(size / self.block_size)
         # we always start with invalid versions, then validate them after backup
         version_uid = self.meta_backend.set_version(
@@ -128,7 +132,6 @@ class Backy():
             new_block_size = min(self.block_size, size - _offset)
             if new_block_size != block_size:
                 # last block changed, so set back all info
-                # valid = False forces this block to be read regardless of hints
                 block_size = new_block_size
                 uid = None
                 checksum = None
@@ -150,6 +153,8 @@ class Backy():
         self.locking.unlock(version_uid)
         return version_uid
 
+    def clone_version(self, name, snapshot_name, from_version_uid):
+        return self._prepare_version(name, snapshot_name, None, from_version_uid)
 
     def ls(self):
         versions = self.meta_backend.get_versions()
