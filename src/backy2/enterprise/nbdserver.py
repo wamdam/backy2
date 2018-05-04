@@ -63,14 +63,26 @@ class Server(object):
     NBD_CMD_WRITE = 1
     NBD_CMD_DISC = 2
     NBD_CMD_FLUSH = 3
+    NBD_CMD_TRIM = 4
+    NBD_CMD_WRITE_ZEROES = 6
 
     # fixed newstyle handshake
     NBD_HANDSHAKE_FLAGS = (1 << 0)
 
-    # has flags, supports flush
-    NBD_EXPORT_FLAGS = (1 << 0) ^ (1 << 2)
-    NBD_RO_FLAG = (1 << 1)
+    NBD_FLAG_HAS_FLAGS = (1<< 0)
+    NBD_FLAG_READ_ONLY = (1 << 1)
+    NBD_FLAG_SEND_FLUSH = (1 << 2)
+    NBD_FLAG_SEND_FUA = (1 << 3)
+    NBD_FLAG_ROTATIONAL = (1 << 4)
+    NBD_FLAG_SEND_TRIM = (1 << 5)
+    NBD_FLAG_SEND_WRITE_ZEROES = (1 << 6)
+    NBD_FLAG_CAN_MULTI_CONN = (1 << 8)
 
+    # has flags, supports flush
+    NBD_EXPORT_FLAGS = NBD_FLAG_HAS_FLAGS ^ NBD_FLAG_SEND_FLUSH
+
+    # command flags (upper 16 bit of request type)
+    NBD_CMD_FLAG_FUA = (1 << 16)
 
     def __init__(self, addr, store, read_only=True):
         self.log = logging.getLogger(__package__)
@@ -158,18 +170,19 @@ class Server(object):
 
                     export_flags = self.NBD_EXPORT_FLAGS
                     if self.read_only:
-                        export_flags ^= self.NBD_RO_FLAG
+                        export_flags ^= self.NBD_FLAG_READ_ONLY
                         self.log.info("nbd is read only.")
                     else:
                         self.log.info("nbd is read/write.")
 
-                    # in case size_bytes is not %4096, we need to extend it to match
-                    # block sizes.
-                    size = math.ceil(version.size/4096)*4096
+                    # In case size is not a multiple of 4096 we extend it to the the maximum support block
+                    # size of 4096
+                    size = math.ceil(version.size / 4096) * 4096
                     writer.write(struct.pack('>QH', size, export_flags))
                     writer.write(b"\x00"*124)
                     yield from writer.drain()
 
+                    # Transition to transmission phase
                     break
 
                 elif opt == self.NBD_OPT_LIST:
