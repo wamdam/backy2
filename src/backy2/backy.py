@@ -409,8 +409,7 @@ class Backy():
 
         return tags
 
-
-    def backup(self, name, snapshot_name, source, hints, from_version, tag=None):
+    def backup(self, name, snapshot_name, source, hints, from_version_uid, tag=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -449,7 +448,7 @@ class Backy():
             read_blocks = set(range(num_blocks))
 
         try:
-            version_uid = self._prepare_version(name, snapshot_name, source_size, from_version)
+            version_uid = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
         except RuntimeError as e:
             logger.error(str(e))
             logger.error('Backy exiting.')
@@ -468,7 +467,7 @@ class Backy():
 
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
-        if from_version and hints:
+        if from_version_uid and hints:
             # SANITY CHECK:
             # Check some blocks outside of hints if they are the same in the
             # from_version backup and in the current backup. If they
