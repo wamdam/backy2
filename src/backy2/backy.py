@@ -416,8 +416,6 @@ class Backy():
         the target.
         """
         stats = {
-                'version_size_bytes': 0,
-                'version_size_blocks': 0,
                 'bytes_read': 0,
                 'blocks_read': 0,
                 'bytes_written': 0,
@@ -570,6 +568,7 @@ class Backy():
         for tag in tags:
             self.meta_backend.add_tag(version.uid, tag)
 
+        logger.debug('Stats: {}'.format(stats))
         self.meta_backend.set_stats(
             version_uid=version.uid,
             version_name=name,
