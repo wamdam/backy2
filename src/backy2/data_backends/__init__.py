@@ -119,11 +119,7 @@ class DataBackend():
             time.sleep(self.write_throttling.consume(len(data)))
             t1 = time.time()
             try:
-                data, metadata = self.compress(data)
-                data, metadata_2 = self.encrypt(data)
-                metadata.update(metadata_2)
-
-                self._write_raw(uid, data, metadata)
+                self._write(uid, data)
             except Exception as exception:
                 self._write_queue_exception.put((id_, threading.current_thread.name, uid, exception))
                 return
@@ -141,9 +137,7 @@ class DataBackend():
             block, offset, length = entry
             t1 = time.time()
             try:
-                data, metadata = self._read_raw(block.uid, offset, length)
-                data = self.decrypt(data, metadata)
-                data = self.uncompress(data, metadata)
+                data = self._read(block, offset, length)
             except Exception as exception:
                 self._read_data_queue.put((exception, block, 0, None, 0))
             else:
@@ -161,6 +155,12 @@ class DataBackend():
         suuid = shortuuid.uuid()
         hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
         return hash[:10] + suuid
+
+    def _write(self, uid, data):
+        data, metadata = self.compress(data)
+        data, metadata_2 = self.encrypt(data)
+        metadata.update(metadata_2)
+        self._write_raw(uid, data, metadata)
 
     def save(self, data, _sync=False):
         try:
@@ -182,13 +182,17 @@ class DataBackend():
 
         return uid
 
+    def _read(self, block, offset, length):
+        data, metadata = self._read_raw(block.uid, offset, length)
+        data = self.decrypt(data, metadata)
+        data = self.uncompress(data, metadata)
+        return data
+
     def read(self, block, offset=0, length=None, sync=False):
-        self._read_queue.put((block, offset, length))
         if sync:
-            rblock, offset, length, data = self.read_get()
-            if rblock.id != block.id:
-                raise RuntimeError('Do not mix threaded reading with sync reading!')
-            return data
+            return self._read(block, offset, length)
+        else:
+            self._read_queue.put((block, offset, length))
 
     def read_get(self, qblock=True, qtimeout=None):
         exception, block, offset, length, data = self._read_data_queue.get(block=qblock, timeout=qtimeout)
