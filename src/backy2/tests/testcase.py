@@ -39,7 +39,7 @@ class TestCase():
 
     def setUp(self):
         self.testpath = self.TestPath()
-        init_logging(None, logging.DEBUG)
+        init_logging(None, logging.INFO)
 
         self.config = Config(cfg=self.CONFIG.format(testpath=self.testpath.path), merge_defaults=False)
 
