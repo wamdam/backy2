@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-
-import queue
-import threading
 import time
 
 import os
@@ -29,36 +26,20 @@ class IO(_IO):
 
     NAME = 'file'
 
-    simultaneous_reads = 1
-    mode = None
-    _writer = None
-
     def __init__(self, config, block_size, hash_function):
-        our_config = config.get('io.{}'.format(self.NAME), types=dict)
-        self.simultaneous_reads = config.get_from_dict(our_config, 'simultaneousReads', types=int)
-        self.block_size = block_size
-        self.hash_function = hash_function
+        super().__init__(config, block_size, hash_function)
 
+        self._writer = None
 
     def open_r(self, io_name):
-        self.mode = 'r'
+        super().open_r(io_name)
+
         _s = re.match('^file://(.+)$', io_name)
         if not _s:
             raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
         self.io_name = _s.groups()[0]
 
-        self._reader_threads = []
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads)
-        for i in range(self.simultaneous_reads):
-            _reader_thread = threading.Thread(target=self._reader, args=(i,))
-            _reader_thread.daemon = True
-            _reader_thread.start()
-            self._reader_threads.append(_reader_thread)
-
-
     def open_w(self, io_name, size=None, force=False):
-        self.mode = 'w'
         _s = re.match('^file://(.+)$', io_name)
         if not _s:
             raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
@@ -78,89 +59,46 @@ class IO(_IO):
                 f.seek(size - 1)
                 f.write(b'\0')
 
-
     def size(self):
-        source_size = 0
         with open(self.io_name, 'rb') as source_file:
-            #posix_fadvise(source_file.fileno(), 0, 0, os.POSIX_FADV_SEQUENTIAL)
-            # determine source size
             source_file.seek(0, 2)  # to the end
             source_size = source_file.tell()
-            source_file.seek(0)
         return source_size
 
-
-    def _reader(self, id_):
-        """ self._inqueue contains Blocks.
-        self._outqueue contains (block, data, data_checksum)
-        """
+    def _read(self, block):
         with open(self.io_name, 'rb') as source_file:
-            while True:
-                block = self._inqueue.get()
-                if block is None:
-                    logger.debug("IO {} finishing.".format(id_))
-                    self._outqueue.put(None)  # also let the outqueue end
-                    break
-                offset = block.id * self.block_size
-                t1 = time.time()
-                source_file.seek(offset)
-                t2 = time.time()
-                data = source_file.read(block.size)
-                t3 = time.time()
-                # throw away cache
-                posix_fadvise(source_file.fileno(), offset, block.size, os.POSIX_FADV_DONTNEED)
-                if not data:
-                    raise RuntimeError('EOF reached on source when there should be data.')
+            offset = block.id * self._block_size
+            t1 = time.time()
+            source_file.seek(offset)
+            data = source_file.read(block.size)
+            t2 = time.time()
+            # throw away cache
+            posix_fadvise(source_file.fileno(), offset, block.size, os.POSIX_FADV_DONTNEED)
 
-                data_checksum = data_hexdigest(self.hash_function, data)
-                logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s) '
-                             '(Inqueue size: {}, Outqueue size: {})'.format(
-                    id_,
-                    block.id,
-                    data_checksum[:16],
-                    t2-t1,
-                    self._inqueue.qsize(),
-                    self._outqueue.qsize()
-                ))
+        if not data:
+            raise RuntimeError('EOF reached on source when there should be data.')
 
-                self._outqueue.put((block, data, data_checksum))
-                self._inqueue.task_done()
+        data_checksum = data_hexdigest(self._hash_function, data)
 
+        logger.debug('IO read block {} (checksum {}...) in {:.2f}s)'.format(
+            block.id,
+            data_checksum[:16],
+            t2-t1,
+        ))
 
-    def read(self, block, sync=False):
-        """ Adds a read job """
-        self._inqueue.put(block)
-        if sync:
-            rblock, data, data_checksum = self.get()
-            if rblock.id != block.id:
-                raise RuntimeError('Do not mix threaded reading with sync reading!')
-            return data
-
-
-    def get(self):
-        d = self._outqueue.get()
-        self._outqueue.task_done()
-        return d
-
+        return block, data, data_checksum
 
     def write(self, block, data):
-        # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
         if not self._writer:
             self._writer = open(self.io_name, 'rb+')
 
-        offset = block.id * self.block_size
+        offset = block.id * self._block_size
         self._writer.seek(offset)
         written = self._writer.write(data)
         posix_fadvise(self._writer.fileno(), offset, len(data), os.POSIX_FADV_DONTNEED)
         assert written == len(data)
 
-
     def close(self):
-        if self.mode == 'r':
-            for _reader_thread in self._reader_threads:
-                self._inqueue.put(None)  # ends the threads
-            for _reader_thread in self._reader_threads:
-                _reader_thread.join()
-        elif self.mode == 'w':
+        super().close()
+        if self._writer:
             self._writer.close()
-

@@ -483,9 +483,7 @@ class Backy():
                 if block.id in check_block_ids and block.uid and block.valid:  # no uid = sparse block in backup. Can't check.
                     io.read(block)
                     num_reading += 1
-            for i in range(num_reading):
-                # this is source file data
-                source_block, source_data, source_data_checksum = io.get()
+            for source_block, source_data, source_data_checksum in io.read_get_completed():
                 # check metadata checksum with the newly read one
                 if source_block.checksum != source_data_checksum:
                     logger.error("Source and backup don't match in regions outside of the hints.")
@@ -522,9 +520,7 @@ class Backy():
         # now use the readers and write
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
-        for i in range(read_jobs):
-            block, data, data_checksum = io.get()
-
+        for block, data, data_checksum in io.read_get_completed():
             stats['blocks_read'] += 1
             stats['bytes_read'] += len(data)
 
@@ -555,14 +551,14 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
-            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version.uid, source, (i + 1) / read_jobs * 100))
-            if i % _log_every_jobs == 0 or i + 1 == read_jobs:
-                logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version.uid, source, done_jobs / read_jobs * 100))
+            if done_jobs % _log_every_jobs == 0 or done_jobs == read_jobs:
+                logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_jobs, read_jobs,  done_jobs / read_jobs * 100))
 
         io.close()  # wait for all readers
-        # self.data_backend.close()  # wait for all writers
         if read_jobs != done_jobs:
-            logger.error('backy broke somewhere. Backup is invalid.')
+            logger.error('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {})'
+                         .format(read_jobs, done_jobs))
             sys.exit(3)
 
         self.meta_backend.set_version_valid(version.uid)
