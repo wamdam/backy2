@@ -1,4 +1,3 @@
-from queue import Empty
 from unittest.mock import Mock
 
 from backy2.meta_backends.sql import Block
@@ -18,7 +17,7 @@ class DatabackendTestCase(BackendTestCase):
         for _ in range(NUM_BLOBS):
             data = self.random_bytes(BLOB_SIZE)
             self.assertEqual(BLOB_SIZE, len(data))
-            uid = self.data_backend.save(data,_sync=True)
+            uid = self.data_backend.save(data, sync=True)
             data_by_uid[uid] = data
         uids = list(data_by_uid.keys())
         self.assertEqual(NUM_BLOBS, len(uids))
@@ -75,13 +74,12 @@ class DatabackendTestCase(BackendTestCase):
 
         self.data_backend.wait_read_finished()
 
-        for _ in uids:
-            block, offset, length, data = self.data_backend.read_get(qtimeout=1)
+        for block, offset, length, data in self.data_backend.read_get_completed(timeout=1):
             self.assertEqual(0, offset)
             self.assertEqual(BLOB_SIZE, length)
             self.assertEqual(data_by_uid[block.uid], data)
 
-        self.assertRaises(Empty, lambda: self.data_backend.read_get(qtimeout=1))
+        self.assertEqual([], [future for future in self.data_backend.read_get_completed(timeout=1)])
 
         for uid in uids:
             self.data_backend.rm(uid)
@@ -91,7 +89,7 @@ class DatabackendTestCase(BackendTestCase):
     def _test_rm_many(self):
         NUM_BLOBS = 15
 
-        uids = [self.data_backend.save(b'B',_sync=True) for _ in range(NUM_BLOBS)]
+        uids = [self.data_backend.save(b'B', sync=True) for _ in range(NUM_BLOBS)]
 
         self.data_backend.rm_many(uids)
 
@@ -109,7 +107,7 @@ class DatabackendTestCase(BackendTestCase):
             self.skipTest('not applicable to this backend')
 
     def test_not_exists(self):
-        uid = self.data_backend.save(b'B',_sync=True)
+        uid = self.data_backend.save(b'B', sync=True)
         self.assertTrue(len(uid) > 0)
 
         block = Mock(Block, uid=uid)
@@ -125,7 +123,7 @@ class DatabackendTestCase(BackendTestCase):
 
     def test_compression(self):
         if self.data_backend.compression_active is not None:
-            uid = self.data_backend.save(b'\0' * 8192,_sync=True)
+            uid = self.data_backend.save(b'\0' * 8192, sync=True)
             self.assertTrue(len(uid) > 0)
             self.data_backend.rm(uid)
         else:

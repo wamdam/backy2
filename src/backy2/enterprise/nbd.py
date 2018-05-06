@@ -111,7 +111,7 @@ class BackyStore():
     def _save(self, data):
         # update a given block_uid
         if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
-            return self.backy.data_backend.save(data, _sync=True)  # returns block uid
+            return self.backy.data_backend.save(data, sync=True)  # returns block uid
         else:
             new_uid = self.backy.data_backend._uid()
             with open(os.path.join(self.cachedir, new_uid), 'wb') as f:
@@ -161,7 +161,7 @@ class BackyStore():
 
             if not self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
                 # dump changed data
-                new_block_uid = self.backy.data_backend.save(data, _sync=True)
+                new_block_uid = self.backy.data_backend.save(data, sync=True)
                 logger.debug('Stored block {} with local uid {} to uid {}'.format(block_id, block_uid, new_block_uid))
                 block_uid = new_block_uid
 

@@ -1,47 +1,71 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import concurrent
+from concurrent.futures import ThreadPoolExecutor
+from threading import BoundedSemaphore
+
 
 class IO():
 
     PACKAGE_PREFIX = 'backy2.io'
 
+    READ_QUEUE_LENGTH = 5
+
     def __init__(self, config, block_size, hash_function):
-        pass
+        self._block_size = block_size
+        self._hash_function = hash_function
 
+        our_config = config.get('io.{}'.format(self.NAME), types=dict)
+        self.simultaneous_reads = config.get_from_dict(our_config, 'simultaneousReads', types=int)
 
-    def open(self, io_name, mode='r', force=False):
-        """ Prepare and check anything needed by the ios,
-        possibly open files and start threads. If mode is 'w', then
-        the force parameter decides if the given target should be overwritten
-        (True) or if a new target should be created (False).
-        """
+        self._read_executor = None
+
+    def open_r(self, io_name):
+        self._read_executor = ThreadPoolExecutor(max_workers=self.simultaneous_reads, thread_name_prefix='IO-Reader-')
+        self._read_futures = []
+        self._read_semaphore = BoundedSemaphore(self.simultaneous_reads + self.READ_QUEUE_LENGTH)
+
+    def open_w(self, io_name, size=None, force=False):
         raise NotImplementedError()
-
 
     def size(self):
         """ Return the size in bytes of the opened io_name
         """
         raise NotImplementedError()
 
+    def _read(self, block):
+        raise NotImplementedError()
+
+    def _bounded_read(self, block):
+        with self._read_semaphore:
+            return self._read(block)
 
     def read(self, block, sync=False):
-        """ Add a read job for a Block """
-        raise NotImplementedError()
+        """ Adds a read job or directly reads and returns the data """
+        if sync:
+            return self._read(block)[1]
+        else:
+            self._read_futures.append(self._read_executor.submit(self._bounded_read, block))
 
+    def read_get_completed(self):
+        """ Returns a generator for all completed read jobs
+        """
+        futures = concurrent.futures.as_completed(self._read_futures)
 
-    def get(self):
-        """ Get the result of a read job, however this is not specific
-        to which job. It just gets one. """
-        raise NotImplementedError()
+        for future in futures:
+                # If future.result() raises then futures for already returned results aren't removed from _read_futures.
+                # Maybe this should to be handled in a better way.
+                yield future.result()
 
+        self._read_futures = []
 
     def write(self, block, data):
         """ Writes data to the given block
         """
         raise NotImplementedError()
 
-
     def close(self):
         """ Close the io
         """
-        raise NotImplementedError()
+        if self._read_executor:
+            self._read_executor.shutdown()
