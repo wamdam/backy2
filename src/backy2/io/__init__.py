@@ -9,7 +9,7 @@ class IO():
 
     PACKAGE_PREFIX = 'backy2.io'
 
-    READ_QUEUE = 5
+    READ_QUEUE_LENGTH = 5
 
     def __init__(self, config, block_size, hash_function):
         self._block_size = block_size
@@ -23,7 +23,7 @@ class IO():
     def open_r(self, io_name):
         self._read_executor = ThreadPoolExecutor(max_workers=self.simultaneous_reads, thread_name_prefix='IO-Reader-')
         self._read_futures = []
-        self._read_semaphore = BoundedSemaphore(self.simultaneous_reads + self.READ_QUEUE)
+        self._read_semaphore = BoundedSemaphore(self.simultaneous_reads + self.READ_QUEUE_LENGTH)
 
     def open_w(self, io_name, size=None, force=False):
         raise NotImplementedError()
@@ -43,8 +43,7 @@ class IO():
     def read(self, block, sync=False):
         """ Adds a read job or directly reads and returns the data """
         if sync:
-            block, data, data_checksum = self._read(block)
-            return data
+            return self._read(block)[1]
         else:
             self._read_futures.append(self._read_executor.submit(self._bounded_read, block))
 

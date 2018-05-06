@@ -78,7 +78,7 @@ class MiscTestCase(BackendTestCase, TestCase):
 
     def test_FileBackend_save_read(self):
         backend = self.data_backend
-        uid = backend.save(b'test', _sync=True)
+        uid = backend.save(b'test', sync=True)
         block = Mock(Block, uid=uid)
         self.assertEqual(backend.read(block, sync=True), b'test')
         backend.rm(uid)

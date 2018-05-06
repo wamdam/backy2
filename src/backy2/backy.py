@@ -224,8 +224,8 @@ class Backy():
                     ))
 
         # and read
-        for i in range(read_jobs):
-            block, offset, length, data = self.data_backend.read_get()
+        for i, entry in enumerate(self.data_backend.read_get_completed()):
+            block, offset, length, data = entry
             if data is None:
                 logger.error('Blob not found: {}'.format(str(block)))
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
@@ -316,8 +316,8 @@ class Backy():
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
-        for i in range(read_jobs):
-            block, offset, length, data = self.data_backend.read_get()
+        for i, entry in enumerate(self.data_backend.read_get_completed()):
+            block, offset, length, data = entry
             assert len(data) == block.size
             data_checksum = data_hexdigest(self.hash_function, data)
             io.write(block, data)

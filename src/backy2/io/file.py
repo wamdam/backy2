@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import threading
 import time
 
 import os
@@ -80,7 +81,8 @@ class IO(_IO):
 
         data_checksum = data_hexdigest(self._hash_function, data)
 
-        logger.debug('IO read block {} (checksum {}...) in {:.2f}s)'.format(
+        logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s)'.format(
+            threading.current_thread().name,
             block.id,
             data_checksum[:16],
             t2-t1,

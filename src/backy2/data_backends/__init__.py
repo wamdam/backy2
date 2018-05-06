@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import queue
+import concurrent
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import BoundedSemaphore
 
 import hashlib
 import importlib
@@ -88,64 +90,45 @@ class DataBackend():
         self.write_throttling = TokenBucket()
         self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
 
-        self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
-        self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
-        self._write_queue = queue.Queue(self.write_queue_length)
-        self._write_queue_exception = queue.Queue()
-        # The read queue has no limit, so that we can queue a whole version worth of blocks
-        self._read_queue = queue.Queue()
-        self._read_data_queue = queue.Queue(self.read_queue_length)
-        self._writer_threads = []
-        self._reader_threads = []
-        for i in range(simultaneous_writes):
-            _writer_thread = threading.Thread(target=self._writer, args=(i,))
-            _writer_thread.daemon = True
-            _writer_thread.start()
-            self._writer_threads.append(_writer_thread)
-        for i in range(simultaneous_reads):
-            _reader_thread = threading.Thread(target=self._reader, args=(i,))
-            _reader_thread.daemon = True
-            _reader_thread.start()
-            self._reader_threads.append(_reader_thread)
+        self._read_executor = ThreadPoolExecutor(max_workers=simultaneous_reads, thread_name_prefix='IO-Reader-')
+        self._read_futures = []
+        self._read_semaphore = BoundedSemaphore(simultaneous_reads + self.READ_QUEUE_LENGTH)
 
-    def _writer(self, id_):
-        """ A threaded background writer """
-        while True:
-            entry = self._write_queue.get()
-            if entry is None:
-                logger.debug("Writer {}({}) finishing.".format(threading.current_thread().name, id_))
-                break
-            uid, data = entry
-            time.sleep(self.write_throttling.consume(len(data)))
-            t1 = time.time()
-            try:
-                self._write(uid, data)
-            except Exception as exception:
-                self._write_queue_exception.put((id_, threading.current_thread.name, uid, exception))
-                return
-            t2 = time.time()
-            self._write_queue.task_done()
-            logger.debug('Writer {}({}) wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(threading.current_thread().name, id_, uid, t2-t1, self._write_queue.qsize()))
+        self._write_executor = ThreadPoolExecutor(max_workers=simultaneous_writes, thread_name_prefix='IO-Reader-')
+        self._write_futures = []
+        self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
-    def _reader(self, id_):
-        """ A threaded background reader """
-        while True:
-            entry = self._read_queue.get()
-            if entry is None:
-                logger.debug("Reader {}({}) finishing.".format(threading.current_thread().name, id_))
-                break
-            block, offset, length = entry
-            t1 = time.time()
-            try:
-                data = self._read(block, offset, length)
-            except Exception as exception:
-                self._read_data_queue.put((exception, block, 0, None, 0))
-            else:
-                time.sleep(self.read_throttling.consume(len(data)))
-                self._read_data_queue.put((None, block, offset, len(data), data))
-                t2 = time.time()
-                self._read_queue.task_done()
-                logger.debug('Reader {}({}) read data async. uid {} in {:.2f}s (Queue size is {})'.format(threading.current_thread().name, id_, block.uid, t2-t1, self._read_queue.qsize()))
+    def _write(self, uid, data):
+        data, metadata = self.compress(data)
+        data, metadata_2 = self.encrypt(data)
+        metadata.update(metadata_2)
+
+        time.sleep(self.write_throttling.consume(len(data)))
+        t1 = time.time()
+        self._write_raw(uid, data, metadata)
+        t2 = time.time()
+
+        logger.debug('Writer {} wrote data. uid {} in {:.2f}s'.format(threading.current_thread().name, uid, t2-t1))
+
+    def _bounded_write(self, uid, block):
+        with self._write_semaphore:
+            return self._write(uid, block)
+
+    def _read(self, block, offset, length):
+        t1 = time.time()
+        data, metadata = self._read_raw(block.uid, offset, length)
+        time.sleep(self.read_throttling.consume(len(data)))
+        t2 = time.time()
+
+        data = self.decrypt(data, metadata)
+        data = self.uncompress(data, metadata)
+
+        logger.debug('Reader {} read data. uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
+        return block, offset, len(data), data
+
+    def _bounded_read(self, block, offset, length):
+        with self._read_semaphore:
+            return self._read(block, offset, length)
 
     def _uid(self):
         # 32 chars are allowed and we need to spread the first few chars so
@@ -156,53 +139,36 @@ class DataBackend():
         hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
         return hash[:10] + suuid
 
-    def _write(self, uid, data):
-        data, metadata = self.compress(data)
-        data, metadata_2 = self.encrypt(data)
-        metadata.update(metadata_2)
-        self._write_raw(uid, data, metadata)
-
-    def save(self, data, _sync=False):
-        try:
-            (id_, thread_name, uid, exception) = self._write_queue_exception.get(block=False)
-            raise RuntimeError('Writer {}({}) failed for {}'.format(thread_name, id_, uid)) from exception
-        except queue.Empty:
-            pass
+    def save(self, data, sync=False):
+        for future in [future for future in self._write_futures if future.done()]:
+            self._write_futures.remove(future)
+            future.result()
 
         uid = self._uid()
-        self._write_queue.put((uid, data))
-
-        if _sync:
-            self._write_queue.join()
-            try:
-                (id_, thread_name, uid, exception) = self._write_queue_exception.get(block=False)
-                raise ('Writer {}({}) failed for {}'.format(thread_name, id_, uid)) from exception
-            except queue.Empty:
-                pass
+        if sync:
+            self._write(uid, data)
+        else:
+            self._write_futures.append(self._write_executor.submit(self._bounded_write, uid, data))
 
         return uid
 
-    def _read(self, block, offset, length):
-        data, metadata = self._read_raw(block.uid, offset, length)
-        data = self.decrypt(data, metadata)
-        data = self.uncompress(data, metadata)
-        return data
-
     def read(self, block, offset=0, length=None, sync=False):
         if sync:
-            return self._read(block, offset, length)
+            return self._read(block, offset, length)[3]
         else:
-            self._read_queue.put((block, offset, length))
+            self._read_futures.append(self._read_executor.submit(self._bounded_read, block, offset, length))
 
-    def read_get(self, qblock=True, qtimeout=None):
-        exception, block, offset, length, data = self._read_data_queue.get(block=qblock, timeout=qtimeout)
-        self._read_data_queue.task_done()
-        if exception is not None:
-            if isinstance(exception, FileNotFoundError):
-                raise FileNotFoundError('Reader failed for {}'.format(block.uid)) from exception
-            else:
-                raise RuntimeError('Reader failed for {}'.format(block.uid)) from exception
-        return block, offset, length, data
+    def read_get_completed(self, timeout=None):
+        """ Returns a generator for all completed read jobs
+        """
+        futures = concurrent.futures.as_completed(self._read_futures, timeout=timeout)
+
+        for future in futures:
+            # If future.result() raises then futures for already returned results aren't removed from _read_futures.
+            # Maybe this should to be handled in a better way.
+            yield future.result()
+
+        self._read_futures = []
 
     def update(self, block, data, offset=0):
         """ Updates data, returns written bytes.
@@ -264,18 +230,14 @@ class DataBackend():
             return data
 
     def wait_read_finished(self):
-        self._read_queue.join()
+        for future in concurrent.futures.as_completed(self._read_futures):
+            pass
 
     def wait_write_finished(self):
-        self._write_queue.join()
+        for future in concurrent.futures.as_completed(self._write_futures):
+            pass
 
     def close(self):
-        for _writer_thread in self._writer_threads:
-            self._write_queue.put(None)  # ends the thread
-        for _writer_thread in self._writer_threads:
-            _writer_thread.join()
-        for _reader_thread in self._reader_threads:
-            self._read_queue.put(None)  # ends the thread
-        for _reader_thread in self._reader_threads:
-            _reader_thread.join()
+        self._write_executor.shutdown()
+        self._read_executor.shutdown()
 
