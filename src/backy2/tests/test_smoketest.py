@@ -82,7 +82,7 @@ class SmokeTestCase():
             if old_size and size > old_size:
                 patch_size = size - old_size + 1
                 offset = old_size - 1
-                print('    Image got bigger at {}({}):{}, exists {}'.format(offset, int(offset / 4096), patch_size, exists))
+                print('    Image got bigger at {}({}):{}'.format(offset, int(offset / 4096), patch_size))
                 hints.append({'offset': offset, 'length': patch_size, 'exists': 'true'})
 
             old_size = size
