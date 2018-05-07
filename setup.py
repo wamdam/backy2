@@ -49,6 +49,6 @@ Topic :: System :: Archiving :: Backup
     entry_points="""
         [console_scripts]
             backy2 = backy2.scripts.backy:main
-            derive_key = backy2.scripts.derive_key:main
+            cse_derive_key = backy2.scripts.cse_derive_key:main
     """,
     )
