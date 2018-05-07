@@ -5,7 +5,9 @@
 #
 
 import argparse
+import getpass
 import logging
+import sys
 from binascii import b2a_base64, a2b_base64
 
 import pkg_resources
@@ -31,13 +33,17 @@ def derive_key(password, salt, rounds):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Key derivation tool for use with AWS S3 client-side encryption.',
+        description="""
+        This tool derives a high entropy key from the supplied password by using PBKDF2 with HMAC-SHA256. It outputs
+        a configuration section which can be directly inserted into the configuration file under the dataBackend section.
+        Currently the derived key is always 32 bytes long which makes it suitable for AES-256.
+        """,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('-V', '--version', action='store_true', help='Show version')
+    parser.add_argument('-V', '--version', action='store_true', help='show version')
     parser.add_argument('-s', '--salt', nargs='?', default='mpJkkZqRm5GcpI2aLpyRpA==', help='BASE64 encoded salt')
-    parser.add_argument('-r', '--rounds', nargs='?', type=int, default=65536, help='Number of rounds')
-    parser.add_argument('password', help="Password string.")
+    parser.add_argument('-r', '--rounds', nargs='?', type=int, default=65536, help='number of rounds')
+    parser.add_argument('-p', '--password-file', nargs='?', help='file containing the password')
 
     args = parser.parse_args()
 
@@ -45,14 +51,22 @@ def main():
         print(__version__)
         exit(0)
 
-    if not hasattr(args, 'password'):
-        parser.print_usage()
-        exit(1)
+    init_logging(None, logging.INFO)
 
-    init_logging(None, logging.WARN)
+    if args.password_file:
+        logger.info('Reading password from file {}.'.format(args.password_file))
+        with open(args.password_file, 'rb') as f:
+            password = f.read()
+    else:
+        logger.info('Reading password from terminal.')
+        password = getpass.getpass(prompt='Enter password: ')
+        password_2 = getpass.getpass(prompt='Reenter password: ')
+        if password != password_2:
+            print('The two passwords don\'t match.', file=sys.stderr)
+            exit(1)
 
     try:
-        derive_key(args.password, a2b_base64(args.salt), args.rounds)
+        derive_key(password, a2b_base64(args.salt), args.rounds)
         exit(0)
     except Exception as e:
         logger.error('Unexpected exception')

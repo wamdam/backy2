@@ -44,6 +44,7 @@ Topic :: System :: Archiving :: Backup
         #'psycopg2>=2.7.4',
         #'pex==1.1.0',
         #'aws_s3_cse>=0.2',
+        #'pycryptodome>=3.6.1',
         ],
     python_requires='~=3.6',
     entry_points="""
