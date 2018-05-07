@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
+from pathlib import Path
 
 import operator
 import os
@@ -64,19 +65,24 @@ class Config():
                     user[k] = cls._merge_dicts(user[k],v)
         return user
 
-    def __init__(self, cfg=None, merge_defaults=True):
+    def __init__(self, cfg=None, sources=None, merge_defaults=True):
         yaml = YAML(typ='safe', pure=True)
         default_config = yaml.load(self.DEFAULT_CONFIG)
 
         if cfg is None:
-            sources = self._get_sources()
+            if not sources:
+                sources = self._get_sources()
+
+            config = None
             for source in sources:
                 if os.path.isfile(source):
-                    config = yaml.load(source)
+                    config = yaml.load(Path(source))
                     if config is None:
                         raise ConfigurationError('Configuration file {} is empty.'.format(source))
                     break
-            raise ConfigurationError('No configuration file found in the default places ({}).'.format(', '.join(sources)))
+
+            if not config:
+                raise ConfigurationError('No configuration file found in the default places ({}).'.format(', '.join(sources)))
         else:
             config = yaml.load(cfg)
             if config is None:

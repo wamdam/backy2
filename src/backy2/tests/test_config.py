@@ -1,12 +1,13 @@
-import logging
 import unittest
+
+import os
 
 from backy2.config import Config
 from backy2.exception import ConfigurationError
-from backy2.logging import init_logging
+from backy2.tests.testcase import TestCase
 
 
-class ConfigTestCase(unittest.TestCase):
+class ConfigTestCase(TestCase, unittest.TestCase):
 
     CONFIG = """
         configurationVersion: '1.0.0'
@@ -35,9 +36,6 @@ class ConfigTestCase(unittest.TestCase):
               - RBD_FEATURE_LAYERING
               - RBD_FEATURE_EXCLUSIVE_LOCK
         """
-
-    def setUp(self):
-        init_logging(None, logging.INFO)
 
     def test_load_from_string(self):
         config = Config(cfg=self.CONFIG, merge_defaults=False)
@@ -87,3 +85,10 @@ class ConfigTestCase(unittest.TestCase):
 
     def test_get_with_dict(self):
         self.assertEqual('Hi there!', Config.get_from_dict({'a': { 'b': 'Hi there!' } }, 'a.b', types=str))
+
+    def test_load_from_file(self):
+        cfile = os.path.join(self.testpath.path, 'test-config.yaml')
+        with open(cfile, 'w') as f:
+            f.write(self.CONFIG)
+        config = Config(sources=[cfile], merge_defaults=False)
+        self.assertEqual(10, config.get('io.rbd.simultaneousReads'))
