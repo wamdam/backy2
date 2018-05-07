@@ -2,6 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 import json
+import setproctitle
 from ast import literal_eval
 from threading import Lock
 from time import time
@@ -10,6 +11,7 @@ import hashlib
 import importlib
 from functools import partial
 
+from backy2.exception import ConfigurationError
 from backy2.logging import logger
 
 
@@ -48,7 +50,6 @@ def data_hexdigest(hash_function, data):
     hash = hash_function.copy()
     hash.update(data)
     return hash.hexdigest()
-
 
 def backy_from_config(config):
     """ Create a partial backy class from a given Config object
@@ -89,6 +90,21 @@ def backy_from_config(config):
                     process_name=process_name,
             )
     return backy
+
+
+def notify(process_name, msg=''):
+    """ This method can receive notifications and append them in '[]' to the
+    process name seen in ps, top, ...
+    """
+    if msg:
+        new_msg = '{} [{}]'.format(
+            process_name,
+            msg.replace('\n', ' ')
+        )
+    else:
+        new_msg = process_name
+
+    setproctitle.setproctitle(new_msg)
 
 
 # token_bucket.py
