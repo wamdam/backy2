@@ -76,7 +76,7 @@ class Config():
                     if config is None:
                         raise ConfigurationError('Configuration file {} is empty.'.format(source))
                     break
-            raise ConfigurationError('No configuration file found in the default directories ({}).'.format(', '.join(sources)))
+            raise ConfigurationError('No configuration file found in the default places ({}).'.format(', '.join(sources)))
         else:
             config = yaml.load(cfg)
             if config is None:
