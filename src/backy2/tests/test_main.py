@@ -87,8 +87,9 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.meta_backend
         name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        uid = backend.set_version(name, snapshot_name, 50000, 5000, True)
-        self.assertIsNotNone(uid)
+        version = backend.set_version(name, snapshot_name, 50000, 5000, True)
+        uid = version.uid
+        self.assertIsNotNone(version)
         version = backend.get_version(uid)
         self.assertEqual(version.name, name)
         self.assertEqual(version.size, 50000)
