@@ -22,8 +22,10 @@ def init_logging(logfile, console_level):  # pragma: no cover
 
     logging.basicConfig(handlers=handlers, level=logging.DEBUG)
 
-    # make alembic quiet
+    # silence alembic
     logging.getLogger('alembic').setLevel(logging.WARN)
+    # silence filelock
+    logging.getLogger('filelock').setLevel(logging.WARN)
 
     logger.info('$ ' + ' '.join(sys.argv))
 
