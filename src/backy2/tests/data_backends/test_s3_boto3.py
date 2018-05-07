@@ -33,8 +33,8 @@ class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
                     e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
                 active: true
 
-          simultaneousWrites: 1
-          simultaneousReads: 1
+          simultaneousWrites: 5
+          simultaneousReads: 5
           bandwidthRead: 0
           bandwidthWrite: 0           
         """
