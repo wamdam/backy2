@@ -1,12 +1,13 @@
 from aws_s3_cse import CSE
 
+
 class Encryption:
 
     NAME = 'aws_s3_cse'
 
     def __init__(self, materials):
         if 'masterKey' not in materials:
-            raise KeyError('required key masterKey is missing in encryption materials')
+            raise KeyError('Required key masterKey is missing in encryption materials.')
 
         self.delegate = CSE(master_key=materials['masterKey'])
 

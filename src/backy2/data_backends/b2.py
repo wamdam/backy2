@@ -4,6 +4,7 @@ import logging
 
 from b2.account_info.exception import MissingAccountData
 from backy2.data_backends import DataBackend as _DataBackend
+from backy2.exception import UsageError
 
 global b2
 import b2
@@ -12,7 +13,7 @@ from b2.account_info.in_memory import InMemoryAccountInfo
 from b2.account_info.sqlite_account_info import SqliteAccountInfo
 from b2.download_dest import DownloadDestBytes
 import b2.file_version
-from b2.exception import B2Error, FileNotPresent
+from b2.exception import B2Error, FileNotPresent, UnknownError
 
 
 class DataBackend(_DataBackend):
@@ -64,11 +65,13 @@ class DataBackend(_DataBackend):
         try:
             self.bucket.download_file_by_name(uid, data_io)
         except B2Error as e:
-            #if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
-            if isinstance(e, FileNotPresent):
+            # Currently FileNotPresent isn't always signaled correctly.
+            # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
+            if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
+            #if isinstance(e, FileNotPresent):
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
-                raise e
+                raise
 
         return data_io.get_bytes_written(), data_io.file_info
 
@@ -86,12 +89,13 @@ class DataBackend(_DataBackend):
             file_version_info = self._file_info(uid)
             self.bucket.delete_file_version(file_version_info.id_, file_version_info.file_name)
         except B2Error as e:
-            # Unfortunately
-            #if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
-            if isinstance(e, FileNotPresent):
+            # Currently FileNotPresent isn't always signaled correctly.
+            # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
+            if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
+            #if isinstance(e, FileNotPresent):
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
-                raise e
+                raise
 
     def rm_many(self, uids):
         """ Deletes many uids from the data backend and returns a list
@@ -110,7 +114,7 @@ class DataBackend(_DataBackend):
 
     def get_all_blob_uids(self, prefix=None):
         if prefix:
-            raise RuntimeError('prefix is not yet implemented for this backend')
+            raise UsageError('Specifying a prefix isn\t implemented for this backend yet.')
         return [file_version_info.file_name
                 for (file_version_info, folder_name) in self.bucket.ls()]
 

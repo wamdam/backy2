@@ -41,13 +41,6 @@ def blocks_from_hints(hints, block_size):
     return sparse_blocks, read_blocks
 
 
-class LockError(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-
 class Backy():
     """
     """
@@ -73,7 +66,7 @@ class Backy():
         notify(process_name)  # i.e. set process name without notification
 
         if not self.locking.lock('backy'):
-            raise LockError('A backy is running which requires exclusive access.')
+            raise AlreadyLocked('Another process is already running.')
         self.locking.unlock('backy')
 
     def _prepare_version(self, name, snapshot_name, size=None, from_version_uid=None):
@@ -84,16 +77,16 @@ class Backy():
         if from_version_uid:
             old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
             if not old_version.valid:
-                raise RuntimeError('You cannot base new version on an invalid one.')
+                raise InvalidSourceError('You cannot base new version on an invalid one.')
             if old_version.block_size != self.block_size:
-                raise RuntimeError('You cannot base new version on an old version with a different block size.')
+                raise InvalidSourceError('You cannot base new version on an old version with a different block size.')
             old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
             if not size:
                 size = old_version.size
         else:
             old_blocks = None
             if not size:
-                raise RuntimeError('Size needs to be specified if there is no base version.')
+                raise InternalError('Size needs to be specified if there is no base version.')
 
         num_blocks = math.ceil(size / self.block_size)
         # we always start with invalid versions, then validate them after backup
@@ -104,7 +97,7 @@ class Backy():
             block_size=self.block_size,
             valid=False)
         if not self.locking.lock(version.uid):
-            raise LockError('Version {} is locked.'.format(version.uid))
+            raise AlreadyLocked('Version {} is locked.'.format(version.uid))
         for id in range(num_blocks):
             if old_blocks:
                 try:
@@ -145,10 +138,9 @@ class Backy():
                 valid,
                 _commit=False,
                 _upsert=False)
-            notify(self.process_name, 'Preparing Version ({}%)'.format((id + 1) // num_blocks * 100))
+            notify(self.process_name, 'Preparing Version ({:.1f}%)'.format((id + 1) // num_blocks * 100))
         self.meta_backend._commit()
         notify(self.process_name)
-        #logger.info('New version: {}'.format(version_uid))
         self.locking.unlock(version.uid)
         return version
 
@@ -170,17 +162,18 @@ class Backy():
         res = parse.urlparse(source)
 
         if res.params or res.query or res.fragment:
-            raise ValueError('Invalid URL.')
+            raise UsageError('The supplied URL {} is invalid.'.format(source))
 
         scheme = res.scheme
         if not scheme:
-            raise ValueError('Invalid URL. You must provide the type (e.g. file://)')
+            raise UsageError('The supplied URL {} is invalid. You must provide a scheme (e.g. file://).'
+                             .format(source))
 
         try:
             from backy2.io import IO
             IOLib = importlib.import_module('{}.{}'.format(IO.PACKAGE_PREFIX, scheme))
         except ImportError:
-            raise NotImplementedError('IO scheme {} not supported'.format(scheme))
+            raise UsageError('IO scheme {} not supported.'.format(scheme))
 
         return IOLib.IO(
                 config=self.config,
@@ -193,7 +186,7 @@ class Backy():
         all was ok
         """
         if not self.locking.lock(version_uid):
-            raise LockError('Version {} is locked.'.format(version_uid))
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid))
         version = self.meta_backend.get_version(version_uid)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
@@ -287,7 +280,7 @@ class Backy():
 
     def restore(self, version_uid, target, sparse=False, force=False):
         if not self.locking.lock(version_uid):
-            raise LockError('Version {} is locked.'.format(version_uid))
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid))
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
@@ -345,26 +338,26 @@ class Backy():
     def protect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
-            raise ValueError('Version {} is already protected.'.format(version_uid))
+            raise RuntimeError('Version {} is already protected.'.format(version_uid))
         self.meta_backend.protect_version(version_uid)
 
     def unprotect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if not version.protected:
-            raise ValueError('Version {} is not protected.'.format(version_uid))
+            raise RuntimeError('Version {} is not protected.'.format(version_uid))
         self.meta_backend.unprotect_version(version_uid)
 
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
         if not self.locking.lock(version_uid):
-            raise LockError('Version {} is locked.'.format(version_uid))
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid))
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
-            raise ValueError('Version {} is protected. Will not delete.'.format(version_uid))
+            raise RuntimeError('Version {} is protected. Will not delete.'.format(version_uid))
         if not force:
             # check if disallow_rm_when_younger_than_days allows deletion
             age_days = (datetime.datetime.now() - version.date).days
             if disallow_rm_when_younger_than_days > age_days:
-                raise LockError('Version {} is too young. Will not delete.'.format(version_uid))
+                raise AlreadyLocked('Version {} is too young. Will not delete.'.format(version_uid))
 
         num_blocks = self.meta_backend.rm_version(version_uid)
         logger.info('Removed backup version {} with {} blocks.'.format(
@@ -435,30 +428,17 @@ class Backy():
             # Sanity check: check hints for validity, i.e. too high offsets, ...
             max_offset = max([h[0]+h[1] for h in hints])
             if max_offset > source_size:
-                raise ValueError('Hints have higher offsets than source file.')
+                raise InvalidSourceError('Hints have higher offsets than source file.')
 
             sparse_blocks, read_blocks = blocks_from_hints(hints, self.block_size)
         else:
             sparse_blocks = set()
             read_blocks = set(range(num_blocks))
 
-        try:
-            version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
-        except RuntimeError as e:
-            logger.error(str(e))
-            logger.error('Backy exiting.')
-            # TODO: Don't exit here, exit in Commands
-            exit(4)
-        except LockError as e:
-            logger.error(str(e))
-            logger.error('Backy exiting.')
-            # TODO: Don't exit here, exit in Commands
-            exit(99)
+        version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
+
         if not self.locking.lock(version.uid):
-            logger.error('Version {} is locked.'.format(version.uid))
-            logger.error('Backy exiting.')
-            # TODO: Don't exit here, exit in Commands
-            exit(99)
+            raise AlreadyLocked('Version {} is locked.'.format(version.uid))
 
         blocks = self.meta_backend.get_blocks_by_version(version.uid)
 
@@ -485,7 +465,7 @@ class Backy():
             for source_block, source_data, source_data_checksum in io.read_get_completed():
                 # check metadata checksum with the newly read one
                 if source_block.checksum != source_data_checksum:
-                    logger.error("Source and backup don't match in regions outside of the hints.")
+                    logger.error("Source and backup don't match in regions outside of the ones indicated by the hints.")
                     logger.error("Looks like the hints don't match or the source is different.")
                     logger.error("Found wrong source data at block {}: offset {} with max. length {}".format(
                         source_block.id,
@@ -494,7 +474,7 @@ class Backy():
                         ))
                     # remove version
                     self.meta_backend.rm_version(version.uid)
-                    sys.exit(5)
+                    raise InvalidSourceError('Source changed in regions outside of ones indicated by the hints.')
             logger.info('Finished sanity check. Checked {} blocks {}.'.format(num_reading, check_block_ids))
 
         read_jobs = 0
@@ -556,9 +536,8 @@ class Backy():
 
         io.close()  # wait for all readers
         if read_jobs != done_jobs:
-            logger.error('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {})'
-                         .format(read_jobs, done_jobs))
-            sys.exit(3)
+            raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
+                                .format(read_jobs, done_jobs))
 
         self.meta_backend.set_version_valid(version.uid)
 
@@ -597,7 +576,7 @@ class Backy():
     def cleanup_fast(self, dt=3600):
         """ Delete unreferenced blob UIDs """
         if not self.locking.lock('backy-cleanup-fast'):
-            raise LockError('Another backy cleanup is running.')
+            raise AlreadyLocked('Another backy cleanup is running.')
 
         for uid_list in self.meta_backend.get_delete_candidates(dt):
             logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
@@ -612,11 +591,10 @@ class Backy():
         # in this mode, we compare all existing uids in data and meta.
         # make sure, no other backy will start
         if not self.locking.lock('backy'):
-            self.locking.unlock('backy')
-            raise LockError('Other backy instances are running.')
+            raise AlreadyLocked('Other backy instances are running.')
         # make sure, no other backy is running
         if len(find_other_procs(self.process_name)) > 1:
-            raise LockError('Other backy instances are running.')
+            raise AlreadyLocked('Other backy instances are running.')
         active_blob_uids = set(self.data_backend.get_all_blob_uids(prefix))
         active_block_uids = set(self.meta_backend.get_all_block_uids(prefix))
         delete_candidates = active_blob_uids.difference(active_block_uids)

@@ -8,6 +8,7 @@ from io import StringIO
 from os.path import expanduser
 from ruamel.yaml import YAML
 
+from backy2.exception import ConfigurationError, InternalError
 from backy2.logging import logger
 
 
@@ -73,19 +74,19 @@ class Config():
                 if os.path.isfile(source):
                     config = yaml.load(source)
                     if config is None:
-                        raise ValueError('Configuration file {} is empty'.format(source))
+                        raise ConfigurationError('Configuration file {} is empty.'.format(source))
                     break
-            raise RuntimeError('No configuration file found (locations: {})'.format(', '.join(sources)))
+            raise ConfigurationError('No configuration file found in the default directories ({}).'.format(', '.join(sources)))
         else:
             config = yaml.load(cfg)
             if config is None:
-                raise ValueError('Configuration string is empty')
+                raise ConfigurationError('Configuration string is empty.')
 
         if 'configurationVersion' not in config or type(config['configurationVersion']) is not str:
-            raise ValueError('Configuration version is missing or not a string')
+            raise ConfigurationError('Configuration version is missing or not a string.')
 
         if config['configurationVersion'] != self.CONFIG_VERSION:
-            raise ValueError('Unknown configuration version')
+            raise ConfigurationError('Unknown configuration version {}.'.format(config['configurationVersion']))
 
         if merge_defaults:
             self._merge_dicts(config, default_config)
@@ -111,12 +112,12 @@ class Config():
             full_name = name
 
         if len(args) > 1:
-            raise RuntimeError('Called with more than two arguments for key {}'.format(full_name))
+            raise InternalError('Called with more than two arguments for key {}.'.format(full_name))
 
         try:
             value = reduce(operator.getitem, name.split('.'), dict_)
             if types is not None and not isinstance(value, types):
-                raise TypeError('Config value {} has wrong type {}, expected {}'.format(full_name, type(value), types))
+                raise TypeError('Config value {} has wrong type {}, expected {}.'.format(full_name, type(value), types))
             if isinstance(value, dict):
                 value['__position'] = name
             return value
@@ -124,7 +125,7 @@ class Config():
             if len(args) == 1:
                 return args[0]
             else:
-                raise KeyError('Config value {} is missing'.format(full_name)) from e
+                raise KeyError('Config value {} is missing.'.format(full_name)) from e
 
     def get(self, name, *args, **kwargs):
         return Config._get(self.config, name, *args, **kwargs)

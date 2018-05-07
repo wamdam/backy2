@@ -9,6 +9,7 @@ import shutil
 
 from backy2.config import Config
 from backy2.data_backends import DataBackend
+from backy2.exception import ConfigurationError
 from backy2.logging import init_logging
 from backy2.meta_backends import MetaBackend
 from backy2.utils import backy_from_config
@@ -56,7 +57,7 @@ class BackendTestCase(TestCase):
             try:
                 DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
             except ImportError:
-                raise NotImplementedError('Data backend type {} unsupported'.format(name))
+                raise ConfigurationError('Data backend type {} not found.'.format(name))
             else:
                 self.data_backend = DataBackendLib.DataBackend(self.config)
                 self.data_backend.rm_many(self.data_backend.get_all_blob_uids())
@@ -66,7 +67,7 @@ class BackendTestCase(TestCase):
             try:
                 MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
             except ImportError:
-                raise NotImplementedError('Meta backend type {} unsupported'.format(name))
+                raise ConfigurationError('Meta backend type {} not found.'.format(name))
             else:
                 meta_backend = MetaBackendLib.MetaBackend(self.config)
                 meta_backend.initdb(_migratedb=False)

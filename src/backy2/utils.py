@@ -31,7 +31,7 @@ def parametrized_hash_function(config_hash_function):
         hash_name = config_hash_function
     hash_function = getattr(hashlib, hash_name)
     if hash_function is None:
-        raise NotImplementedError('Unsupported hash function {}'.format(hash_name))
+        raise ConfigurationError('Unsupported hash function {}.'.format(hash_name))
     kwargs = {}
     if hash_args is not None:
         kwargs = dict((k, literal_eval(v)) for k, v in (pair.split('=') for pair in hash_args.split(',')))
@@ -40,8 +40,8 @@ def parametrized_hash_function(config_hash_function):
 
     from backy2.meta_backends import MetaBackend
     if len(hash_function_w_kwargs.digest()) > MetaBackend.MAXIMUM_CHECKSUM_LENGTH:
-        raise RuntimeError('Specified hash function exceeds maximum digest length of {}'
-                           .format(MetaBackend.MAXIMUM_CHECKSUM_LENGTH))
+        raise ConfigurationError('Specified hash function exceeds maximum digest length of {}.'
+                                 .format(MetaBackend.MAXIMUM_CHECKSUM_LENGTH))
 
     return hash_function_w_kwargs
 
@@ -65,7 +65,7 @@ def backy_from_config(config):
         try:
             DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
         except ImportError:
-            raise NotImplementedError('Data backend type {} unsupported'.format(name))
+            raise ConfigurationError('Data backend type {} not found.'.format(name))
         else:
             data_backend = DataBackendLib.DataBackend(config)
 
@@ -75,7 +75,7 @@ def backy_from_config(config):
         try:
             MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
         except ImportError:
-            raise NotImplementedError('Meta backend type {} unsupported'.format(name))
+            raise ConfigurationError('Meta backend type {} not found.'.format(name))
         else:
             meta_backend = MetaBackendLib.MetaBackend(config)
 

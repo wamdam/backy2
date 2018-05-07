@@ -2,7 +2,6 @@
 # -*- encoding: utf-8 -*-
 import datetime
 import json
-import sys
 import time
 from binascii import hexlify, unhexlify
 from collections import namedtuple
@@ -172,9 +171,7 @@ class MetaBackend(_MetaBackend):
                 self.migrate_db()
             #except sqlalchemy.exc.OperationalError:
             except:
-                logger.error('Invalid database ({}). Please run initdb first.'.format(self.engine.url))
-                sys.exit(1)  # TODO: Return something (or raise)
-                #raise RuntimeError('Invalid database')
+                raise RuntimeError('Invalid database ({}). Maybe you need to run initdb first?'.format(self.engine.url))
 
         Session = sessionmaker(bind=self.engine)
         self.session = Session()

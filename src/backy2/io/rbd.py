@@ -7,6 +7,7 @@ import re
 from functools import reduce
 from operator import or_
 
+from backy2.exception import UsageError
 from backy2.io import IO as _IO
 from backy2.io.lib import rados  # XXX use default rados lib?
 from backy2.io.lib import rbd  # XXX use default rbd lib?
@@ -37,34 +38,31 @@ class IO(_IO):
         self.io_name = io_name
         img_name = re.match('^rbd://([^/]+)/([^@]+)@?(.+)?$', io_name)
         if not img_name:
-            raise RuntimeError('Not a valid io name: {} . Need pool/imagename or pool/imagename@snapshotname'.format(io_name))
+            raise UsageError('Not a valid io name: {} . Need pool/imagename or pool/imagename@snapshotname.'.format(io_name))
         self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
         # try opening it and quit if that's not possible.
         try:
             ioctx = self.cluster.open_ioctx(self.pool_name)
         except rados.ObjectNotFound:
-            logger.error('Pool not found: {}'.format(self.pool_name))
-            exit('Error opening backup source.')
+            raise FileNotFoundError('Pool not found: {}'.format(self.pool_name))
 
         try:
             rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True)
         except rbd.ImageNotFound:
-            logger.error('Image/Snapshot not found: {}@{}'.format(self.image_name, self.snapshot_name))
-            exit('Error opening backup source.')
+            raise FileNotFoundError('Image or snapshot not found: {}'.format(self.io_name))
 
     def open_w(self, io_name, size=None, force=False):
         # io_name has the form rbd://pool/imagename@snapshotname or rbd://pool/imagename
         self.io_name = io_name
         img_name = re.match('^rbd://([^/]+)/([^@]+)$', io_name)
         if not img_name:
-            raise RuntimeError('Not a valid io name: {} . Need pool/imagename'.format(io_name))
+            raise UsageError('Not a valid io name: {} . Need pool/imagename.'.format(io_name))
         self.pool_name, self.image_name = img_name.groups()
         # try opening it and quit if that's not possible.
         try:
             ioctx = self.cluster.open_ioctx(self.pool_name)
         except rados.ObjectNotFound:
-            logger.error('Pool not found: {}'.format(self.pool_name))
-            exit('Error opening backup source.')
+            raise FileNotFoundError('Pool not found: {}'.format(self.pool_name))
 
         try:
             rbd.Image(ioctx, self.image_name)
@@ -72,12 +70,12 @@ class IO(_IO):
             rbd.RBD().create(ioctx, self.image_name, size, old_format=False, features=self.new_image_features)
         else:
             if not force:
-                logger.error('Image already exists: {}'.format(self.image_name))
-                exit('Error opening restore target.')
+                raise FileExistsError('Restore target {} already exists. Force the restore if you want to overwrite it.'
+                                      .format(self.io_name))
             else:
                 if size < self.size():
-                    logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
-                    exit('Error opening restore target.')
+                    raise IOError('Restore target {} is too small. Its size is {} bytes, but we need {} bytes for the restore.'
+                                  .format(self.io_name, self.size(), size))
 
     def size(self):
         ioctx = self.cluster.open_ioctx(self.pool_name)
@@ -94,7 +92,7 @@ class IO(_IO):
             t2 = time.time()
 
         if not data:
-            raise RuntimeError('EOF reached on source when there should be data.')
+            raise EOFError('EOF reached on source when there should be data.')
 
         data_checksum = data_hexdigest(self._hash_function, data)
         logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s)'.format(

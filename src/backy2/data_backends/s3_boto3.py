@@ -72,34 +72,14 @@ class DataBackend(_DataBackend):
         try:
             self._local.resource.meta.client.head_bucket(Bucket=self._bucket_name)
         except ClientError as e:
-            error_code = int(e.response['Error']['Code'])
-            if error_code == 404:
+            if e.response['Error']['Code'] == 'NoSuchBucket':
                 # Doesn't exists...
                 exists = False
             else:
-                # e.g. 403 Forbidden -> ACL forbids access
-                self.fatal_error = e
-                logger.error('Fatal error, dying: {}'.format(e))
-                print('Fatal error: {}'.format(e))
-                exit(10)
-        except OSError as e:
-            # no route to host
-            self.fatal_error = e
-            logger.error('Fatal error, dying: {}'.format(e))
-            print('Fatal error: {}'.format(e))
-            exit(10)
+                raise
 
         if not exists:
-            try:
-                self._local.resource.create_bucket(Bucket=self._bucket_name)
-            except (
-                    OSError,
-                    ClientError,
-            ) as e:
-                self.fatal_error = e
-                logger.error('Fatal error, dying: {}'.format(e))
-                print('Fatal error: {}'.format(e))
-                exit(10)
+            self._local.resource.create_bucket(Bucket=self._bucket_name)
 
         self._local.bucket = self._local.resource.Bucket(self._bucket_name)
 
@@ -130,7 +110,7 @@ class DataBackend(_DataBackend):
             if e.response['Error']['Code'] == 'NoSuchKey':
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
-                raise e
+                raise
         time.sleep(self.read_throttling.consume(len(data)))
 
         return data, object['Metadata']
@@ -142,10 +122,10 @@ class DataBackend(_DataBackend):
         try:
             object.load()
         except ClientError as e:
-            if e.response['Error']['Code'] == "404":
+            if e.response['Error']['Code'] == "NoSuchKey":
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
-                raise e
+                raise
         else:
             object.delete()
 

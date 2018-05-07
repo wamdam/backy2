@@ -2,6 +2,7 @@ import logging
 import unittest
 
 from backy2.config import Config
+from backy2.exception import ConfigurationError
 from backy2.logging import init_logging
 
 
@@ -57,10 +58,10 @@ class ConfigTestCase(unittest.TestCase):
         self.assertTrue(isinstance(Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=False), Config))
 
     def test_wrong_version(self):
-        self.assertRaises(ValueError, lambda : Config(cfg='configurationVersion: \'234242.2343242\'', merge_defaults=False))
+        self.assertRaises(ConfigurationError, lambda : Config(cfg='configurationVersion: \'234242.2343242\'', merge_defaults=False))
 
     def test_missing_version(self):
-        self.assertRaises(ValueError, lambda : Config(cfg='a: {b: 1, c: 2}', merge_defaults=False))
+        self.assertRaises(ConfigurationError, lambda : Config(cfg='a: {b: 1, c: 2}', merge_defaults=False))
 
     def test_defaults(self):
         config = Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=True)

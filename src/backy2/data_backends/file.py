@@ -5,6 +5,7 @@ import fnmatch
 import os
 
 from backy2.data_backends import DataBackend as _DataBackend
+from backy2.exception import UsageError
 
 
 def makedirs(path):
@@ -107,7 +108,7 @@ class DataBackend(_DataBackend):
 
     def get_all_blob_uids(self, prefix=None):
         if prefix:
-            raise RuntimeError('prefix is not supported on file backends.')
+            raise UsageError('Specifying a prefix isn\'t supported on file backends.')
         matches = []
         for root, dirnames, filenames in os.walk(self.path):
             for filename in fnmatch.filter(filenames, '*.blob'):

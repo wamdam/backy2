@@ -11,6 +11,7 @@ from io import StringIO
 from prettytable import PrettyTable
 
 from backy2.config import Config
+from backy2.exception import AlreadyLocked, BackyException
 from backy2.logging import logger, init_logging
 from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_hash_function
 
@@ -35,31 +36,26 @@ class Commands():
         backy.backup(name, snapshot_name, source, hints, from_version, tag)
         backy.close()
 
-
     def restore(self, version_uid, target, sparse, force):
         backy = self.backy()
         backy.restore(version_uid, target, sparse, force)
         backy.close()
-
 
     def protect(self, version_uid):
         backy = self.backy()
         backy.protect(version_uid)
         backy.close()
 
-
     def unprotect(self, version_uid):
         backy = self.backy()
         backy.unprotect(version_uid)
         backy.close()
-
 
     def rm(self, version_uid, force):
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
         backy = self.backy()
         backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
         backy.close()
-
 
     def scrub(self, version_uid, source, percentile):
         if percentile:
@@ -69,7 +65,6 @@ class Commands():
         backy.close()
         if not state:
             exit(20)
-
 
     def _ls_blocks_tbl_output(self, blocks):
         tbl = PrettyTable()
@@ -86,7 +81,6 @@ class Commands():
                 ])
         print(tbl)
 
-
     def _ls_blocks_machine_output(self, blocks):
         field_names = ['type', 'id', 'date', 'uid', 'size', 'valid']
         print('|'.join(field_names))
@@ -99,7 +93,6 @@ class Commands():
                 block.size,
                 int(block.valid),
                 ])))
-
 
     def _ls_versions_tbl_output(self, versions):
         tbl = PrettyTable()
@@ -125,7 +118,6 @@ class Commands():
                 ])
         print(tbl)
 
-
     def _ls_versions_machine_output(self, versions):
         field_names = ['type', 'date', 'name', 'snapshot_name', 'size',
                 'size_bytes', 'uid', 'valid', 'protected', 'tags']
@@ -143,7 +135,6 @@ class Commands():
                 int(version.protected),
                 ",".join([t.name for t in version.tags]),
                 ])))
-
 
     def _stats_tbl_output(self, stats):
         tbl = PrettyTable()
@@ -182,7 +173,6 @@ class Commands():
                 ])
         print(tbl)
 
-
     def _stats_machine_output(self, stats):
         field_names = ['type', 'date', 'uid', 'name', 'size bytes', 'size blocks',
                 'bytes read', 'blocks read', 'bytes written', 'blocks written',
@@ -208,7 +198,6 @@ class Commands():
                 stat.duration_seconds,
                 ])))
 
-
     def ls(self, name, snapshot_name, tag):
         backy = self.backy()
         versions = backy.ls()
@@ -224,7 +213,6 @@ class Commands():
         else:
             self._ls_versions_tbl_output(versions)
         backy.close()
-
 
     def diff_meta(self, version_uid1, version_uid2):
         """ Output difference between two version in blocks.
@@ -259,7 +247,6 @@ class Commands():
                 pass
         backy.close()
 
-
     def stats(self, version_uid, limit=None):
         backy = self.backy()
         if limit is not None:
@@ -271,7 +258,6 @@ class Commands():
             self._stats_tbl_output(stats)
         backy.close()
 
-
     def cleanup(self, full, prefix=None):
         backy = self.backy()
         if full:
@@ -279,7 +265,6 @@ class Commands():
         else:
             backy.cleanup_fast()
         backy.close()
-
 
     def export(self, version_uids, filename='-'):
         backy = self.backy()
@@ -292,10 +277,9 @@ class Commands():
                 backy.export(version_uids, f)
         backy.close()
 
-
     def nbd(self, version_uid, bind_address, bind_port, read_only):
-        from backy2.enterprise.nbdserver import Server as NbdServer
-        from backy2.enterprise.nbd import BackyStore
+        from backy2.nbd.nbdserver import Server as NbdServer
+        from backy2.nbd.nbd import BackyStore
         backy = self.backy()
         hash_function = parametrized_hash_function(self.get('hashFunction', types=str))
         cache_dir = self.config.get('nbd.cacheDirectory', types=str)
@@ -310,7 +294,6 @@ class Commands():
         logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
         server.serve_forever()
 
-
     def import_(self, filename='-'):
         backy = self.backy()
         try:
@@ -319,15 +302,14 @@ class Commands():
             else:
                 with open(filename, 'r') as f:
                     backy.import_(f)
-        except KeyError as e:
-            logger.error(str(e))
+        except KeyError:
+            logger.exception()
             exit(22)
-        except ValueError as e:
-            logger.error(str(e))
+        except ValueError:
+            logger.exception()
             exit(23)
         finally:
             backy.close()
-
 
     def add_tag(self, version_uid, name):
         try:
@@ -337,16 +319,13 @@ class Commands():
         except:
             logger.warn('Unable to add tag.')
 
-
     def remove_tag(self, version_uid, name):
         backy = self.backy()
         backy.remove_tag(version_uid, name)
         backy.close()
 
-
     def initdb(self):
         self.backy(initdb=True)
-
 
 
 def main():
@@ -529,11 +508,11 @@ def main():
 
     if args.version:
         print(__version__)
-        sys.exit(0)
+        exit(0)
 
     if not hasattr(args, 'func'):
         parser.print_usage()
-        sys.exit(1)
+        exit(1)
 
     if args.verbose:
         console_level = logging.DEBUG
@@ -546,8 +525,8 @@ def main():
         try:
             cfg = open(args.configfile, 'r', encoding='utf-8').read()
         except FileNotFoundError:
-            logger.error('File not found: {}'.format(args.configfile))
-            sys.exit(1)
+            logger.error('File {} not found.'.format(args.configfile))
+            exit(1)
         config = Config(cfg=cfg)
     else:
         config = Config()
@@ -573,12 +552,20 @@ def main():
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
         func(**func_args)
         logger.info('Backy complete.\n')
-        sys.exit(0)
+        exit(0)
+    except BackyException:
+        logger.exception()
+        logger.info('Backy failed.\n')
+        exit(4)
+    except AlreadyLocked:
+        logger.exception()
+        logger.info('Backy failed.\n')
+        exit(99)
     except Exception as e:
         logger.error('Unexpected exception')
         logger.exception(e)
         logger.info('Backy failed.\n')
-        sys.exit(100)
+        exit(100)
 
 
 if __name__ == '__main__':

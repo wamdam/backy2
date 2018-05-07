@@ -6,6 +6,7 @@ import time
 import os
 import re
 
+from backy2.exception import UsageError
 from backy2.io import IO as _IO
 from backy2.logging import logger
 from backy2.utils import data_hexdigest
@@ -37,23 +38,23 @@ class IO(_IO):
 
         _s = re.match('^file://(.+)$', io_name)
         if not _s:
-            raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
+            raise UsageError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file.'.format(io_name))
         self.io_name = _s.groups()[0]
 
     def open_w(self, io_name, size=None, force=False):
         _s = re.match('^file://(.+)$', io_name)
         if not _s:
-            raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
+            raise UsageError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file.'.format(io_name))
         self.io_name = _s.groups()[0]
 
         if os.path.exists(self.io_name):
             if not force:
-                logger.error('Target already exists: {}'.format(io_name))
-                exit('Error opening restore target. You must force the restore.')
+                raise FileExistsError('Restore target {} already exists. Force the restore if you want to overwrite it.'
+                                      .format(self.io_name))
             else:
                 if size < self.size():
-                    logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
-                    exit('Error opening restore target.')
+                    raise IOError('Restore target {} is too small. Its size is {} bytes, but we need {} bytes for the restore.'
+                                  .format(self.io_name, self.size(), size))
         else:
             # create the file
             with open(self.io_name, 'wb') as f:
@@ -77,7 +78,7 @@ class IO(_IO):
             posix_fadvise(source_file.fileno(), offset, block.size, os.POSIX_FADV_DONTNEED)
 
         if not data:
-            raise RuntimeError('EOF reached on source when there should be data.')
+            raise EOFError('EOF reached on source when there should be data.')
 
         data_checksum = data_hexdigest(self._hash_function, data)
 

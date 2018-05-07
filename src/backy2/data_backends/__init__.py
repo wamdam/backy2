@@ -10,6 +10,7 @@ import hashlib
 import importlib
 import shortuuid
 
+from backy2.exception import InternalError, ConfigurationError
 from backy2.logging import logger
 from backy2.utils import TokenBucket
 
@@ -46,17 +47,18 @@ class DataBackend():
                 try:
                     encryption_module = importlib.import_module('{}.{}'.format(self._ENCRYPTION_PACKAGE_PREFIX, name))
                 except ImportError:
-                    raise NotImplementedError('Encryption type {} is not supported'.format(name))
+                    raise ConfigurationError('Module file {}.{} not found or related import error.'
+                                             .format(self._ENCRYPTION_PACKAGE_PREFIX, name))
                 else:
                     if (name != encryption_module.Encryption.NAME):
-                        raise RuntimeError('Encryption module file name and name don\'t agree ({} != {})'
+                        raise InternalError('Encryption module file name and name don\'t agree ({} != {}).'
                                          .format(name, encryption_module.Encryption.NAME))
 
                     self.encryption[name] = encryption_module.Encryption(materials)
                     
                 if config.get_from_dict(encryption_module_dict, 'active', types=bool):
                     if self.encryption_active is not None:
-                        raise RuntimeError('Only one encryption module can be active')
+                        raise ConfigurationError('Only one encryption module can be active at the same time.')
                     self.encryption_active = self.encryption[name]
 
         compression_modules = config.get('dataBackend.{}.compression'.format(self.NAME), None, types=list)
@@ -67,17 +69,18 @@ class DataBackend():
                 try:
                     compression_module = importlib.import_module('{}.{}'.format(self._COMPRESSION_PACKAGE_PREFIX, name))
                 except ImportError:
-                    raise NotImplementedError('Compression type {} is not supported'.format(name))
+                    raise ConfigurationError('Module file {}.{} not found or related import error.'
+                                             .format(self._COMPRESSION_PACKAGE_PREFIX, name))
                 else:
                     if (name != compression_module.Compression.NAME):
-                        raise RuntimeError('Compression module file name and name don\'t agree ({} != {})'
+                        raise InternalError('Compression module file name and name don\'t agree ({} != {}).'
                                            .format(name, compression_module.Compression.NAME))
 
                     self.compression[name] = compression_module.Compression(materials)
 
                 if config.get_from_dict(compression_module_dict, 'active', types=bool):
                     if self.compression_active is not None:
-                        raise RuntimeError('Only one compression module can be active')
+                        raise ConfigurationError('Only one compression module can be active at the same time.')
                     self.compression_active = self.compression[name]
 
         simultaneous_writes = config.get('dataBackend.simultaneousWrites', types=int)
@@ -204,7 +207,7 @@ class DataBackend():
             if name in self.encryption:
                 return self.encryption[name].decrypt(data, metadata)
             else:
-                raise IOError('Unsupported encryption type {}'.format(name))
+                raise IOError('Unsupported encryption type {} in object metadata.'.format(name))
         else:
             return data
 
@@ -225,7 +228,7 @@ class DataBackend():
             if name in self.compression:
                 return self.compression[name].uncompress(data, metadata)
             else:
-                raise IOError('Unsupported compression type {}'.format(name))
+                raise IOError('Unsupported compression type {} in object metadata.'.format(name))
         else:
             return data
 
