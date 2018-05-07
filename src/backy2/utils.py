@@ -9,6 +9,7 @@ from time import time
 
 import hashlib
 import importlib
+import os
 from functools import partial
 
 from backy2.exception import ConfigurationError
@@ -106,6 +107,11 @@ def notify(process_name, msg=''):
 
     setproctitle.setproctitle(new_msg)
 
+def makedirs(path):
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        pass
 
 # token_bucket.py
 class TokenBucket:

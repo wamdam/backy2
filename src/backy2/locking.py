@@ -1,6 +1,8 @@
 import psutil
 from filelock import FileLock, Timeout
 
+from backy2.utils import makedirs
+
 
 class Locking:
     """ implements name-based locking """
@@ -9,6 +11,8 @@ class Locking:
     def __init__(self, lock_dir):
         self._lock_dir = lock_dir
         self._locks = {}  # contains name => FileLock object
+
+        makedirs(self._lock_dir)
 
     def lock(self, name):
         """

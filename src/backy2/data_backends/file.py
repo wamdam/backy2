@@ -6,14 +6,7 @@ import os
 
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.exception import UsageError
-
-
-def makedirs(path):
-    try:
-        os.makedirs(path)
-    except FileExistsError:
-        pass
-
+from backy2.utils import makedirs
 
 
 class DataBackend(_DataBackend):
