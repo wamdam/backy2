@@ -97,30 +97,30 @@ class Commands():
     def _ls_versions_tbl_output(self, versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid',
-                'valid', 'protected', 'tags']
+        tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'block_size', 'uid',
+                           'valid', 'protected', 'tags']
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
         tbl.align['tags'] = 'l'
         tbl.align['size'] = 'r'
-        tbl.align['size_bytes'] = 'r'
+        tbl.align['block_size'] = 'r'
         for version in versions:
             tbl.add_row([
                 version.date,
                 version.name,
                 version.snapshot_name,
                 version.size,
-                version.size_bytes,
+                version.block_size,
                 version.uid,
-                int(version.valid),
-                int(version.protected),
+                version.valid,
+                version.protected,
                 ",".join(sorted([t.name for t in version.tags])),
                 ])
         print(tbl)
 
     def _ls_versions_machine_output(self, versions):
-        field_names = ['type', 'date', 'name', 'snapshot_name', 'size',
-                'size_bytes', 'uid', 'valid', 'protected', 'tags']
+        field_names = ['type', 'date', 'name', 'snapshot_name', 'size', 'block_size', 'uid',
+                       'valid', 'protected', 'tags']
         print('|'.join(field_names))
         for version in versions:
             print('|'.join(map(str, [
@@ -129,19 +129,18 @@ class Commands():
                 version.name,
                 version.snapshot_name,
                 version.size,
-                version.size_bytes,
+                version.block_size,
                 version.uid,
-                int(version.valid),
-                int(version.protected),
+                version.valid,
+                version.protected,
                 ",".join([t.name for t in version.tags]),
                 ])))
 
     def _stats_tbl_output(self, stats):
         tbl = PrettyTable()
-        tbl.field_names = ['date', 'uid', 'name', 'size bytes', 'size blocks',
-                'bytes read', 'blocks read', 'bytes written', 'blocks written',
-                'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
-                'duration (s)']
+        tbl.field_names = ['date', 'uid', 'name', 'size bytes', 'block size',
+                           'bytes read', 'blocks read', 'bytes written', 'blocks written',
+                           'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)']
         tbl.align['name'] = 'l'
         tbl.align['size bytes'] = 'r'
         tbl.align['size blocks'] = 'r'
@@ -159,8 +158,8 @@ class Commands():
                 stat.date,
                 stat.version_uid,
                 stat.version_name,
-                stat.version_size_bytes,
-                stat.version_size_blocks,
+                stat.version_size,
+                stat.version_block_size,
                 stat.bytes_read,
                 stat.blocks_read,
                 stat.bytes_written,
@@ -174,10 +173,9 @@ class Commands():
         print(tbl)
 
     def _stats_machine_output(self, stats):
-        field_names = ['type', 'date', 'uid', 'name', 'size bytes', 'size blocks',
-                'bytes read', 'blocks read', 'bytes written', 'blocks written',
-                'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
-                'duration (s)']
+        field_names = ['type', 'date', 'uid', 'name', 'size bytes', 'block size',
+                       'bytes read', 'blocks read', 'bytes written', 'blocks written',
+                       'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)']
         print('|'.join(field_names))
         for stat in stats:
             print('|'.join(map(str, [
@@ -185,8 +183,8 @@ class Commands():
                 stat.date,
                 stat.version_uid,
                 stat.version_name,
-                stat.version_size_bytes,
-                stat.version_size_blocks,
+                stat.version_size,
+                stat.version_block_size,
                 stat.bytes_read,
                 stat.blocks_read,
                 stat.bytes_written,

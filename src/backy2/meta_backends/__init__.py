@@ -12,7 +12,7 @@ class MetaBackend():
     def __init__(self):
         pass
 
-    def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=False):
+    def set_version(self, version_name, snapshot_name, size, block_size, valid, protected=False):
         """ Creates a new version with a given name and snapshot_name.
         size is the number of blocks this version will contain.
         Returns a uid for this version.
@@ -20,8 +20,8 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def set_stats(self, version_uid, version_name, version_size_bytes,
-            version_size_blocks, bytes_read, blocks_read, bytes_written,
+    def set_stats(self, version_uid, version_name, version_size,
+            version_block_size, bytes_read, blocks_read, bytes_written,
             blocks_written, bytes_found_dedup, blocks_found_dedup,
             bytes_sparse, blocks_sparse, duration_seconds):
         """ Stores statistics
