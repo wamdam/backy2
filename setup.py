@@ -39,6 +39,7 @@ Topic :: System :: Archiving :: Backup
         'python-dateutil>=2.6.0',
         'alembic',
         'ruamel.yaml>=0.15.37',
+        'filelock>=3.0.4',
         #'boto>=2.38.0',
         #'boto3>=1.6.16',
         #'psycopg2>=2.7.4',
