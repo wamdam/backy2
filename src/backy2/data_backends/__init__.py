@@ -152,12 +152,6 @@ class DataBackend():
 
         return uid
 
-    def _read(self, block, offset, length):
-        data, metadata = self._read_raw(block.uid, offset, length)
-        data = self.decrypt(data, metadata)
-        data = self.uncompress(data, metadata)
-        return data
-
     def read(self, block, offset=0, length=None, sync=False):
         if sync:
             return self._read(block, offset, length)[3]
