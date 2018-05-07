@@ -35,9 +35,8 @@ import traceback
 
 import struct
 
+from backy2.exception import NbdServerAbortedNegotiationError
 
-class AbortedNegotiationError(IOError):
-    pass
 
 class Server(object):
     """
@@ -200,7 +199,7 @@ class Server(object):
                     writer.write(struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_ACK, 0))
                     yield from writer.drain()
 
-                    raise AbortedNegotiationError()
+                    raise NbdServerAbortedNegotiationError()
                 else:
                     # we don't support any other option
                     if not fixed:
@@ -273,7 +272,7 @@ class Server(object):
                     self.log.warning("[%s:%s] Unknown cmd %s, disconnecting" % (host, port, cmd))
                     break
 
-        except AbortedNegotiationError:
+        except NbdServerAbortedNegotiationError:
             self.log.info("[%s:%s] Client aborted negotiation" % (host, port))
 
         except (asyncio.IncompleteReadError, IOError) as ex:

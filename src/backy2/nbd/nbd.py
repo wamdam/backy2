@@ -46,6 +46,8 @@ class BackyStore():
                 # We round up the size reported by the NBD server to a multiple of 4096 which is the maximum
                 # block size supported by NBD. So we might need to fake up to 4095 bytes (of zeros) here.
                 if (length > 4095):
+                    # Don't throw one of our own exceptions here as we need an exception with an errno value
+                    # to communicate it back in the NBD response.
                     raise OSError(errno.EIO)
                 read_length = min(block.size-block_offset, length)
                 read_list.append((None, 0, read_length))  # hint: return \0s

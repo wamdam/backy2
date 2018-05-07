@@ -63,8 +63,8 @@ class NbdTestCase():
         super().tearDown()
 
     def test(self):
-        from backy2.enterprise.nbdserver import Server as NbdServer
-        from backy2.enterprise.nbd import BackyStore
+        from backy2.nbd.nbdserver import Server as NbdServer
+        from backy2.nbd.nbd import BackyStore
         backy = self.backyOpen(initdb=False)
 
         hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
@@ -174,7 +174,7 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
             """
 
 
-class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase):
+class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
 
     SERVER_PORT = 1315
 
