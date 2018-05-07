@@ -6,7 +6,7 @@ from backy2.tests.testcase import BackendTestCase
 class test_sql(BackendTestCase, TestCase):
 
     CONFIG = """
-        configurationVersion: '0.1'
+        configurationVersion: '1.0.0'
         logFile: /dev/stderr
         lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32
