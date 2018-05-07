@@ -26,3 +26,13 @@ def init_logging(logfile, console_level):  # pragma: no cover
     logging.getLogger('alembic').setLevel(logging.WARN)
 
     logger.info('$ ' + ' '.join(sys.argv))
+
+# Source: https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python/16993115#16993115
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
