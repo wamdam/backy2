@@ -76,7 +76,10 @@ class Config():
             config = None
             for source in sources:
                 if os.path.isfile(source):
-                    config = yaml.load(Path(source))
+                    try:
+                        config = yaml.load(Path(source))
+                    except Exception as exception:
+                        raise ConfigurationError('Configuration file {} is invalud.'.format(source)) from exception
                     if config is None:
                         raise ConfigurationError('Configuration file {} is empty.'.format(source))
                     break

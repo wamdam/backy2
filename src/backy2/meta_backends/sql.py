@@ -519,8 +519,13 @@ class MetaBackend(_MetaBackend):
                   )
 
     def import_(self, f):
-        f.seek(0)
-        json_input = json.load(f)
+        try:
+            f.seek(0)
+            json_input = json.load(f)
+        except Exception as exception:
+            raise InputDataError('Import file is invalid.') from exception
+        if json_input is None:
+            raise InputDataError('Import file is empty.')
         if 'metadataVersion' not in json_input:
             raise InputDataError('Wrong import format.')
         if json_input['metadataVersion'] == '1.0.0':
