@@ -610,12 +610,12 @@ def main():
         {'exception': backy2.exception.InputDataError, 'msg': 'Input data error', 'exit_code': os.EX_DATAERR},
         {'exception': PermissionError, 'msg': 'Already locked error', 'exit_code': os.EX_NOPERM},
         {'exception': FileExistsError, 'msg': 'Already exists', 'exit_code': os.EX_CANTCREAT},
-        {'exception': FileNotFoundError, 'msg': 'Not found', 'exit_code': os.EX_NOTFOUND},
+        {'exception': FileNotFoundError, 'msg': 'Not found', 'exit_code': os.EX_NOINPUT},
         {'exception': EOFError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
         {'exception': IOError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
         {'exception': OSError, 'msg': 'Not found', 'exit_code': os.EX_OSERR},
         {'exception': ConnectionError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
-        {'exception': LookupError, 'msg': 'Not found', 'exit_code': os.EX_NOTFOUND},
+        {'exception': LookupError, 'msg': 'Not found', 'exit_code': os.EX_NOINPUT},
         {'exception': Exception, 'msg': 'Other exception', 'exit_code': os.EX_SOFTWARE},
     ]
 
