@@ -6,12 +6,13 @@ import fileinput
 import logging
 import sys
 
+import os
 import pkg_resources
 from io import StringIO
 from prettytable import PrettyTable
 
+import backy2.exception
 from backy2.config import Config
-from backy2.exception import AlreadyLocked, BackyException
 from backy2.logging import logger, init_logging
 from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_hash_function
 
@@ -26,45 +27,68 @@ class Commands():
         self.config = config
         self.backy = backy_from_config(config)
 
-
     def backup(self, name, snapshot_name, source, rbd, from_version, tag=None):
         backy = self.backy()
-        hints = None
-        if rbd:
-            data = ''.join([line for line in fileinput.input(rbd).readline()])
-            hints = hints_from_rbd_diff(data)
-        backy.backup(name, snapshot_name, source, hints, from_version, tag)
-        backy.close()
+        try:
+            hints = None
+            if rbd:
+                data = ''.join([line for line in fileinput.input(rbd).readline()])
+                hints = hints_from_rbd_diff(data)
+            backy.backup(name, snapshot_name, source, hints, from_version, tag)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def restore(self, version_uid, target, sparse, force):
         backy = self.backy()
-        backy.restore(version_uid, target, sparse, force)
-        backy.close()
+        try:
+            backy.restore(version_uid, target, sparse, force)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def protect(self, version_uid):
         backy = self.backy()
-        backy.protect(version_uid)
-        backy.close()
+        try:
+            backy.protect(version_uid)
+        except backy2.exception.NoChange:
+            logger.warn('Version {} already was protected.'.format(version_uid))
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def unprotect(self, version_uid):
         backy = self.backy()
-        backy.unprotect(version_uid)
-        backy.close()
+        try:
+            backy.unprotect(version_uid)
+        except backy2.exception.NoChange:
+            logger.warn('Version {} already was unprotected.'.format(version_uid))
+        finally:
+            backy.close()
 
     def rm(self, version_uid, force):
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
         backy = self.backy()
-        backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
-        backy.close()
+        try:
+            backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def scrub(self, version_uid, source, percentile):
         if percentile:
             percentile = int(percentile)
         backy = self.backy()
-        state = backy.scrub(version_uid, source, percentile)
-        backy.close()
-        if not state:
-            exit(20)
+        try:
+            backy.scrub(version_uid, source, percentile)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def _ls_blocks_tbl_output(self, blocks):
         tbl = PrettyTable()
@@ -198,99 +222,125 @@ class Commands():
 
     def ls(self, name, snapshot_name, tag):
         backy = self.backy()
-        versions = backy.ls()
-        if name:
-            versions = [v for v in versions if v.name == name]
-        if snapshot_name:
-            versions = [v for v in versions if v.snapshot_name == snapshot_name]
-        if tag:
-            versions = [v for v in versions if tag in [t.name for t in v.tags]]
+        try:
+            versions = backy.ls()
 
-        if self.machine_output:
-            self._ls_versions_machine_output(versions)
-        else:
-            self._ls_versions_tbl_output(versions)
-        backy.close()
+            if name:
+                versions = [v for v in versions if v.name == name]
+            if snapshot_name:
+                versions = [v for v in versions if v.snapshot_name == snapshot_name]
+            if tag:
+                versions = [v for v in versions if tag in [t.name for t in v.tags]]
+
+            if self.machine_output:
+                self._ls_versions_machine_output(versions)
+            else:
+                self._ls_versions_tbl_output(versions)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def diff_meta(self, version_uid1, version_uid2):
         """ Output difference between two version in blocks.
         """
         # TODO: Feel free to create a default diff format.
         backy = self.backy()
-        blocks1 = backy.ls_version(version_uid1)
-        blocks2 = backy.ls_version(version_uid2)
-        max_len = max(len(blocks1), len(blocks2))
-        for i in range(max_len):
-            b1 = b2 = None
-            try:
-                b1 = blocks1.pop(0)
-            except IndexError:
-                pass
-            try:
-                b2 = blocks2.pop(0)
-            except IndexError:
-                pass
-            if b1 and b2:
-                assert b1.id == b2.id
-            try:
-                if b1.uid == b2.uid:
-                    print('SAME      {}'.format(b1.id))
-                elif b1 is None and b2:
-                    print('NEW RIGHT {}'.format(b2.id))
-                elif b1 and b2 is None:
-                    print('NEW LEFT  {}'.format(b1.id))
-                else:
-                    print('DIFF      {}'.format(b1.id))
-            except BrokenPipeError:
-                pass
-        backy.close()
+        try:
+            blocks1 = backy.ls_version(version_uid1)
+            blocks2 = backy.ls_version(version_uid2)
+            max_len = max(len(blocks1), len(blocks2))
+            for i in range(max_len):
+                b1 = b2 = None
+                try:
+                    b1 = blocks1.pop(0)
+                except IndexError:
+                    pass
+                try:
+                    b2 = blocks2.pop(0)
+                except IndexError:
+                    pass
+                if b1 and b2:
+                    assert b1.id == b2.id
+                try:
+                    if b1.uid == b2.uid:
+                        print('SAME      {}'.format(b1.id))
+                    elif b1 is None and b2:
+                        print('NEW RIGHT {}'.format(b2.id))
+                    elif b1 and b2 is None:
+                        print('NEW LEFT  {}'.format(b1.id))
+                    else:
+                        print('DIFF      {}'.format(b1.id))
+                except BrokenPipeError:
+                    pass
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def stats(self, version_uid, limit=None):
-        backy = self.backy()
-        if limit is not None:
+        if limit:
             limit = int(limit)
-        stats = backy.stats(version_uid, limit)
-        if self.machine_output:
-            self._stats_machine_output(stats)
-        else:
-            self._stats_tbl_output(stats)
-        backy.close()
+        backy = self.backy()
+        try:
+            stats = backy.stats(version_uid, limit)
+            if self.machine_output:
+                self._stats_machine_output(stats)
+            else:
+                self._stats_tbl_output(stats)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def cleanup(self, full, prefix=None):
         backy = self.backy()
-        if full:
-            backy.cleanup_full(prefix)
-        else:
-            backy.cleanup_fast()
-        backy.close()
+        try:
+            if full:
+                backy.cleanup_full(prefix)
+            else:
+                backy.cleanup_fast()
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def export(self, version_uid, filename='-'):
         backy = self.backy()
-        if filename == '-':
-            with StringIO() as f:
-                backy.export([version_uid], f)
-                print(f.getvalue())
-        else:
-            with open(filename, 'w') as f:
-                backy.export([version_uid], f)
-        backy.close()
+        try:
+            if filename == '-':
+                with StringIO() as f:
+                    backy.export([version_uid], f)
+                    print(f.getvalue())
+            else:
+                with open(filename, 'w') as f:
+                    backy.export([version_uid], f)
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def nbd(self, version_uid, bind_address, bind_port, read_only):
         from backy2.nbd.nbdserver import Server as NbdServer
         from backy2.nbd.nbd import BackyStore
         backy = self.backy()
-        hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
-        cache_dir = self.config.get('nbd.cacheDirectory', types=str)
-        store = BackyStore(backy, cachedir=cache_dir, hash_function=hash_function)
-        addr = (bind_address, bind_port)
-        server = NbdServer(addr, store, read_only)
-        logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
-        logger.info("You may now start")
-        logger.info("  nbd-client -l %s -p %s" % (addr[0], addr[1]))
-        logger.info("and then get the backup via")
-        logger.info("  modprobe nbd")
-        logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
-        server.serve_forever()
+        try:
+            hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
+            cache_dir = self.config.get('nbd.cacheDirectory', types=str)
+            store = BackyStore(backy, cachedir=cache_dir, hash_function=hash_function)
+            addr = (bind_address, bind_port)
+            server = NbdServer(addr, store, read_only)
+            logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
+            logger.info("You may now start")
+            logger.info("  nbd-client -l %s -p %s" % (addr[0], addr[1]))
+            logger.info("and then get the backup via")
+            logger.info("  modprobe nbd")
+            logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
+            server.serve_forever()
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def import_(self, filename='-'):
         backy = self.backy()
@@ -300,12 +350,8 @@ class Commands():
             else:
                 with open(filename, 'r') as f:
                     backy.import_(f)
-        except KeyError:
-            logger.exception()
-            exit(22)
-        except ValueError:
-            logger.exception()
-            exit(23)
+        except Exception:
+            raise
         finally:
             backy.close()
 
@@ -313,14 +359,23 @@ class Commands():
         try:
             backy = self.backy()
             backy.add_tag(version_uid, name)
+        except backy2.exception.NoChange:
+            logger.warn('Version {} already tagged with {}.'.format(version_uid, name))
+        except Exception:
+            raise
+        finally:
             backy.close()
-        except:
-            logger.warn('Unable to add tag.')
 
     def remove_tag(self, version_uid, name):
         backy = self.backy()
-        backy.remove_tag(version_uid, name)
-        backy.close()
+        try:
+            backy.remove_tag(version_uid, name)
+        except backy2.exception.NoChange:
+            logger.warn('Version {} has no tag {}.'.format(version_uid, name))
+        except Exception:
+            raise
+        finally:
+            backy.close()
 
     def initdb(self):
         self.backy(initdb=True)
@@ -546,25 +601,35 @@ def main():
     del func_args['version']
     del func_args['machine_output']
 
+    # From most specific to least specific
+    exit_code_list = [
+        {'exception': backy2.exception.UsageError, 'msg': 'Usage error', 'exit_code': os.EX_USAGE},
+        {'exception': backy2.exception.AlreadyLocked, 'msg': 'Already locked error', 'exit_code': os.EX_NOPERM},
+        {'exception': backy2.exception.InternalError, 'msg': 'Internal error', 'exit_code': os.EX_SOFTWARE},
+        {'exception': backy2.exception.ConfigurationError, 'msg': 'Configuration error', 'exit_code': os.EX_CONFIG},
+        {'exception': backy2.exception.InputDataError, 'msg': 'Input data error', 'exit_code': os.EX_DATAERR},
+        {'exception': PermissionError, 'msg': 'Already locked error', 'exit_code': os.EX_NOPERM},
+        {'exception': FileExistsError, 'msg': 'Already exists', 'exit_code': os.EX_CANTCREAT},
+        {'exception': FileNotFoundError, 'msg': 'Not found', 'exit_code': os.EX_NOTFOUND},
+        {'exception': EOFError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
+        {'exception': IOError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
+        {'exception': OSError, 'msg': 'Not found', 'exit_code': os.EX_OSERR},
+        {'exception': ConnectionError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
+        {'exception': LookupError, 'msg': 'Not found', 'exit_code': os.EX_NOTFOUND},
+        {'exception': Exception, 'msg': 'Other exception', 'exit_code': os.EX_SOFTWARE},
+    ]
+
     try:
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
         func(**func_args)
         logger.info('Backy complete.\n')
         exit(0)
-    except BackyException:
-        logger.exception()
-        logger.info('Backy failed.\n')
-        exit(4)
-    except AlreadyLocked:
-        logger.exception()
-        logger.info('Backy failed.\n')
-        exit(99)
-    except Exception as e:
-        logger.error('Unexpected exception')
-        logger.exception(e)
-        logger.info('Backy failed.\n')
-        exit(100)
-
+    except Exception as exception:
+        for case in exit_code_list:
+            if isinstance(exception, case['exception']):
+                logger.exception(case['msg'])
+                logger.info('Backy failed.\n')
+                exit(case['exit_code'])
 
 if __name__ == '__main__':
     main()

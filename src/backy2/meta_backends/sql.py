@@ -14,6 +14,7 @@ from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime, TypeDecorator
 
+from backy2.exception import InputDataError
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 
@@ -521,11 +522,11 @@ class MetaBackend(_MetaBackend):
         f.seek(0)
         json_input = json.load(f)
         if 'metadataVersion' not in json_input:
-            raise ValueError('Wrong import format.')
+            raise InputDataError('Wrong import format.')
         if json_input['metadataVersion'] == '1.0.0':
             self.import_1_0_0(json_input)
         else:
-            raise ValueError('Wrong import format version {}.'.format(json_input['metadataVersion']))
+            raise InputDataError('Wrong import format version {}.'.format(json_input['metadataVersion']))
 
     def import_1_0_0(self, json_input):
         for version_dict in json_input['versions']:
@@ -534,7 +535,7 @@ class MetaBackend(_MetaBackend):
             except KeyError:
                 pass  # does not exist
             else:
-                raise KeyError('Version {} already exists and cannot be imported.'.format(version_dict['uid']))
+                raise FileExistsError('Version {} already exists and cannot be imported.'.format(version_dict['uid']))
             version = Version(
                 uid=version_dict['uid'],
                 date=datetime.datetime.strptime(version_dict['date'], '%Y-%m-%dT%H:%M:%S'),

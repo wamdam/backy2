@@ -6,7 +6,7 @@ class BackyException(Exception):
 class UsageError(BackyException, RuntimeError):
     pass
 
-class InvalidSourceError(BackyException, RuntimeError):
+class InputDataError(BackyException, RuntimeError):
     pass
 
 class AlreadyLocked(BackyException, RuntimeError):
@@ -16,6 +16,9 @@ class InternalError(BackyException, RuntimeError):
     pass
 
 class ConfigurationError(BackyException, RuntimeError):
+    pass
+
+class NoChange(BackyException, RuntimeError):
     pass
 
 class NbdServerAbortedNegotiationError(BackyException, IOError):

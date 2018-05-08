@@ -9,7 +9,7 @@ import importlib
 import random
 from dateutil.relativedelta import relativedelta
 
-from backy2.exception import InvalidSourceError, InternalError, AlreadyLocked, UsageError
+from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange
 from backy2.locking import Locking
 from backy2.locking import find_other_procs
 from backy2.logging import logger
@@ -77,9 +77,9 @@ class Backy():
         if from_version_uid:
             old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
             if not old_version.valid:
-                raise InvalidSourceError('You cannot base new version on an invalid one.')
+                raise UsageError('You cannot base new version on an invalid one.')
             if old_version.block_size != self.block_size:
-                raise InvalidSourceError('You cannot base new version on an old version with a different block size.')
+                raise UsageError('You cannot base new version on an old version with a different block size.')
             old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
             if not size:
                 size = old_version.size
@@ -338,13 +338,13 @@ class Backy():
     def protect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
-            raise RuntimeError('Version {} is already protected.'.format(version_uid))
+            raise NoChange('Version {} is already protected.'.format(version_uid))
         self.meta_backend.protect_version(version_uid)
 
     def unprotect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if not version.protected:
-            raise RuntimeError('Version {} is not protected.'.format(version_uid))
+            raise NoChange('Version {} is not protected.'.format(version_uid))
         self.meta_backend.unprotect_version(version_uid)
 
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
@@ -357,7 +357,7 @@ class Backy():
             # check if disallow_rm_when_younger_than_days allows deletion
             age_days = (datetime.datetime.now() - version.date).days
             if disallow_rm_when_younger_than_days > age_days:
-                raise AlreadyLocked('Version {} is too young. Will not delete.'.format(version_uid))
+                raise RuntimeError('Version {} is too young. Will not delete.'.format(version_uid))
 
         num_blocks = self.meta_backend.rm_version(version_uid)
         logger.info('Removed backup version {} with {} blocks.'.format(
@@ -428,7 +428,7 @@ class Backy():
             # Sanity check: check hints for validity, i.e. too high offsets, ...
             max_offset = max([h[0]+h[1] for h in hints])
             if max_offset > source_size:
-                raise InvalidSourceError('Hints have higher offsets than source file.')
+                raise InputDataError('Hints have higher offsets than source file.')
 
             sparse_blocks, read_blocks = blocks_from_hints(hints, self.block_size)
         else:
@@ -474,7 +474,7 @@ class Backy():
                         ))
                     # remove version
                     self.meta_backend.rm_version(version.uid)
-                    raise InvalidSourceError('Source changed in regions outside of ones indicated by the hints.')
+                    raise InputDataError('Source changed in regions outside of ones indicated by the hints.')
             logger.info('Finished sanity check. Checked {} blocks {}.'.format(num_reading, check_block_ids))
 
         read_jobs = 0
