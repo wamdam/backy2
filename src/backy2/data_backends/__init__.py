@@ -166,13 +166,11 @@ class DataBackend():
         """ Returns a generator for all completed read jobs
         """
         futures = concurrent.futures.as_completed(self._read_futures, timeout=timeout)
+        # Release our references to the Futures early, so that they can be freed
+        self._read_futures = []
 
         for future in futures:
-            # If future.result() raises then futures for already returned results aren't removed from _read_futures.
-            # Maybe this should to be handled in a better way.
             yield future.result()
-
-        self._read_futures = []
 
     def update(self, block, data, offset=0):
         """ Updates data, returns written bytes.
