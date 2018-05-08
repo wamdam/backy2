@@ -162,10 +162,11 @@ class Commands():
 
     def _stats_tbl_output(self, stats):
         tbl = PrettyTable()
-        tbl.field_names = ['date', 'uid', 'name', 'size bytes', 'block size',
+        tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
                            'bytes read', 'blocks read', 'bytes written', 'blocks written',
                            'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)']
         tbl.align['name'] = 'l'
+        tbl.align['snapshot_name'] = 'l'
         tbl.align['size bytes'] = 'r'
         tbl.align['size blocks'] = 'r'
         tbl.align['bytes read'] = 'r'
@@ -182,6 +183,7 @@ class Commands():
                 stat.date,
                 stat.version_uid,
                 stat.version_name,
+                stat.version_snapshot_name,
                 stat.version_size,
                 stat.version_block_size,
                 stat.bytes_read,
@@ -197,16 +199,17 @@ class Commands():
         print(tbl)
 
     def _stats_machine_output(self, stats):
-        field_names = ['type', 'date', 'uid', 'name', 'size bytes', 'block size',
+        field_names = ['type', 'date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
                        'bytes read', 'blocks read', 'bytes written', 'blocks written',
                        'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)']
         print('|'.join(field_names))
         for stat in stats:
             print('|'.join(map(str, [
-                'statistics',
+                'stat',
                 stat.date,
                 stat.version_uid,
                 stat.version_name,
+                stat.version_snapshot_name,
                 stat.version_size,
                 stat.version_block_size,
                 stat.bytes_read,

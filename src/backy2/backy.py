@@ -556,6 +556,7 @@ class Backy():
         self.meta_backend.set_stats(
             version_uid=version.uid,
             version_name=name,
+            version_snapshot_name=snapshot_name,
             version_size=source_size,
             version_block_size=self.block_size,
             bytes_read=stats['bytes_read'],
