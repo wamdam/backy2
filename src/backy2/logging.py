@@ -26,6 +26,11 @@ def init_logging(logfile, console_level):  # pragma: no cover
     logging.getLogger('alembic').setLevel(logging.WARN)
     # silence filelock
     logging.getLogger('filelock').setLevel(logging.WARN)
+    # silence boto3
+    # See https://github.com/boto/boto3/issues/521
+    logging.getLogger('boto3').setLevel(logging.WARN)
+    logging.getLogger('botocore').setLevel(logging.WARN)
+    logging.getLogger('nose').setLevel(logging.WARN)
 
     logger.info('$ ' + ' '.join(sys.argv))
 
