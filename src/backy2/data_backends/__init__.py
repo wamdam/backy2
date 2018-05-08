@@ -287,7 +287,7 @@ class ROSDataBackend(DataBackend):
 
         block, offset, length, data = super()._read(block, offset, length)
 
-        if self._read_cache:
+        if self._read_cache is not None:
             self._read_cache.set(block.uid, data)
 
         return block, offset, length, data
