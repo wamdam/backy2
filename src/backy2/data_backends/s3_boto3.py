@@ -9,11 +9,11 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 from botocore.handlers import set_list_objects_encoding_type_url
 
-from backy2.data_backends import DataBackend as _DataBackend
+from backy2.data_backends import ROSDataBackend
 from backy2.logging import logger
 
 
-class DataBackend(_DataBackend):
+class DataBackend(ROSDataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 

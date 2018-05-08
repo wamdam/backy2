@@ -9,10 +9,11 @@ from threading import BoundedSemaphore
 import hashlib
 import importlib
 import shortuuid
+from diskcache import Cache
 
 from backy2.exception import InternalError, ConfigurationError
 from backy2.logging import logger
-from backy2.utils import TokenBucket
+from backy2.utils import TokenBucket, makedirs
 
 
 class DataBackend():
@@ -244,3 +245,57 @@ class DataBackend():
         self._write_executor.shutdown()
         self._read_executor.shutdown()
 
+
+class ROSDataBackend(DataBackend):
+
+    def __init__(self, config):
+        read_cache_directory = config.get('dataBackend.readCacheDirectory', None, types=str)
+        read_cache_maximum_size = config.get('dataBackend.readCacheMaximumSize', None, types=int)
+    
+        if read_cache_directory and not read_cache_maximum_size or not read_cache_directory and read_cache_maximum_size:
+            raise ConfigurationError('Both dataBackend.cacheDirectory and dataBackend.cacheMaximumSize need to be set '
+                                  + 'to enable disk based caching.')
+    
+        if read_cache_directory and read_cache_maximum_size:
+            makedirs(read_cache_directory)
+            try:
+                self._read_cache = Cache(read_cache_directory,
+                                    size_limit=read_cache_maximum_size,
+                                    eviction_policy='least-frequently-used',
+                                    statistics=1,
+                                    )
+            except Exception:
+                logger.warn('Unable to enable disk based read caching. Continuing without it.')
+                self._read_cache = None
+            else:
+                logger.info('Disk based read caching enabled (cache size {})'.format(read_cache_maximum_size))
+        else:
+            self._read_cache = None
+
+        # Start reader and write threads after the disk cached is created, so that they see it.
+        super().__init__(config)
+
+    def _read(self, block, offset, length):
+        if offset != 0 or length is not None:
+            raise InternalError('Remote object based storage called invalid offset or length '
+                                + '(offset {} != 0, length {} != None)')
+
+        if self._read_cache is not None:
+            data = self._read_cache.get(block.uid)
+            if data:
+                return block, offset, len(data), data
+
+        block, offset, length, data = super()._read(block, offset, length)
+
+        if self._read_cache:
+            self._read_cache.set(block.uid, data)
+
+        return block, offset, length, data
+        
+    def close(self):
+        super().close()
+        if self._read_cache is not None:
+            (cache_hits, cache_misses) = self._read_cache.stats()
+            logger.info('Disk based cache: {} hits, {} misses'.format(cache_hits, cache_misses))
+            self._read_cache.close()
+        
