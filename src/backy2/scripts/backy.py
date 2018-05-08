@@ -279,7 +279,7 @@ class Commands():
         from backy2.nbd.nbdserver import Server as NbdServer
         from backy2.nbd.nbd import BackyStore
         backy = self.backy()
-        hash_function = parametrized_hash_function(self.get('hashFunction', types=str))
+        hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
         cache_dir = self.config.get('nbd.cacheDirectory', types=str)
         store = BackyStore(backy, cachedir=cache_dir, hash_function=hash_function)
         addr = (bind_address, bind_port)
