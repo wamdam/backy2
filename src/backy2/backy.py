@@ -138,7 +138,7 @@ class Backy():
                 valid,
                 _commit=False,
                 _upsert=False)
-            notify(self.process_name, 'Preparing Version ({:.1f}%)'.format((id + 1) // num_blocks * 100))
+            notify(self.process_name, 'Preparing Version ({:.1f}%)'.format((id + 1) / num_blocks * 100))
         self.meta_backend._commit()
         notify(self.process_name)
         self.locking.unlock(version.uid)
