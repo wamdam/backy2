@@ -16,7 +16,7 @@ class ConfigTestCase(TestCase, unittest.TestCase):
         hashFunction: sha512
         lockDirectory: /run
         processName: backy2
-        metadataBackend:
+        metaBackend:
           type: sql
           sql:
             engine: sqlite:////var/lib/backy2/backy.sqlite
