@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import concurrent
+import hashlib
+import importlib
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import BoundedSemaphore
 
-import hashlib
-import importlib
 import shortuuid
 from diskcache import Cache
 
@@ -98,7 +98,7 @@ class DataBackend():
         self._read_futures = []
         self._read_semaphore = BoundedSemaphore(simultaneous_reads + self.READ_QUEUE_LENGTH)
 
-        self._write_executor = ThreadPoolExecutor(max_workers=simultaneous_writes, thread_name_prefix='IO-Reader-')
+        self._write_executor = ThreadPoolExecutor(max_workers=simultaneous_writes, thread_name_prefix='IO-Writer-')
         self._write_futures = []
         self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
