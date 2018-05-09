@@ -109,7 +109,8 @@ class SmokeTestCase():
             blocks = backy.ls_version(version_uid)
             self.assertEqual(list(range(len(blocks))), sorted([block.id for block in blocks]))
             self.assertTrue(len(blocks) > 0)
-            self.assertTrue(reduce(and_, [block.size == backy.block_size for block in blocks[:-1]]))
+            if len(blocks) > 1:
+                self.assertTrue(reduce(and_, [block.size == backy.block_size for block in blocks[:-1]]))
             print('  Block list successful')
             backy.close()
 
