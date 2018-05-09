@@ -463,7 +463,7 @@ class Backy():
             num_reading = 0
             for block in blocks:
                 if block.id in check_block_ids and block.uid and block.valid:  # no uid = sparse block in backup. Can't check.
-                    io.read(block)
+                    io.read(block.deref())
                     num_reading += 1
             for source_block, source_data, source_data_checksum in io.read_get_completed():
                 # check metadata checksum with the newly read one
