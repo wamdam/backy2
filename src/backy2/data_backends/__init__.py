@@ -103,8 +103,8 @@ class DataBackend():
         self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
     def _write(self, uid, data):
-        data, metadata = self.compress(data)
-        data, metadata_2 = self.encrypt(data)
+        data, metadata = self._compress(data)
+        data, metadata_2 = self._encrypt(data)
         metadata.update(metadata_2)
 
         time.sleep(self.write_throttling.consume(len(data)))
@@ -120,8 +120,8 @@ class DataBackend():
         time.sleep(self.read_throttling.consume(len(data)))
         t2 = time.time()
 
-        data = self.decrypt(data, metadata)
-        data = self.uncompress(data, metadata)
+        data = self._decrypt(data, metadata)
+        data = self._uncompress(data, metadata)
 
         logger.debug('Reader {} read data. uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
         return block, offset, len(data), data
@@ -186,7 +186,7 @@ class DataBackend():
         """ Get all existing blob uids """
         raise NotImplementedError()
 
-    def encrypt(self, data):
+    def _encrypt(self, data):
         if self.encryption_active is not None:
             data, metadata = self.encryption_active.encrypt(data)
             metadata[self._ENCRYPTION_HEADER] = self.encryption_active.NAME
@@ -194,7 +194,7 @@ class DataBackend():
         else:
             return data, {}
 
-    def decrypt(self, data, metadata):
+    def _decrypt(self, data, metadata):
         if self._ENCRYPTION_HEADER in metadata:
             name = metadata[self._ENCRYPTION_HEADER]
             if name in self.encryption:
@@ -204,7 +204,7 @@ class DataBackend():
         else:
             return data
 
-    def compress(self, data):
+    def _compress(self, data):
         if self.compression_active is not None:
             compressed_data, metadata = self.compression_active.compress(data)
             if len(compressed_data) < len(data):
@@ -215,7 +215,7 @@ class DataBackend():
         else:
             return data, {}
 
-    def uncompress(self, data, metadata):
+    def _uncompress(self, data, metadata):
         if self._COMPRESSION_HEADER in metadata:
             name = metadata[self._COMPRESSION_HEADER]
             if name in self.compression:
