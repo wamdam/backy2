@@ -114,10 +114,6 @@ class DataBackend():
 
         logger.debug('Writer {} wrote data. uid {} in {:.2f}s'.format(threading.current_thread().name, uid, t2-t1))
 
-    def _bounded_write(self, uid, block):
-        with self._write_semaphore:
-            return self._write(uid, block)
-
     def _read(self, block, offset, length):
         t1 = time.time()
         data, metadata = self._read_raw(block.uid, offset, length)
@@ -154,7 +150,8 @@ class DataBackend():
         if sync:
             self._write(uid, data)
         else:
-            self._write_futures.append(self._write_executor.submit(self._bounded_write, uid, data))
+            with self._write_semaphore:
+                self._write_futures.append(self._write_executor.submit(self._write, uid, data))
 
         return uid
 
