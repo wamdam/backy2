@@ -105,7 +105,12 @@ def notify(process_name, msg=''):
     else:
         new_msg = process_name
 
-    setproctitle.setproctitle(new_msg)
+    if notify.old_msg != new_msg:
+        notify.old_msg = new_msg
+        setproctitle.setproctitle(new_msg)
+
+
+notify.old_msg = ''
 
 
 def makedirs(path):
