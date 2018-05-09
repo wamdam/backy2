@@ -255,6 +255,9 @@ class DataBackend():
             future.result()
             del future
 
+    def use_read_cache(self, enable):
+        return False
+
     def close(self):
         self._write_executor.shutdown()
         self._read_executor.shutdown()
@@ -282,9 +285,10 @@ class ROSDataBackend(DataBackend):
                 logger.warn('Unable to enable disk based read caching. Continuing without it.')
                 self._read_cache = None
             else:
-                logger.debug('Disk based read caching enabled (cache size {})'.format(read_cache_maximum_size))
+                logger.debug('Disk based read caching instantiated (cache size {}).'.format(read_cache_maximum_size))
         else:
             self._read_cache = None
+        self._use_read_cache = True
 
         # Start reader and write threads after the disk cached is created, so that they see it.
         super().__init__(config)
@@ -294,22 +298,28 @@ class ROSDataBackend(DataBackend):
             raise InternalError('Remote object based storage called invalid offset or length '
                                 + '(offset {} != 0, length {} != None)')
 
-        if self._read_cache is not None:
+        if self._read_cache is not None and self._use_read_cache:
             data = self._read_cache.get(block.uid)
             if data:
                 return block, offset, len(data), data
 
         block, offset, length, data = super()._read(block, offset, length)
 
+        # We always put blocks into the cache even when self._use_read_cache is False
         if self._read_cache is not None:
             self._read_cache.set(block.uid, data)
 
         return block, offset, length, data
+
+    def use_read_cache(self, enable):
+        old_value =  self._use_read_cache
+        self._use_read_cache = enable
+        return old_value
         
     def close(self):
         super().close()
         if self._read_cache is not None:
             (cache_hits, cache_misses) = self._read_cache.stats()
-            logger.info('Disk based cache statistics (since cache creation): {} hits, {} misses'.format(cache_hits, cache_misses))
+            logger.info('Disk based cache statistics (since cache creation): {} hits, {} misses.'.format(cache_hits, cache_misses))
             self._read_cache.close()
         

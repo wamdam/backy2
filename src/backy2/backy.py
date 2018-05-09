@@ -197,6 +197,7 @@ class Backy():
 
         notify(self.process_name, 'Preparing scrub of version {}'.format(version_uid))
         # prepare
+        old_use_read_cache = self.data_backend.use_read_cache(False)
         read_jobs = 0
         for block in blocks:
             if block.uid:
@@ -216,15 +217,18 @@ class Backy():
                     ))
 
         # and read
+        done_jobs = 0
         for i, entry in enumerate(self.data_backend.read_get_completed()):
             block, offset, length, data = entry
+
             if data is None:
-                logger.error('Blob not found: {}'.format(str(block)))
+                logger.error('Blob not found: {}.'.format(str(block)))
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 state = False
                 continue
+
             if len(data) != block.size:
-                logger.error('Blob has wrong size: {} is: {} should be: {}'.format(
+                logger.error('Blob {} has wrong size {}, it should be {}.'.format(
                     block.uid,
                     len(data),
                     block.size,
@@ -232,6 +236,7 @@ class Backy():
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 state = False
                 continue
+
             data_checksum = data_hexdigest(self.hash_function, data)
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during scrub for block '
@@ -261,19 +266,29 @@ class Backy():
                     # We are not setting the block invalid here because
                     # when the block is there AND the checksum is good,
                     # then the source is invalid.
+
             logger.debug('Scrub of block {} (UID {}) ok.'.format(
                 block.id,
                 block.uid,
                 ))
+            done_jobs += 1
             notify(self.process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid, (i + 1) / read_jobs * 100))
+
+        if read_jobs != done_jobs:
+            raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
+                                .format(read_jobs, done_jobs))
+
+        # Restore old read cache setting
+        self.data_backend.use_read_cache(old_use_read_cache)
+
         if state == True:
             self.meta_backend.set_version_valid(version_uid)
         else:
             # version is set invalid by set_blocks_invalid.
-            logger.error('Marked version invalid because it has errors: {}'.format(version_uid))
+            logger.error('Marked version {} invalid because it has errors: {}'.format(version_uid))
+
         if source:
             io.close()  # wait for all io
-
         self.locking.unlock(version_uid)
         notify(self.process_name)
         return state
