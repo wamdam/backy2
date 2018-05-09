@@ -1,12 +1,11 @@
 # This is an port and update of the original smoketest.py
 import json
-from unittest import TestCase
-
 import os
 import random
 from functools import reduce
 from operator import and_
 from shutil import copyfile
+from unittest import TestCase
 
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.tests.testcase import BackyTestCase
@@ -163,7 +162,7 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
             blockSize: 4096
             io:
               file:
-                simultaneousReads: 5
+                simultaneousReads: 2
             dataBackend:
               type: file
               file:
@@ -188,7 +187,7 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
             blockSize: 4096
             io:
               file:
-                simultaneousReads: 5
+                simultaneousReads: 2
             dataBackend:
               type: file
               file:
@@ -213,7 +212,7 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
             blockSize: 4096
             io:
               file:
-                simultaneousReads: 5
+                simultaneousReads: 2
             dataBackend:
               type: s3
               s3:
@@ -244,7 +243,7 @@ class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
             blockSize: 4096
             io:
               file:
-                simultaneousReads: 5
+                simultaneousReads: 2
             dataBackend:
               type: s3_boto3
               s3_boto3:
@@ -275,7 +274,7 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
             blockSize: 4096
             io:
               file:
-                simultaneousReads: 5
+                simultaneousReads: 2
             dataBackend:
               type: b2
               b2:
