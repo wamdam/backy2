@@ -72,7 +72,7 @@ class DataBackend(ROSDataBackend):
         try:
             self._local.resource.meta.client.head_bucket(Bucket=self._bucket_name)
         except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchBucket':
+            if e.response['Error']['Code'] == 'NoSuchBucket' or e.response['Error']['Code'] == '404':
                 # Doesn't exists...
                 exists = False
             else:
@@ -107,7 +107,7 @@ class DataBackend(ROSDataBackend):
             object = object.get()
             data = object['Body'].read()
         except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchKey':
+            if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
                 raise
@@ -122,7 +122,7 @@ class DataBackend(ROSDataBackend):
         try:
             object.load()
         except ClientError as e:
-            if e.response['Error']['Code'] == "NoSuchKey":
+            if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
                 raise FileNotFoundError('UID {} not found.'.format(uid))
             else:
                 raise
