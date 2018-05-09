@@ -164,7 +164,7 @@ class DataBackend():
         if sync:
             return self._read(block, offset, length)[3]
         else:
-            def read_with_acquire(s):
+            def read_with_acquire():
                 self._read_semaphore.acquire()
                 return self._read(block, offset, length)
 
