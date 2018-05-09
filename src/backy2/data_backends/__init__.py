@@ -261,7 +261,7 @@ class ROSDataBackend(DataBackend):
                 logger.warn('Unable to enable disk based read caching. Continuing without it.')
                 self._read_cache = None
             else:
-                logger.info('Disk based read caching enabled (cache size {})'.format(read_cache_maximum_size))
+                logger.debug('Disk based read caching enabled (cache size {})'.format(read_cache_maximum_size))
         else:
             self._read_cache = None
 
