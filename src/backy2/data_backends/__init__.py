@@ -146,7 +146,9 @@ class DataBackend():
     def save(self, data, sync=False):
         for future in [future for future in self._write_futures if future.done()]:
             self._write_futures.remove(future)
+            # Make sure that exceptions are delivered
             future.result()
+            del future
 
         uid = self._uid()
         if sync:
@@ -228,11 +230,17 @@ class DataBackend():
 
     def wait_read_finished(self):
         for future in concurrent.futures.as_completed(self._read_futures):
-            pass
+            self._read_futures.remove(future)
+            # Make sure exceptions are delivered
+            future.result()
+            del future
 
     def wait_write_finished(self):
         for future in concurrent.futures.as_completed(self._write_futures):
-            pass
+            self._write_futures.remove(future)
+            # Make sure exceptions are delivered
+            future.result()
+            del future
 
     def close(self):
         self._write_executor.shutdown()
