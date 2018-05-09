@@ -170,7 +170,7 @@ class DataBackend():
 
             self._read_futures.append(self._read_executor.submit(read_with_acquire))
 
-    def read_get_completed(self, timeout=None):
+    def read_get_completed(self):
         """ Returns a generator for all completed read jobs
         """
         return future_results_as_completed(self._read_futures, self._read_semaphore)
