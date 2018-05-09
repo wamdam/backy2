@@ -195,11 +195,10 @@ class Backy():
 
         state = True
 
-        notify(self.process_name, 'Preparing scrub of version {}'.format(version_uid))
         # prepare
         old_use_read_cache = self.data_backend.use_read_cache(False)
         read_jobs = 0
-        for block in blocks:
+        for i, block in enumerate(blocks):
             if block.uid:
                 if percentile < 100 and random.randint(1, 100) > percentile:
                     logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
@@ -215,6 +214,7 @@ class Backy():
                     block.id,
                     block.uid,
                     ))
+            notify(self.process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid, (id + 1) / len(blocks) * 100))
 
         # and read
         done_jobs = 0
