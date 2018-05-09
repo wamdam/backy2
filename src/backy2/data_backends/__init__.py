@@ -126,10 +126,6 @@ class DataBackend():
         logger.debug('Reader {} read data. uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
         return block, offset, len(data), data
 
-    def _bounded_read(self, block, offset, length):
-        with self._read_semaphore:
-            return self._read(block, offset, length)
-
     def _uid(self):
         # 32 chars are allowed and we need to spread the first few chars so
         # that blobs are distributed nicely. And want to avoid hash collisions.
@@ -150,8 +146,17 @@ class DataBackend():
         if sync:
             self._write(uid, data)
         else:
-            with self._write_semaphore:
-                self._write_futures.append(self._write_executor.submit(self._write, uid, data))
+            self._write_semaphore.acquire()
+
+            def write_with_release():
+                try:
+                    return self._write(uid, data)
+                except Exception:
+                    raise
+                finally:
+                    self._write_semaphore.release()
+
+            self._write_futures.append(self._write_executor.submit(write_with_release))
 
         return uid
 
@@ -159,12 +164,16 @@ class DataBackend():
         if sync:
             return self._read(block, offset, length)[3]
         else:
-            self._read_futures.append(self._read_executor.submit(self._bounded_read, block, offset, length))
+            def read_with_acquire(s):
+                self._read_semaphore.acquire()
+                return self._read(block, offset, length)
+
+            self._read_futures.append(self._read_executor.submit(read_with_acquire))
 
     def read_get_completed(self, timeout=None):
         """ Returns a generator for all completed read jobs
         """
-        return future_results_as_completed(self._read_futures)
+        return future_results_as_completed(self._read_futures, self._read_semaphore)
 
     def update(self, block, data, offset=0):
         """ Updates data, returns written bytes.

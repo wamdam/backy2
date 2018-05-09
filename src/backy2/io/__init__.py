@@ -37,21 +37,21 @@ class IO():
     def _read(self, block):
         raise NotImplementedError()
 
-    def _bounded_read(self, block):
-        with self._read_semaphore:
-            return self._read(block)
-
     def read(self, block, sync=False):
         """ Adds a read job or directly reads and returns the data """
         if sync:
             return self._read(block)[1]
         else:
-            self._read_futures.append(self._read_executor.submit(self._bounded_read, block))
+            def read_with_acquire():
+                self._read_semaphore.acquire()
+                return self._read(block)
+
+            self._read_futures.append(self._read_executor.submit(read_with_acquire))
 
     def read_get_completed(self):
         """ Returns a generator for all completed read jobs
         """
-        return future_results_as_completed(self._read_futures)
+        return future_results_as_completed(self._read_futures, self._read_semaphore)
 
     def write(self, block, data):
         """ Writes data to the given block

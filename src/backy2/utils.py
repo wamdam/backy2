@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import concurrent
+import hashlib
+import importlib
 import json
+import os
 import setproctitle
 import sys
 from ast import literal_eval
+from functools import partial
 from threading import Lock
 from time import time
-
-import hashlib
-import importlib
-import os
-from functools import partial
 
 from backy2.exception import ConfigurationError
 from backy2.logging import logger
@@ -118,13 +117,14 @@ def makedirs(path):
 
 # This is tricky to implement as we need to make sure that we don't hold a reference to the completed Future anymore.
 # Indeed it's so tricky that older Python versions had the same problem. See https://bugs.python.org/issue27144.
-def future_results_as_completed(futures):
+def future_results_as_completed(futures, semaphore):
     if sys.version_info < (3,6,4):
         logger.warn('Large backup jobs are likely to fail because of excessive memory usage. '
                     + 'Upgrade your Python to at least 3.6.4.')
 
     for future in concurrent.futures.as_completed(futures):
         futures.remove(future)
+        semaphore.release()
         result = future.result()
         del future
         yield result
