@@ -13,7 +13,7 @@ from diskcache import Cache
 
 from backy2.exception import InternalError, ConfigurationError
 from backy2.logging import logger
-from backy2.utils import TokenBucket, makedirs
+from backy2.utils import TokenBucket, makedirs, future_results_as_completed
 
 
 class DataBackend():
@@ -165,12 +165,7 @@ class DataBackend():
     def read_get_completed(self, timeout=None):
         """ Returns a generator for all completed read jobs
         """
-        futures = concurrent.futures.as_completed(self._read_futures, timeout=timeout)
-        # Release our references to the Futures early, so that they can be freed
-        self._read_futures = []
-
-        for future in futures:
-            yield future.result()
+        return future_results_as_completed(self._read_futures)
 
     def update(self, block, data, offset=0):
         """ Updates data, returns written bytes.

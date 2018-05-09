@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import concurrent
 from concurrent.futures import ThreadPoolExecutor
 from threading import BoundedSemaphore
+
+from backy2.utils import future_results_as_completed
 
 
 class IO():
@@ -50,12 +51,7 @@ class IO():
     def read_get_completed(self):
         """ Returns a generator for all completed read jobs
         """
-        futures = concurrent.futures.as_completed(self._read_futures)
-        # Release our references to the Futures early, so that they can be freed
-        self._read_futures = []
-
-        for future in futures:
-                yield future.result()
+        return future_results_as_completed(self._read_futures)
 
     def write(self, block, data):
         """ Writes data to the given block
