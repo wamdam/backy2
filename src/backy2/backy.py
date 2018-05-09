@@ -1,12 +1,12 @@
 # -*- encoding: utf-8 -*-
 
 import datetime
+import importlib
 import math
+import random
 import time
 from urllib import parse
 
-import importlib
-import random
 from dateutil.relativedelta import relativedelta
 
 from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange
@@ -304,7 +304,9 @@ class Backy():
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
-            if not sparse:
+            if sparse:
+                notify(self.process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
+            else:
                 notify(self.process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
 
         done_jobs = 0
@@ -479,7 +481,7 @@ class Backy():
             logger.info('Finished sanity check. Checked {} blocks {}.'.format(num_reading, check_block_ids))
 
         read_jobs = 0
-        for block in blocks:
+        for i, block in enumerate(blocks):
             if block.id in read_blocks or not block.valid:
                 io.read(block.deref())  # adds a read job.
                 read_jobs += 1
@@ -493,6 +495,7 @@ class Backy():
             else:
                 # Block is already in database, no need to update it
                 logger.debug('Keeping block {}'.format(block.id))
+            notify(self.process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid, source, (i + 1) / len(blocks) * 100))
 
         # precompute checksum of a sparse block
         sparse_block_checksum = data_hexdigest(self.hash_function, b'\0' * block.size)
