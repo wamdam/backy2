@@ -195,7 +195,7 @@ class Backy():
 
         state = True
 
-        notify(self.process_name, 'Preparing Scrub of version {}'.format(version_uid))
+        notify(self.process_name, 'Preparing scrub of version {}'.format(version_uid))
         # prepare
         read_jobs = 0
         for block in blocks:
@@ -265,7 +265,7 @@ class Backy():
                 block.id,
                 block.uid,
                 ))
-            notify(self.process_name, 'Scrubbing Version {} ({:.1f}%)'.format(version_uid, (i + 1) / read_jobs * 100))
+            notify(self.process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid, (i + 1) / read_jobs * 100))
         if state == True:
             self.meta_backend.set_version_valid(version_uid)
         else:
@@ -283,7 +283,7 @@ class Backy():
             raise AlreadyLocked('Version {} is locked.'.format(version_uid))
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
+        notify(self.process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid, target))
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
         io = self.get_io_by_source(target, version.block_size)
@@ -304,7 +304,8 @@ class Backy():
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
-            notify(self.process_name, 'Restoring Version {} to {} PREPARING AND SPARSE BLOCKS ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
+            if not sparse:
+                notify(self.process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -329,7 +330,7 @@ class Backy():
                     block.size,
                     ))
 
-            notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
+            notify(self.process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
         io.close()
@@ -530,7 +531,7 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
-            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version.uid, source, done_jobs / read_jobs * 100))
+            notify(self.process_name, 'Backup version {} from {} ({:.1f}%)'.format(version.uid, source, done_jobs / read_jobs * 100))
             if done_jobs % _log_every_jobs == 0 or done_jobs == read_jobs:
                 logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_jobs, read_jobs,  done_jobs / read_jobs * 100))
 
