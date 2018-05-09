@@ -214,7 +214,7 @@ class Backy():
                     block.id,
                     block.uid,
                     ))
-            notify(self.process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid, (id + 1) / len(blocks) * 100))
+            notify(self.process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid, (i + 1) / len(blocks) * 100))
 
         # and read
         done_jobs = 0
