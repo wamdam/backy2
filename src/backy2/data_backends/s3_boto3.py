@@ -38,8 +38,8 @@ class DataBackend(ROSDataBackend):
         signature_version = config.get_from_dict(our_config, 'signatureVersion', None, types=str)
 
         self._bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
-        self._multi_delete = config.get_from_dict(our_config, 'multiDelete', None, types=bool) or True
-        self._disable_encoding_type = config.get_from_dict(our_config, 'disableEncodingType', None, types=bool) or False
+        self._multi_delete = config.get_from_dict(our_config, 'multiDelete', types=bool)
+        self._disable_encoding_type = config.get_from_dict(our_config, 'disableEncodingType', types=bool)
 
         self._resource_config = {
             'aws_access_key_id': aws_access_key_id,
