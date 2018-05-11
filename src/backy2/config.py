@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
-from pathlib import Path
-
 import operator
 import os
 from functools import reduce
 from io import StringIO
 from os.path import expanduser
+from pathlib import Path
+
 from ruamel.yaml import YAML
 
 from backy2.exception import ConfigurationError, InternalError
@@ -54,6 +54,19 @@ class Config():
         simultaneousReads: 1
     """
 
+    REDACT = """
+        dataBackend:
+          s3_boto3:
+            awsAccessKeyId: '<redacted>'
+            awsSecretAccessKey: '<redacted>'
+          s3:
+            awsAccessKeyId: '<redacted>'
+            awsSecretAccessKey: '<redacted>'
+          b2:
+            accountId: '<redacted>'
+            applicationKey: '<redacted>'
+        """
+
     # Source: https://stackoverflow.com/questions/823196/yaml-merge-in-python
     @classmethod
     def _merge_dicts(cls, user, default):
@@ -100,9 +113,11 @@ class Config():
         if merge_defaults:
             self._merge_dicts(config, default_config)
 
-        with StringIO() as loaded_config:
-            yaml.dump(config, loaded_config)
-            logger.debug('Loaded configuration: {}'.format(loaded_config.getvalue()))
+        with StringIO() as redacted_config_string:
+            redacted_config = yaml.load(self.REDACT)
+            self._merge_dicts(redacted_config, config)
+            yaml.dump(redacted_config, redacted_config_string)
+            logger.debug('Loaded configuration: {}'.format(redacted_config_string.getvalue()))
 
         self.config = config
 
