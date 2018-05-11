@@ -91,7 +91,7 @@ class DatabackendTestCase(BackendTestCase):
 
         uids = [self.data_backend.save(b'B', sync=True) for _ in range(NUM_BLOBS)]
 
-        self.data_backend.rm_many(uids)
+        self.assertEqual([], self.data_backend.rm_many(uids))
 
         saved_uids = self.data_backend.get_all_blob_uids()
         self.assertEqual(0, len(saved_uids))

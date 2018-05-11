@@ -1,11 +1,10 @@
-import logging
-import string
-from binascii import hexlify
-
 import importlib
+import logging
 import os
 import random
 import shutil
+import string
+from binascii import hexlify
 
 from backy2.config import Config
 from backy2.data_backends import DataBackend
@@ -31,7 +30,8 @@ class TestCase():
     class TestPath():
         def __init__(self):
             self.path = 'backy2-test_' + TestCase.random_string(16)
-            for dir in [self.path, self.path + '/data', self.path + '/lock', self.path + '/nbd', self.path + '/nbd/cache']:
+            for dir in [self.path, self.path + '/data', self.path + '/lock', self.path + '/nbd-cache',
+                        self.path + '/read-cache']:
                 os.mkdir(dir)
 
         def close(self):
@@ -40,7 +40,7 @@ class TestCase():
 
     def setUp(self):
         self.testpath = self.TestPath()
-        init_logging(None, logging.INFO)
+        init_logging(None, logging.DEBUG)
 
         self.config = Config(cfg=self.CONFIG.format(testpath=self.testpath.path), merge_defaults=False)
 

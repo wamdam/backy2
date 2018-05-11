@@ -91,13 +91,13 @@ class DataBackend(_DataBackend):
         """ Deletes many uids from the data backend and returns a list
         of uids that couldn't be deleted.
         """
-        _no_del = []
+        errors = []
         for uid in uids:
             try:
                 self.rm(uid)
             except FileNotFoundError:
-                _no_del.append(uid)
-        return _no_del
+                errors.append(uid)
+        return errors
 
     def get_all_blob_uids(self, prefix=None):
         if prefix:

@@ -108,9 +108,7 @@ class DataBackend(_DataBackend):
                 self.bucket.delete_file_version(file_version_info.id_, file_version_info.file_name)
             except (B2Error, FileNotFoundError):
                 errors.append(uid)
-
-        if len(errors) > 0:
-            return errors
+        return errors
 
     def get_all_blob_uids(self, prefix=None):
         if prefix:

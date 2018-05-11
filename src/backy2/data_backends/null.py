@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import hashlib
+
 import shortuuid
 
 
@@ -44,10 +45,10 @@ class DataBackend():
         pass
 
     def rm_many(self, uids):
-        pass
+        return []
 
     def get_all_blob_uids(self, prefix=None):
-        pass
+        return []
 
     def wait_read_finished(self):
         pass

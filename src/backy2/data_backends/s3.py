@@ -92,10 +92,7 @@ class DataBackend(_DataBackend):
         of uids that couldn't be deleted.
         """
         errors = self.bucket.delete_keys(uids, quiet=True)
-        if errors.errors:
-            # unable to test this. ceph object gateway doesn't return errors.
-            # raise FileNotFoundError('UIDS {} not found.'.format(errors.errors))
-            return errors.errors  # TODO: which should be a list of uids.
+        return errors.errors
 
     def get_all_blob_uids(self, prefix=None):
         return [k.name for k in self.bucket.list(prefix)]

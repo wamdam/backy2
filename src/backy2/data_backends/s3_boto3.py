@@ -134,12 +134,11 @@ class DataBackend(ROSDataBackend):
         of uids that couldn't be deleted.
         """
         self._init_connection()
+        errors = []
         if self._multi_delete:
             # Amazon (at least) only handles 1000 deletes at a time
             # Split list into parts of at most 1000 elements
             uids_parts = [islice(uids, i, i+1000) for i  in range(0, len(uids), 1000)]
-
-            errors = []
             for part in uids_parts:
                 response = self._local.resource.meta.client.delete_objects(
                     Bucket=self._local.bucket.name,
@@ -150,17 +149,12 @@ class DataBackend(ROSDataBackend):
                 if 'Errors' in response:
                     errors += list(map(lambda object: object['Key'], response['Errors']))
         else:
-            errors = []
             for uid in uids:
                 try:
                     self._local.bucket.Object(uid).delete()
-                except ClientError as e:
+                except ClientError:
                     errors.append(uid)
-
-        if len(errors) > 0:
-            # unable to test this. ceph object gateway doesn't return errors.
-            # raise FileNotFoundError('UIDS {} not found.'.format(errors))
-            return errors
+        return errors
 
     def get_all_blob_uids(self, prefix=None):
         self._init_connection()
