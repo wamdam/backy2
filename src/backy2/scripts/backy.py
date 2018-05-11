@@ -4,11 +4,11 @@
 import argparse
 import fileinput
 import logging
-import sys
-
 import os
-import pkg_resources
+import sys
 from io import StringIO
+
+import pkg_resources
 from prettytable import PrettyTable
 
 import backy2.exception
@@ -69,11 +69,12 @@ class Commands():
         finally:
             backy.close()
 
-    def rm(self, version_uid, force):
+    def rm(self, version_uids, force):
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
         backy = self.backy()
         try:
-            backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
+            for version_uid in version_uids:
+                backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
         except Exception:
             raise
         finally:
@@ -453,9 +454,9 @@ def main():
     # RM
     p = subparsers.add_parser(
         'rm',
-        help="Remove a given backup version. This will only remove meta data and you will have to cleanup after this.")
+        help="Remove the given backup versions. This will only remove meta data and you will have to cleanup after this.")
     p.add_argument('-f', '--force', action='store_true', help="Force removal of version, even if it's younger than the configured disallow_rm_when_younger_than_days.")
-    p.add_argument('version_uid')
+    p.add_argument('version_uids', metavar='version_uid', nargs='+')
     p.set_defaults(func='rm')
 
     # SCRUB
