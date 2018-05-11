@@ -48,10 +48,10 @@ class IO():
 
             self._read_futures.append(self._read_executor.submit(read_with_acquire))
 
-    def read_get_completed(self):
+    def read_get_completed(self, timeout=None):
         """ Returns a generator for all completed read jobs
         """
-        return future_results_as_completed(self._read_futures, self._read_semaphore)
+        return future_results_as_completed(self._read_futures, self._read_semaphore, timeout=timeout)
 
     def write(self, block, data):
         """ Writes data to the given block
