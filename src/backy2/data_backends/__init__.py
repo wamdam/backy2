@@ -313,6 +313,6 @@ class ROSDataBackend(DataBackend):
         super().close()
         if self._read_cache is not None:
             (cache_hits, cache_misses) = self._read_cache.stats()
-            logger.info('Disk based cache statistics (since cache creation): {} hits, {} misses.'.format(cache_hits, cache_misses))
+            logger.debug('Disk based cache statistics (since cache creation): {} hits, {} misses.'.format(cache_hits, cache_misses))
             self._read_cache.close()
         
