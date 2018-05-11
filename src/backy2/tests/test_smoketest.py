@@ -254,14 +254,49 @@ class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
                 bucketName: backy2
                 multiDelete: true
                 addressingStyle: path
-              simultaneousWrites: 5
-              simultaneousReads: 5
+                disableEncodingType: false
+              simultaneousWrites: 1
+              simultaneousReads: 1
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
               type: sql
               sql:
-                engine: postgresql://backy2:verysecret@localhost:15432/backy2
+                engine: sqlite:///{testpath}/backy.sqlite
+            """
+
+class SmokeTestCasePostgreSQL_S3_Boto3_ReadCache(SmokeTestCase, BackyTestCase, TestCase):
+
+    CONFIG = """
+            configurationVersion: '1.0.0'
+            processName: backy2
+            logFile: /dev/stderr
+            lockDirectory: {testpath}/lock
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4194304
+            io:
+              file:
+                simultaneousReads: 2
+            dataBackend:
+              type: s3_boto3
+              s3_boto3:
+                awsAccessKeyId: minio
+                awsSecretAccessKey: minio123
+                endpointUrl: http://127.0.0.1:9901/
+                bucketName: backy2
+                multiDelete: false
+                addressingStyle: path
+                disableEncodingType: false
+              simultaneousWrites: 1
+              simultaneousReads: 1
+              bandwidthRead: 0
+              bandwidthWrite: 0
+              readCacheDirectory: {testpath}/read-cache
+              readCacheMaximumSize: 16777216
+            metaBackend: 
+              type: sql
+              sql:
+                engine: sqlite:///{testpath}/backy.sqlite
             """
 
 class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):

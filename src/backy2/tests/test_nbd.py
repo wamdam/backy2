@@ -1,11 +1,10 @@
 # This is an port and update of the original smoketest.py
-import subprocess
-import threading
-from unittest import TestCase
-
 import os
 import random
 import re
+import subprocess
+import threading
+from unittest import TestCase
 
 from backy2.logging import logger
 from backy2.tests.testcase import BackyTestCase
@@ -170,7 +169,7 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
               sql:
                 engine: sqlite:///{testpath}/backy.sqlite
             nbd:
-              cacheDirectory: {testpath}/nbd/cache
+              cacheDirectory: {testpath}/nbd-cache
             """
 
 
@@ -223,5 +222,5 @@ class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
               sql:
                 engine: postgresql://backy2:verysecret@localhost:15432/backy2
             nbd:
-              cacheDirectory: {testpath}/nbd/cache
+              cacheDirectory: {testpath}/nbd-cache
             """
