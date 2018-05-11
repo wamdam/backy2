@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import errno
-
 import os
 from io import BytesIO
 
@@ -145,7 +144,7 @@ class BackyStore():
                 cow[block.id] = block._replace(uid=block_uid, checksum=None)
                 logger.debug('COW: Wrote block {} into {}'.format(block.id, block_uid))
 
-    def flush(self):
+    def flush(self, cow_version):
         # TODO: Maybe fixate partly?
         pass
 

@@ -31,9 +31,8 @@ import errno
 import logging
 import math
 import signal
-import traceback
-
 import struct
+import traceback
 
 from backy2.exception import NbdServerAbortedNegotiationError
 
@@ -230,7 +229,7 @@ class Server(object):
                     if(len(data) != length):
                         raise IOError("%s bytes expected, disconnecting" % length)
 
-                    if (self.read_only):
+                    if self.read_only:
                         yield from self.nbd_response(writer, handle, error=errno.EPERM)
                         continue
 
@@ -259,6 +258,10 @@ class Server(object):
                     yield from self.nbd_response(writer, handle, data=data)
 
                 elif cmd == self.NBD_CMD_FLUSH:
+                    if self.read_only or not cow_version:
+                        yield from self.nbd_response(writer, handle)
+                        continue
+
                     try:
                         self.store.flush(cow_version)
                     except Exception as ex:
