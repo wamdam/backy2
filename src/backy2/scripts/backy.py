@@ -483,7 +483,7 @@ def main():
     p.add_argument('-p', '--bind-port', default=10809,
             help="Bind to this port (default: 10809)")
     p.add_argument(
-        '-r', '--read-only', action='store_true',
+        '-r', '--read-only', action='store_true', default=False,
         help='Read only if set, otherwise a copy on write backup is created.')
     p.set_defaults(func='nbd')
 
