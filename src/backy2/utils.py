@@ -90,8 +90,8 @@ def backy_from_config(config):
             )
     return backy
 
-
-def notify(process_name, msg=''):
+# old_msg is used as a stateful storage between calls
+def notify(process_name, msg='', old_msg = ''):
     """ This method can receive notifications and append them in '[]' to the
     process name seen in ps, top, ...
     """
@@ -103,12 +103,9 @@ def notify(process_name, msg=''):
     else:
         new_msg = process_name
 
-    if notify.old_msg != new_msg:
-        notify.old_msg = new_msg
+    if old_msg != new_msg:
+        old_msg = new_msg
         setproctitle.setproctitle(new_msg)
-
-
-notify.old_msg = ''
 
 
 def makedirs(path):
