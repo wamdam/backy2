@@ -89,7 +89,7 @@ class Version(Base):
         'Block',
         backref='version',
         order_by='asc(Block.id)',
-        viewonly=True,
+        passive_deletes=True,
     )
 
     def __repr__(self):
@@ -110,7 +110,7 @@ DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'ch
 class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
-    version_uid = Column(VersionUid, ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    version_uid = Column(VersionUid, ForeignKey('versions.uid', ondelete='CASCADE'), primary_key=True, nullable=False)
     id = Column(Integer, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     checksum = Column(Checksum(_MetaBackend.MAXIMUM_CHECKSUM_LENGTH), index=True, nullable=True)
@@ -397,6 +397,8 @@ class MetaBackend(_MetaBackend):
                 )
                 self.session.add(deleted_block)
         affected_blocks.delete()
+        # The following delete statement will cascade this delete to the blocks table,
+        # but we've already moved the blocks to the deleted blocks table for later inspection.
         self.session.query(Version).filter_by(uid=version_uid).delete()
         self.session.commit()
         return num_blocks
