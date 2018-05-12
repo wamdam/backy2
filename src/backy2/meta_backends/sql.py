@@ -495,9 +495,9 @@ class MetaBackend(_MetaBackend):
                 return super().default(obj)
         return Backy2Encoder
 
-    def export_any(self, root_key, root_value, f, ignore_fields=[], ignore_relationships=[]):
-        ignore_fields = list(ignore_fields)
-        ignore_relationships = list(ignore_relationships)
+    def export_any(self, root_key, root_value, f, ignore_fields=None, ignore_relationships=None):
+        ignore_fields = list(ignore_fields) if ignore_fields is not None else []
+        ignore_relationships = list(ignore_relationships) if ignore_relationships is not None else []
 
         # These are always ignored because they'd lead to a circle
         ignore_fields.append(((Tag, Block), ('version_uid',)))
