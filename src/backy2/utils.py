@@ -61,24 +61,22 @@ def backy_from_config(config):
     process_name = config.get('processName', types=str)
 
     from backy2.data_backends import DataBackend
-    name = config.get('dataBackend.type', None, types=str)
-    if name is not None:
-        try:
-            DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
-        except ImportError:
-            raise ConfigurationError('Data backend type {} not found.'.format(name))
-        else:
-            data_backend = DataBackendLib.DataBackend(config)
+    name = config.get('dataBackend.type', types=str)
+    try:
+        DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
+    except ImportError:
+        raise ConfigurationError('Data backend type {} not found.'.format(name))
+    else:
+        data_backend = DataBackendLib.DataBackend(config)
 
     from backy2.meta_backends import MetaBackend
-    name = config.get('metaBackend.type', None, types=str)
-    if name is not None:
-        try:
-            MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
-        except ImportError:
-            raise ConfigurationError('Meta backend type {} not found.'.format(name))
-        else:
-            meta_backend = MetaBackendLib.MetaBackend(config)
+    name = config.get('metaBackend.type', types=str)
+    try:
+        MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
+    except ImportError:
+        raise ConfigurationError('Meta backend type {} not found.'.format(name))
+    else:
+        meta_backend = MetaBackendLib.MetaBackend(config)
 
     from backy2.backy import Backy
     backy = partial(Backy,
