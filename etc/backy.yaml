@@ -103,6 +103,10 @@ dataBackend:
   #      level: 1
   #    active: true
 
+  #readCache:
+  #  directory: /var/lib/backy2/read-cache
+  #  maximumSize: (in bytes)
+
 nbd:
   cacheDirectory: /tmp
 

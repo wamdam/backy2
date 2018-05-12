@@ -256,14 +256,14 @@ class DataBackend():
         self._read_executor.shutdown()
 
 
-class ROSDataBackend(DataBackend):
+class ReadCacheDataBackend(DataBackend):
 
     def __init__(self, config):
-        read_cache_directory = config.get('dataBackend.readCacheDirectory', None, types=str)
-        read_cache_maximum_size = config.get('dataBackend.readCacheMaximumSize', None, types=int)
+        read_cache_directory = config.get('dataBackend.readCache.directory', None, types=str)
+        read_cache_maximum_size = config.get('dataBackend.readCache.maximumSize', None, types=int)
     
         if read_cache_directory and not read_cache_maximum_size or not read_cache_directory and read_cache_maximum_size:
-            raise ConfigurationError('Both dataBackend.cacheDirectory and dataBackend.cacheMaximumSize need to be set '
+            raise ConfigurationError('Both dataBackend.readCache.directory and dataBackend.readCache.maximumSize need to be set '
                                   + 'to enable disk based caching.')
     
         if read_cache_directory and read_cache_maximum_size:

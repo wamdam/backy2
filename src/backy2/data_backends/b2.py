@@ -2,21 +2,19 @@
 # -*- encoding: utf-8 -*-
 import logging
 
-from b2.account_info.exception import MissingAccountData
-from backy2.data_backends import DataBackend as _DataBackend
-from backy2.exception import UsageError
-
-global b2
 import b2
 import b2.api
+import b2.file_version
+from b2.account_info.exception import MissingAccountData
 from b2.account_info.in_memory import InMemoryAccountInfo
 from b2.account_info.sqlite_account_info import SqliteAccountInfo
 from b2.download_dest import DownloadDestBytes
-import b2.file_version
 from b2.exception import B2Error, FileNotPresent, UnknownError
+from backy2.data_backends import ReadCacheDataBackend
+from backy2.exception import UsageError
 
 
-class DataBackend(_DataBackend):
+class DataBackend(ReadCacheDataBackend):
     """ A DataBackend which stores its data in a BackBlaze (B2) file store."""
 
     NAME = 'b2'

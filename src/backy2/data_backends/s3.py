@@ -6,11 +6,11 @@ import socket
 import boto.exception
 import boto.s3.connection
 
-from backy2.data_backends import DataBackend as _DataBackend
+from backy2.data_backends import ReadCacheDataBackend
 from backy2.logging import logger
 
 
-class DataBackend(_DataBackend):
+class DataBackend(ReadCacheDataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
 
