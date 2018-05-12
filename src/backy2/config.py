@@ -45,7 +45,7 @@ class Config():
         addressingStyle: path
         disableEncodingType: false
     nbd:
-      cacheDir: /tmp
+      cacheDirectory: /tmp
     io:
       file:
         simultaneousReads: 1
