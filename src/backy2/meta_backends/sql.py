@@ -2,11 +2,11 @@
 # -*- encoding: utf-8 -*-
 import datetime
 import json
+import os
 import time
 from binascii import hexlify, unhexlify
 from collections import namedtuple
 
-import os
 import sqlalchemy
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect
 from sqlalchemy import func, distinct, desc
@@ -180,7 +180,6 @@ class MetaBackend(_MetaBackend):
         self._flush_block_counter = 0
         return self
 
-
     def migrate_db(self):
         # FIXME: fix to use supplied config
         # migrate the db to the lastest version
@@ -191,7 +190,6 @@ class MetaBackend(_MetaBackend):
             alembic_cfg.attributes['connection'] = connection
             #command.upgrade(alembic_cfg, "head", sql=True)
             command.upgrade(alembic_cfg, "head")
-
 
     def initdb(self, _destroydb=False, _migratedb=True):
         # This is dangerous and is only used by the test suite to get a clean slate
@@ -213,10 +211,8 @@ class MetaBackend(_MetaBackend):
                 # mark the version table, "stamping" it with the most recent rev:
                 command.stamp(alembic_cfg, "head")
 
-
     def _commit(self):
         self.session.commit()
-
 
     def set_version(self, version_name, snapshot_name, size, block_size, valid=False, protected=False):
         version = Version(
@@ -230,7 +226,6 @@ class MetaBackend(_MetaBackend):
         self.session.add(version)
         self.session.commit()
         return version
-
 
     def set_stats(self, version_uid, version_name, version_snapshot_name, version_size, version_block_size, bytes_read,
                   blocks_read, bytes_written, blocks_written, bytes_found_dedup, blocks_found_dedup, bytes_sparse,
@@ -254,7 +249,6 @@ class MetaBackend(_MetaBackend):
         self.session.add(stats)
         self.session.commit()
 
-
     def get_stats(self, version_uid=None, limit=None):
         """ gets the <limit> newest entries """
         if version_uid:
@@ -272,7 +266,6 @@ class MetaBackend(_MetaBackend):
                 _stats = _stats.limit(limit)
             return reversed(_stats.all())
 
-
     def set_version_invalid(self, uid):
         version = self.get_version(uid)
         version.valid = False
@@ -280,7 +273,6 @@ class MetaBackend(_MetaBackend):
         logger.info('Marked version invalid (UID {})'.format(
             uid,
             ))
-
 
     def set_version_valid(self, uid):
         version = self.get_version(uid)
@@ -290,13 +282,11 @@ class MetaBackend(_MetaBackend):
             uid,
             ))
 
-
     def get_version(self, uid):
         version = self.session.query(Version).filter_by(uid=uid).first()
         if version is None:
             raise KeyError('Version {} not found.'.format(uid))
         return version
-
 
     def protect_version(self, uid):
         version = self.get_version(uid)
@@ -306,7 +296,6 @@ class MetaBackend(_MetaBackend):
             uid,
             ))
 
-
     def unprotect_version(self, uid):
         version = self.get_version(uid)
         version.protected = False
@@ -315,10 +304,8 @@ class MetaBackend(_MetaBackend):
             uid,
             ))
 
-
     def get_versions(self):
         return self.session.query(Version).order_by(Version.name, Version.date).all()
-
 
     def add_tag(self, version_uid, name):
         """ Add a tag to a version_uid, do nothing if the tag already exists.
@@ -329,11 +316,9 @@ class MetaBackend(_MetaBackend):
             )
         self.session.add(tag)
 
-
     def remove_tag(self, version_uid, name):
         self.session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
         self.session.commit()
-
 
     def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):
         """ Upsert a block (or insert only when _upsert is False - this is only
@@ -368,7 +353,6 @@ class MetaBackend(_MetaBackend):
         if _commit:
             self.session.commit()
 
-
     def set_blocks_invalid(self, block_uid, checksum):
         _affected_version_uids = self.session.query(distinct(Block.version_uid)).filter_by(uid=block_uid, checksum=checksum).all()
         affected_version_uids = [v[0] for v in _affected_version_uids]
@@ -383,18 +367,14 @@ class MetaBackend(_MetaBackend):
             self.set_version_invalid(version_uid)
         return affected_version_uids
 
-
     def get_block(self, block_uid):
         return self.session.query(Block).filter_by(uid=block_uid).first()
-
 
     def get_block_by_checksum(self, checksum):
         return self.session.query(Block).filter_by(checksum=checksum, valid=True).first()
 
-
     def get_blocks_by_version(self, version_uid):
         return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all()
-
 
     def rm_version(self, version_uid):
         affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
@@ -416,7 +396,6 @@ class MetaBackend(_MetaBackend):
         self.session.query(Version).filter_by(uid=version_uid).delete()
         self.session.commit()
         return num_blocks
-
 
     def get_delete_candidates(self, dt=3600):
         _stat_i = 0
@@ -475,7 +454,6 @@ class MetaBackend(_MetaBackend):
             _stat_delete_candidates,
             ))
 
-
     def get_all_block_uids(self, prefix=None):
         if prefix:
             rows = self.session.query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
@@ -486,21 +464,29 @@ class MetaBackend(_MetaBackend):
     # Based on: https://stackoverflow.com/questions/5022066/how-to-serialize-sqlalchemy-result-to-json/7032311,
     # https://stackoverflow.com/questions/1958219/convert-sqlalchemy-row-object-to-python-dict
     @staticmethod
-    def new_backy2_encoder():
+    def new_backy2_encoder(ignore_fields, ignore_relationships):
         class Backy2Encoder(json.JSONEncoder):
             def default(self, obj):
                 if isinstance(obj.__class__, DeclarativeMeta):
                     fields = {}
 
                     for field in inspect(obj).mapper.column_attrs:
-                        if isinstance(obj, (Tag, Block)) and field.key == 'version_uid':
-                            continue
-                        fields[field.key] = getattr(obj, field.key)
+                        ignore = False
+                        for types, names in ignore_fields:
+                            if isinstance(obj, types) and field.key in names:
+                                ignore = True
+                                break
+                        if not ignore:
+                            fields[field.key] = getattr(obj, field.key)
 
                     for relationship in inspect(obj).mapper.relationships:
-                        if isinstance(obj, (Tag, Block)) and relationship.key == 'version':
-                            continue
-                        fields[relationship.key] = getattr(obj, relationship.key)
+                        ignore = False
+                        for types, names in ignore_relationships:
+                            if isinstance(obj, types) and relationship.key in names:
+                                ignore = True
+                                break
+                        if not ignore:
+                            fields[relationship.key] = getattr(obj, relationship.key)
 
                     return fields
 
@@ -510,14 +496,27 @@ class MetaBackend(_MetaBackend):
                 return super().default(obj)
         return Backy2Encoder
 
-    def export(self, version_uids, f):
+    def export_any(self, root_key, root_value, f, ignore_fields=[], ignore_relationships=[]):
+        ignore_fields = list(ignore_fields)
+        ignore_relationships = list(ignore_relationships)
+
+        # These are always ignored because they'd lead to a circle
+        ignore_fields.append(((Tag, Block), ('version_uid',)))
+        ignore_relationships.append(((Tag, Block), ('version',)))
+
         json.dump({'metadataVersion': self.METADATA_VERSION,
-                   'versions': [self.get_version(version_uid) for version_uid in version_uids] },
+                   root_key: root_value },
                   f,
-                  cls=self.new_backy2_encoder(),
+                  cls=self.new_backy2_encoder(ignore_fields, ignore_relationships),
                   check_circular=True,
                   indent=2,
                   )
+
+    def export(self, version_uids, f):
+        self.export_any('versions',
+                        [self.get_version(version_uid) for version_uid in version_uids],
+                        f
+                        )
 
     def import_(self, f):
         try:
@@ -590,7 +589,6 @@ class MetaBackend(_MetaBackend):
                 self.rm_version(version_dict['uid'])
             finally:
                 self.session.commit()
-
 
     def close(self):
         self.session.commit()

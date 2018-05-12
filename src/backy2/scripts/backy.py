@@ -14,6 +14,7 @@ from prettytable import PrettyTable
 import backy2.exception
 from backy2.config import Config
 from backy2.logging import logger, init_logging
+from backy2.meta_backends.sql import Version
 from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_hash_function
 
 __version__ = pkg_resources.get_distribution('backy2').version
@@ -91,34 +92,6 @@ class Commands():
         finally:
             backy.close()
 
-    def _ls_blocks_tbl_output(self, blocks):
-        tbl = PrettyTable()
-        tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
-        tbl.align['id'] = 'r'
-        tbl.align['size'] = 'r'
-        for block in blocks:
-            tbl.add_row([
-                block.id,
-                block.date,
-                block.uid,
-                block.size,
-                int(block.valid),
-                ])
-        print(tbl)
-
-    def _ls_blocks_machine_output(self, blocks):
-        field_names = ['type', 'id', 'date', 'uid', 'size', 'valid']
-        print('|'.join(field_names))
-        for block in blocks:
-            print('|'.join(map(str, [
-                'block',
-                block.id,
-                block.date,
-                block.uid,
-                block.size,
-                int(block.valid),
-                ])))
-
     def _ls_versions_tbl_output(self, versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
@@ -142,24 +115,6 @@ class Commands():
                 ",".join(sorted([t.name for t in version.tags])),
                 ])
         print(tbl)
-
-    def _ls_versions_machine_output(self, versions):
-        field_names = ['type', 'date', 'name', 'snapshot_name', 'size', 'block_size', 'uid',
-                       'valid', 'protected', 'tags']
-        print('|'.join(field_names))
-        for version in versions:
-            print('|'.join(map(str, [
-                'version',
-                version.date,
-                version.name,
-                version.snapshot_name,
-                version.size,
-                version.block_size,
-                version.uid,
-                version.valid,
-                version.protected,
-                ",".join([t.name for t in version.tags]),
-                ])))
 
     def _stats_tbl_output(self, stats):
         tbl = PrettyTable()
@@ -199,32 +154,7 @@ class Commands():
                 ])
         print(tbl)
 
-    def _stats_machine_output(self, stats):
-        field_names = ['type', 'date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
-                       'bytes read', 'blocks read', 'bytes written', 'blocks written',
-                       'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)']
-        print('|'.join(field_names))
-        for stat in stats:
-            print('|'.join(map(str, [
-                'stat',
-                stat.date,
-                stat.version_uid,
-                stat.version_name,
-                stat.version_snapshot_name,
-                stat.version_size,
-                stat.version_block_size,
-                stat.bytes_read,
-                stat.blocks_read,
-                stat.bytes_written,
-                stat.blocks_written,
-                stat.bytes_found_dedup,
-                stat.blocks_found_dedup,
-                stat.bytes_sparse,
-                stat.blocks_sparse,
-                stat.duration_seconds,
-                ])))
-
-    def ls(self, name, snapshot_name, tag):
+    def ls(self, name, snapshot_name, tag, include_blocks):
         backy = self.backy()
         try:
             versions = backy.ls()
@@ -237,7 +167,11 @@ class Commands():
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
             if self.machine_output:
-                self._ls_versions_machine_output(versions)
+                backy.meta_backend.export_any('versions',
+                                              versions,
+                                              sys.stdout,
+                                              ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
+                                              )
             else:
                 self._ls_versions_tbl_output(versions)
         except Exception:
@@ -288,8 +222,13 @@ class Commands():
         backy = self.backy()
         try:
             stats = backy.stats(version_uid, limit)
+
             if self.machine_output:
-                self._stats_machine_output(stats)
+                stats = list(stats) # resolve iterator, otherwise it's not serializable
+                backy.meta_backend.export_any('stats',
+                                              stats,
+                                              sys.stdout,
+                                              )
             else:
                 self._stats_tbl_output(stats)
         except Exception:
@@ -511,6 +450,8 @@ def main():
             help="Limit output to this snapshot name")
     p.add_argument('-t', '--tag', default=None,
             help="Limit output to this tag")
+    p.add_argument('--include-blocks', default=False, action='store_true',
+            help='Include blocks in output')
     p.set_defaults(func='ls')
 
     # STATS
@@ -540,7 +481,7 @@ def main():
     p.add_argument('-p', '--bind-port', default=10809,
             help="Bind to this port (default: 10809)")
     p.add_argument(
-        '-r', '--read-only', action='store_true', default=False,
+        '-r', '--read-only', action='store_true',
         help='Read only if set, otherwise a copy on write backup is created.')
     p.set_defaults(func='nbd')
 
