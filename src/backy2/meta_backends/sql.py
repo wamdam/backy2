@@ -3,13 +3,15 @@
 import datetime
 import json
 import os
+import sqlite3
 import time
 from binascii import hexlify, unhexlify
 from collections import namedtuple
 
 import sqlalchemy
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event
 from sqlalchemy import func, distinct, desc
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime, TypeDecorator
@@ -173,6 +175,15 @@ class MetaBackend(_MetaBackend):
             #except sqlalchemy.exc.OperationalError:
             except:
                 raise RuntimeError('Invalid database ({}). Maybe you need to run initdb first?'.format(self.engine.url))
+
+        # SQLite 3 supports checking of foreign keys but it needs to be enabled explicitly!
+        # See: http://docs.sqlalchemy.org/en/latest/dialects/sqlite.html#foreign-key-support
+        @event.listens_for(Engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            if isinstance(dbapi_connection, sqlite3.Connection):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
 
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
