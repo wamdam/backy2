@@ -20,10 +20,9 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def set_stats(self, version_uid, version_name, version_size,
-            version_block_size, bytes_read, blocks_read, bytes_written,
-            blocks_written, bytes_found_dedup, blocks_found_dedup,
-            bytes_sparse, blocks_sparse, duration_seconds):
+    def set_stats(self, version_uid, version_name, version_snapshot_name, version_size, version_block_size, bytes_read,
+                  blocks_read, bytes_written, blocks_written, bytes_found_dedup, blocks_found_dedup, bytes_sparse,
+                  blocks_sparse, duration_seconds):
         """ Stores statistics
         """
         raise NotImplementedError()
