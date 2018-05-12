@@ -513,7 +513,7 @@ class Backy:
             notify(self.process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid, source, (i + 1) / len(blocks) * 100))
 
         # precompute checksum of a sparse block
-        sparse_block_checksum = data_hexdigest(self.hash_function, b'\0' * block.size)
+        sparse_block_checksum = data_hexdigest(self.hash_function, b'\0' * self.block_size)
 
         # now use the readers and write
         done_jobs = 0
