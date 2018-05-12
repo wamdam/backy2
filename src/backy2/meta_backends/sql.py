@@ -79,9 +79,11 @@ class Version(Base):
     block_size = Column(Integer, nullable=False)
     valid = Column(Boolean, nullable=False)
     protected = Column(Boolean, nullable=False)
+
     tags = sqlalchemy.orm.relationship(
         'Tag',
         backref='version',
+        order_by='asc(Tag.name)',
         passive_deletes=True,
     )
 
