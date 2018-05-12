@@ -40,13 +40,16 @@ Topic :: System :: Archiving :: Backup
         'alembic',
         'ruamel.yaml>=0.15.37',
         'filelock>=3.0.4',
-        #'boto>=2.38.0',
-        #'boto3>=1.6.16',
-        #'psycopg2>=2.7.4',
-        #'pex==1.1.0',
-        #'aws_s3_cse>=0.2',
-        #'pycryptodome>=3.6.1',
         ],
+    extras_require={
+        'PostgreSQL metadata backend': ['psycopg2-binary>=2.7.4'],
+        's3 data backend': ['boto>=2.38.0'],
+        's3_boto3 data backend': ['boto3>=1.6.16'],
+        'encryption': ['pycryptodome>=3.6.1', 'aws_s3_cse>=0.2'],
+        'compression': ['zstd>=1.3.3'],
+        'disk based read cache': ['diskcache>=3.0.6'],
+        'PEX generation': ['pex==1.1.0'],
+    },
     python_requires='~=3.6',
     entry_points="""
         [console_scripts]
