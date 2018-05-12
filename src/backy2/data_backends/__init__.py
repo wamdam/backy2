@@ -16,7 +16,7 @@ from backy2.logging import logger
 from backy2.utils import TokenBucket, makedirs, future_results_as_completed
 
 
-class DataBackend():
+class DataBackend:
     """ Holds BLOBs
     """
 
@@ -51,7 +51,7 @@ class DataBackend():
                     raise ConfigurationError('Module file {}.{} not found or related import error.'
                                              .format(self._ENCRYPTION_PACKAGE_PREFIX, name))
                 else:
-                    if (name != encryption_module.Encryption.NAME):
+                    if name != encryption_module.Encryption.NAME:
                         raise InternalError('Encryption module file name and name don\'t agree ({} != {}).'
                                          .format(name, encryption_module.Encryption.NAME))
 
@@ -73,7 +73,7 @@ class DataBackend():
                     raise ConfigurationError('Module file {}.{} not found or related import error.'
                                              .format(self._COMPRESSION_PACKAGE_PREFIX, name))
                 else:
-                    if (name != compression_module.Compression.NAME):
+                    if name != compression_module.Compression.NAME:
                         raise InternalError('Compression module file name and name don\'t agree ({} != {}).'
                                            .format(name, compression_module.Compression.NAME))
 
@@ -102,6 +102,9 @@ class DataBackend():
         self._write_futures = []
         self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
+    def _write_raw(self, uid, data, metadata):
+        raise NotImplementedError
+
     def _write(self, uid, data):
         data, metadata = self._compress(data)
         data, metadata_2 = self._encrypt(data)
@@ -113,6 +116,9 @@ class DataBackend():
         t2 = time.time()
 
         logger.debug('Writer {} wrote data. uid {} in {:.2f}s'.format(threading.current_thread().name, uid, t2-t1))
+
+    def _read_raw(self, uid, offset, length):
+        raise NotImplementedError
 
     def _read(self, block, offset, length):
         t1 = time.time()
@@ -126,6 +132,7 @@ class DataBackend():
         logger.debug('Reader {} read data. uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
         return block, offset, len(data), data
 
+    # noinspection PyMethodMayBeStatic
     def _uid(self):
         # 32 chars are allowed and we need to spread the first few chars so
         # that blobs are distributed nicely. And want to avoid hash collisions.

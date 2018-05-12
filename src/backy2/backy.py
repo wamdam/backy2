@@ -41,7 +41,7 @@ def blocks_from_hints(hints, block_size):
     return sparse_blocks, read_blocks
 
 
-class Backy():
+class Backy:
     """
     """
 
@@ -564,8 +564,7 @@ class Backy():
             if isinstance(tag, list):
                 tags = tag
             else:
-                tags = []
-                tags.append(tag)
+                tags = [tag]
         else:
             tags = self._generate_auto_tags(name)
         for tag in tags:

@@ -43,8 +43,8 @@ class MiscTestCase(BackendTestCase, TestCase):
         ]
         block_size = 1024
         sparse_blocks, read_blocks = backy2.backy.blocks_from_hints(hints, block_size)
-        self.assertEqual(sparse_blocks, set([32, 33, 34, 35, 36, 64, 65]))
-        self.assertEqual(read_blocks, set([0, 1, 2, 4, 5, 6, 8, 9, 13, 15, 16, 36, 64, 65]))
+        self.assertEqual(sparse_blocks, {32, 33, 34, 35, 36, 64, 65})
+        self.assertEqual(read_blocks, {0, 1, 2, 4, 5, 6, 8, 9, 13, 15, 16, 36, 64, 65})
 
 
     def test_FileBackend_path(self):

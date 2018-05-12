@@ -119,7 +119,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def export(self, f):
+    def export(self, version_uids, f):
         raise NotImplementedError()
 
 

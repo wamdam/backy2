@@ -14,10 +14,10 @@ kB = 1024
 MB = kB * 1024
 GB = MB * 1024
 
-class SmokeTestCase():
+class SmokeTestCase:
 
-    @classmethod
-    def patch(self, filename, offset, data=None):
+    @staticmethod
+    def patch(filename, offset, data=None):
         """ write data into a file at offset """
         if not os.path.exists(filename):
             open(filename, 'wb').close()
@@ -25,8 +25,8 @@ class SmokeTestCase():
             f.seek(offset)
             f.write(data)
 
-    @classmethod
-    def same(self, file1, file2):
+    @staticmethod
+    def same(file1, file2):
         """ returns False if files differ, True if they are the same """
         with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
             d1 = f1.read()

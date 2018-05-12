@@ -14,10 +14,10 @@ kB = 1024
 MB = kB * 1024
 GB = MB * 1024
 
-class NbdTestCase():
+class NbdTestCase:
 
-    @classmethod
-    def patch(self, filename, offset, data=None):
+    @staticmethod
+    def patch(filename, offset, data=None):
         """ write data into a file at offset """
         if not os.path.exists(filename):
             open(filename, 'wb').close()
@@ -25,8 +25,8 @@ class NbdTestCase():
             f.seek(offset)
             f.write(data)
 
-    @classmethod
-    def read_file(self, file1):
+    @staticmethod
+    def read_file(file1):
         with open(file1, 'rb') as f1:
             data = f1.read()
         return data
@@ -79,7 +79,7 @@ class NbdTestCase():
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
 
-        self.assertEqual(set([self.version_uid[0], 'V0000000002']), set([version.uid for version  in backy.ls()]))
+        self.assertEqual({self.version_uid[0], 'V0000000002'}, set([version.uid for version  in backy.ls()]))
 
         backy.close()
 

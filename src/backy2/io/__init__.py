@@ -6,7 +6,7 @@ from threading import BoundedSemaphore
 from backy2.utils import future_results_as_completed
 
 
-class IO():
+class IO:
 
     PACKAGE_PREFIX = 'backy2.io'
 

@@ -20,7 +20,7 @@ from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_ha
 __version__ = pkg_resources.get_distribution('backy2').version
 
 
-class Commands():
+class Commands:
     """Proxy between CLI calls and actual backup code."""
 
     def __init__(self, machine_output, config):
@@ -92,7 +92,8 @@ class Commands():
         finally:
             backy.close()
 
-    def _ls_versions_tbl_output(self, versions):
+    @staticmethod
+    def _ls_versions_tbl_output(versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
         tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'block_size', 'uid',
@@ -116,7 +117,8 @@ class Commands():
                 ])
         print(tbl)
 
-    def _stats_tbl_output(self, stats):
+    @staticmethod
+    def _stats_tbl_output(stats):
         tbl = PrettyTable()
         tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
                            'bytes read', 'blocks read', 'bytes written', 'blocks written',

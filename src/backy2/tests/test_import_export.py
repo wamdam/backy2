@@ -1,11 +1,10 @@
 # This is an port and update of the original smoketest.py
 import datetime
 import json
-from unittest import TestCase
-
 import os
 import random
 from io import StringIO
+from unittest import TestCase
 
 from backy2.meta_backends import MetaBackend
 from backy2.scripts.backy import hints_from_rbd_diff
@@ -17,8 +16,8 @@ GB = MB * 1024
 
 class ImportExportTestCase():
 
-    @classmethod
-    def patch(self, filename, offset, data=None):
+    @staticmethod
+    def patch(filename, offset, data=None):
         """ write data into a file at offset """
         if not os.path.exists(filename):
             open(filename, 'wb').close()
@@ -118,7 +117,7 @@ class ImportExportTestCase():
         self.assertFalse(version.protected)
         self.assertIsInstance(version.blocks, list)
         self.assertIsInstance(version.tags, list)
-        self.assertEqual(set(['b_daily', 'b_weekly', 'b_monthly']), set([tag.name for tag in version.tags]))
+        self.assertEqual({'b_daily', 'b_weekly', 'b_monthly'}, set([tag.name for tag in version.tags]))
         self.assertEqual(datetime.datetime.strptime('2018-05-02T22:10:36', '%Y-%m-%dT%H:%M:%S'), version.date)
         blocks = backy.meta_backend.get_blocks_by_version('V0000000001')
         self.assertTrue(len(blocks) > 0)

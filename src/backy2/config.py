@@ -13,7 +13,7 @@ from backy2.exception import ConfigurationError, InternalError
 from backy2.logging import logger
 
 
-class Config():
+class Config:
 
     CONFIG_VERSION = '1.0.0'
 

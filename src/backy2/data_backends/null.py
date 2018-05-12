@@ -5,7 +5,7 @@ import hashlib
 import shortuuid
 
 
-class DataBackend():
+class DataBackend:
 
     NAME = 'null'
 
@@ -19,9 +19,11 @@ class DataBackend():
         self.block_size = config.get('blockSize', types=int)
         self._read_list = []
 
-    def _data(self, block):
+    @staticmethod
+    def _data(block):
         return (block.uid * (block.size // len(block.uid) + 1))[:block.size].encode('ascii')
 
+    # noinspection PyMethodMayBeStatic
     def _uid(self):
         suuid = shortuuid.uuid()
         hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
