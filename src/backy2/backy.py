@@ -285,7 +285,7 @@ class Backy:
             self.meta_backend.set_version_valid(version_uid)
         else:
             # version is set invalid by set_blocks_invalid.
-            logger.error('Marked version {} invalid because it has errors: {}'.format(version_uid))
+            logger.error('Marked version {} invalid because it has errors.'.format(version_uid))
 
         if source:
             io.close()  # wait for all io
