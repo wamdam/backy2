@@ -22,7 +22,7 @@ class IO:
         self._read_executor = None
 
     def open_r(self, io_name):
-        self._read_executor = ThreadPoolExecutor(max_workers=self.simultaneous_reads, thread_name_prefix='IO-Reader-')
+        self._read_executor = ThreadPoolExecutor(max_workers=self.simultaneous_reads, thread_name_prefix='IO-Reader')
         self._read_futures = []
         self._read_semaphore = BoundedSemaphore(self.simultaneous_reads + self.READ_QUEUE_LENGTH)
 
