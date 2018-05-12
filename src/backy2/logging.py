@@ -31,6 +31,8 @@ def init_logging(logfile, console_level):  # pragma: no cover
     logging.getLogger('boto3').setLevel(logging.WARN)
     logging.getLogger('botocore').setLevel(logging.WARN)
     logging.getLogger('nose').setLevel(logging.WARN)
+    # silence b2
+    logging.getLogger('b2').setLevel(logging.WARN)
 
     logger.info('$ ' + ' '.join(sys.argv))
 
