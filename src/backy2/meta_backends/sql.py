@@ -80,7 +80,7 @@ class Version(Base):
     tags = sqlalchemy.orm.relationship(
         'Tag',
         backref='version',
-        cascade='all, delete-orphan',  # i.e. delete when version is deleted
+        passive_deletes=True,
     )
 
     blocks = sqlalchemy.orm.relationship(
@@ -97,7 +97,7 @@ class Version(Base):
 
 class Tag(Base):
     __tablename__ = 'tags'
-    version_uid = Column(VersionUid, ForeignKey('versions.uid'), primary_key=True, nullable=False)
+    version_uid = Column(VersionUid, ForeignKey('versions.uid', ondelete='CASCADE'), primary_key=True, nullable=False)
     name = Column(String, nullable=False, primary_key=True)
 
     def __repr__(self):
@@ -386,12 +386,6 @@ class MetaBackend(_MetaBackend):
                 )
                 self.session.add(deleted_block)
         affected_blocks.delete()
-        # TODO: This is a sqlalchemy stupidity. cascade only works if the version
-        # is deleted via session.delete() which first loads all objects into
-        # memory. A session.query().filter().delete does not work with cascade.
-        # Please see http://stackoverflow.com/questions/5033547/sqlalchemy-cascade-delete/12801654#12801654
-        # for reference.
-        self.session.query(Tag).filter_by(version_uid=version_uid).delete()
         self.session.query(Version).filter_by(uid=version_uid).delete()
         self.session.commit()
         return num_blocks
