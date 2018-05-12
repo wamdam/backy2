@@ -549,6 +549,7 @@ class MetaBackend(_MetaBackend):
                 pass  # does not exist
             else:
                 raise FileExistsError('Version {} already exists and cannot be imported.'.format(version_dict['uid']))
+
             version = Version(
                 uid=version_dict['uid'],
                 date=datetime.datetime.strptime(version_dict['date'], '%Y-%m-%dT%H:%M:%S'),
@@ -560,46 +561,19 @@ class MetaBackend(_MetaBackend):
                 protected=version_dict['protected'],
                 )
             self.session.add(version)
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            # SQLAlchemy Bug
-            # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
-            #
-            # """
-            # Within the same class, the order is indeed determined by the order
-            # that add was called. However, you may see different orderings in the
-            # INSERTs between different classes. If you add object a of type A and
-            # later add object b of type B, but a turns out to have a foreign key
-            # to b, you'll see an INSERT for b before the INSERT for a.
-            # """
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            self.session.flush()
+
+            for block_dict in version_dict['blocks']:
+                block_dict['version_uid'] = version.uid
+                block_dict['date'] = datetime.datetime.strptime(block_dict['date'], '%Y-%m-%dT%H:%M:%S')
+            self.session.bulk_insert_mappings(Block, version_dict['blocks'])
+
+            for tag_dict in version_dict['tags']:
+                tag_dict['version_uid'] = version.uid
+            self.session.bulk_insert_mappings(Tag, version_dict['tags'])
+
             self.session.commit()
-            # and because of this bug we must also try/except here instead of
-            # simply leaving this to the database's transaction handling.
-            try:
-                for block_dict in version_dict['blocks']:
-                    block = Block(
-                        uid=block_dict['uid'],
-                        version_uid=version_dict['uid'],
-                        id=block_dict['id'],
-                        date=datetime.datetime.strptime(block_dict['date'], '%Y-%m-%dT%H:%M:%S'),
-                        checksum=block_dict['checksum'],
-                        size=block_dict['size'],
-                        valid=block_dict['valid'],
-                    )
-                    self.session.add(block)
-                for tag_dict in version_dict['tags']:
-                    tag = Tag(
-                        version_uid=version_dict['uid'],
-                        name=tag_dict['name'],
-                    )
-                    self.session.add(tag)
-            except:  # see above
-                self.rm_version(version_dict['uid'])
-            finally:
-                self.session.commit()
 
     def close(self):
         self.session.commit()
         self.session.close()
-
-
