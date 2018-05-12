@@ -88,7 +88,7 @@ class Backy:
             if not size:
                 raise InternalError('Size needs to be specified if there is no base version.')
 
-        num_blocks = math.ceil(size / self.block_size)
+        num_blocks = int(math.ceil(size / self.block_size))
         # we always start with invalid versions, then validate them after backup
         version = self.meta_backend.set_version(
             version_name=name,
@@ -440,7 +440,7 @@ class Backy:
         io.open_r(source)
         source_size = io.size()
 
-        num_blocks = math.ceil(source_size / self.block_size)
+        num_blocks = int(math.ceil(source_size / self.block_size))
 
         if hints is not None and len(hints) > 0:
             # Sanity check: check hints for validity, i.e. too high offsets, ...
