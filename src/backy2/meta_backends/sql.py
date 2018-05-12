@@ -87,8 +87,7 @@ class Version(Base):
         'Block',
         backref='version',
         order_by='asc(Block.id)',
-        cascade='',
-        passive_deletes=True
+        viewonly=True,
     )
 
     def __repr__(self):
