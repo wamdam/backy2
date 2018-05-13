@@ -51,6 +51,7 @@ class SmokeTestCase:
         old_size = 0
         initdb = True
         image_filename = os.path.join(testpath, 'image')
+        block_size = random.sample({512, 1024, 2048, 4096}, 1)[0]
         for i in range(100):
             print('Run {}'.format(i+1))
             hints = []
@@ -92,7 +93,7 @@ class SmokeTestCase:
             with open(os.path.join(testpath, 'hints'), 'w') as f:
                     f.write(json.dumps(hints))
 
-            backy = self.backyOpen(initdb=initdb)
+            backy = self.backyOpen(initdb=initdb, block_size=block_size)
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
                 version_uid = backy.backup(

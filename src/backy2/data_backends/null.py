@@ -16,6 +16,7 @@ class DataBackend:
     PACKAGE_PREFIX = 'backy2.data_backends'
 
     def __init__(self, config):
+        # FIXME: This won't work when something other than the default block size is used
         self.block_size = config.get('blockSize', types=int)
         self._read_list = []
 

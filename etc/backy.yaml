@@ -5,8 +5,11 @@ configurationVersion: '1.0.0'
 # If you also need DEBUG information, please start backy with '-v'.
 logFile: /var/log/backy.log
 
-# Default block size. 4MB are recommended.
-# DO NOT CHANGE WHEN BACKUPS EXIST!
+# Default block size. 4MB are recommended for backup of Ceph RBD images.
+# The block size can be changed on the command line on a version by version basis, but be aware that this will affect
+# deduplication and increase the space usage. One possible use case for different block sizes would be backing up LVM
+# volumes and Ceph images with the same Backy2 installation. While for Ceph 4MB is usually the best size, LVM volume
+# might profit from a smaller block size.
 blockSize: 4194304
 
 # Hash function to use. Use a large one to avoid collisions.

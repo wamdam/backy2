@@ -9,11 +9,11 @@ from urllib import parse
 
 from dateutil.relativedelta import relativedelta
 
-from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange
+from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
 from backy2.locking import Locking
 from backy2.locking import find_other_procs
 from backy2.logging import logger
-from backy2.utils import data_hexdigest, notify
+from backy2.utils import data_hexdigest, notify, parametrized_hash_function
 
 
 def blocks_from_hints(hints, block_size):
@@ -45,25 +45,43 @@ class Backy:
     """
     """
 
-    def __init__(self, meta_backend, data_backend, config, block_size=None,
-            hash_function=None, lock_dir=None, process_name='backy2',
-            initdb=False, _destroydb=False, _migratedb=True):
-        if block_size is None:
-            block_size = 1024*4096  # 4MB
-        if hash_function is None:
-            import hashlib
-            hash_function = hashlib.sha512
-        if initdb:
-            meta_backend.initdb(_destroydb=_destroydb,_migratedb=_migratedb)
-        self.meta_backend = meta_backend.open(_migratedb=_migratedb)
-        self.data_backend = data_backend
-        self.config = config
-        self.block_size = block_size
-        self.hash_function = hash_function
-        self.locking = Locking(lock_dir)
-        self.process_name = process_name
+    def __init__(self, config, block_size=None, initdb=False, _destroydb=False, _migratedb=True):
 
-        notify(process_name)  # i.e. set process name without notification
+        self.config = config
+
+        if block_size is None:
+            self.block_size = config.get('blockSize', types=int)
+        else:
+            self.block_size = block_size
+
+        self.hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
+        self.locking = Locking(config.get('lockDirectory', types=str))
+        self.process_name = config.get('processName', types=str)
+
+        from backy2.data_backends import DataBackend
+        name = config.get('dataBackend.type', types=str)
+        try:
+            DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
+        except ImportError:
+            raise ConfigurationError('Data backend type {} not found.'.format(name))
+        else:
+            self.data_backend = DataBackendLib.DataBackend(config)
+
+        from backy2.meta_backends import MetaBackend
+        name = config.get('metaBackend.type', types=str)
+        try:
+            MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
+        except ImportError:
+            raise ConfigurationError('Meta backend type {} not found.'.format(name))
+        else:
+            meta_backend = MetaBackendLib.MetaBackend(config)
+
+        if initdb:
+            meta_backend.initdb(_destroydb=_destroydb, _migratedb=_migratedb)
+
+        self.meta_backend = meta_backend.open(_migratedb=_migratedb)
+
+        notify(self.process_name)  # i.e. set process name without notification
 
         if not self.locking.lock('backy'):
             raise AlreadyLocked('Another process is already running.')

@@ -2,13 +2,11 @@
 # -*- encoding: utf-8 -*-
 import concurrent
 import hashlib
-import importlib
 import json
 import os
 import setproctitle
 import sys
 from ast import literal_eval
-from functools import partial
 from threading import Lock
 from time import time
 
@@ -52,43 +50,6 @@ def data_hexdigest(hash_function, data):
     hash.update(data)
     return hash.hexdigest()
 
-def backy_from_config(config):
-    """ Create a partial backy class from a given Config object
-    """
-    block_size = config.get('blockSize', types=int)
-    hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
-    lock_dir = config.get('lockDirectory', types=str)
-    process_name = config.get('processName', types=str)
-
-    from backy2.data_backends import DataBackend
-    name = config.get('dataBackend.type', types=str)
-    try:
-        DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
-    except ImportError:
-        raise ConfigurationError('Data backend type {} not found.'.format(name))
-    else:
-        data_backend = DataBackendLib.DataBackend(config)
-
-    from backy2.meta_backends import MetaBackend
-    name = config.get('metaBackend.type', types=str)
-    try:
-        MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
-    except ImportError:
-        raise ConfigurationError('Meta backend type {} not found.'.format(name))
-    else:
-        meta_backend = MetaBackendLib.MetaBackend(config)
-
-    from backy2.backy import Backy
-    backy = partial(Backy,
-                    meta_backend=meta_backend,
-                    data_backend=data_backend,
-                    config=config,
-                    block_size=block_size,
-                    hash_function=hash_function,
-                    lock_dir=lock_dir,
-                    process_name=process_name,
-            )
-    return backy
 
 # old_msg is used as a stateful storage between calls
 def notify(process_name, msg='', old_msg = ''):

@@ -12,10 +12,11 @@ import pkg_resources
 from prettytable import PrettyTable
 
 import backy2.exception
+from backy2.backy import Backy
 from backy2.config import Config
 from backy2.logging import logger, init_logging
 from backy2.meta_backends.sql import Version
-from backy2.utils import hints_from_rbd_diff, backy_from_config, parametrized_hash_function
+from backy2.utils import hints_from_rbd_diff, parametrized_hash_function
 
 __version__ = pkg_resources.get_distribution('backy2').version
 
@@ -26,10 +27,9 @@ class Commands:
     def __init__(self, machine_output, config):
         self.machine_output = machine_output
         self.config = config
-        self.backy = backy_from_config(config)
 
-    def backup(self, name, snapshot_name, source, rbd, from_version, tag=None):
-        backy = self.backy()
+    def backup(self, name, snapshot_name, source, rbd, from_version, block_size=None, tag=None):
+        backy = Backy(self.config, block_size=block_size)
         try:
             hints = None
             if rbd:
@@ -42,7 +42,7 @@ class Commands:
             backy.close()
 
     def restore(self, version_uid, target, sparse, force):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             backy.restore(version_uid, target, sparse, force)
         except Exception:
@@ -51,7 +51,7 @@ class Commands:
             backy.close()
 
     def protect(self, version_uid):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             backy.protect(version_uid)
         except backy2.exception.NoChange:
@@ -62,7 +62,7 @@ class Commands:
             backy.close()
 
     def unprotect(self, version_uid):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             backy.unprotect(version_uid)
         except backy2.exception.NoChange:
@@ -72,7 +72,7 @@ class Commands:
 
     def rm(self, version_uids, force):
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             for version_uid in version_uids:
                 backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
@@ -84,7 +84,7 @@ class Commands:
     def scrub(self, version_uid, source, percentile):
         if percentile:
             percentile = int(percentile)
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             backy.scrub(version_uid, source, percentile)
         except Exception:
@@ -157,7 +157,7 @@ class Commands:
         print(tbl)
 
     def ls(self, name, snapshot_name, tag, include_blocks):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             versions = backy.ls()
 
@@ -185,7 +185,7 @@ class Commands:
         """ Output difference between two version in blocks.
         """
         # TODO: Feel free to create a default diff format.
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             blocks1 = backy.ls_version(version_uid1)
             blocks2 = backy.ls_version(version_uid2)
@@ -221,7 +221,7 @@ class Commands:
     def stats(self, version_uid, limit=None):
         if limit:
             limit = int(limit)
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             stats = backy.stats(version_uid, limit)
 
@@ -239,7 +239,7 @@ class Commands:
             backy.close()
 
     def cleanup(self, full, prefix=None):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             if full:
                 backy.cleanup_full(prefix)
@@ -251,7 +251,7 @@ class Commands:
             backy.close()
 
     def export(self, version_uid, filename='-'):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             if filename == '-':
                 with StringIO() as f:
@@ -268,7 +268,7 @@ class Commands:
     def nbd(self, version_uid, bind_address, bind_port, read_only):
         from backy2.nbd.nbdserver import Server as NbdServer
         from backy2.nbd.nbd import BackyStore
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
             cache_dir = self.config.get('nbd.cacheDirectory', types=str)
@@ -288,7 +288,7 @@ class Commands:
             backy.close()
 
     def import_(self, filename='-'):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             if filename=='-':
                 backy.import_(sys.stdin)
@@ -302,7 +302,7 @@ class Commands:
 
     def add_tag(self, version_uid, name):
         try:
-            backy = self.backy()
+            backy = Backy(self.config)
             backy.add_tag(version_uid, name)
         except backy2.exception.NoChange:
             logger.warn('Version {} already tagged with {}.'.format(version_uid, name))
@@ -312,7 +312,7 @@ class Commands:
             backy.close()
 
     def remove_tag(self, version_uid, name):
-        backy = self.backy()
+        backy = Backy(self.config)
         try:
             backy.remove_tag(version_uid, name)
         except backy2.exception.NoChange:
@@ -361,9 +361,9 @@ def main():
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the rbd snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
-    p.add_argument(
-        '-t', '--tag', action='append',  dest='tag', default=None,
-        help='Use a specific tag for the target backup version-uid')
+    p.add_argument('-t', '--tag', action='append',  dest='tag', default=None,
+                   help='Use a specific tag for the target backup version-uid')
+    p.add_argument('--block-size', help='Block size to use for this backup in bytes')
     p.set_defaults(func='backup')
 
     # RESTORE

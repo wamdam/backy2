@@ -6,12 +6,12 @@ import shutil
 import string
 from binascii import hexlify
 
+from backy2.backy import Backy
 from backy2.config import Config
 from backy2.data_backends import DataBackend
 from backy2.exception import ConfigurationError
 from backy2.logging import init_logging
 from backy2.meta_backends import MetaBackend
-from backy2.utils import backy_from_config
 
 
 class TestCase():
@@ -90,6 +90,6 @@ class BackyTestCase(TestCase):
     def tearDown(self):
         super().tearDown()
 
-    def backyOpen(self, initdb=False):
-        self.backy = backy_from_config(self.config)(initdb=initdb, _destroydb=initdb, _migratedb=False)
+    def backyOpen(self, initdb=False, block_size=None):
+        self.backy = Backy(self.config, initdb=initdb, _destroydb=initdb, _migratedb=False, block_size=block_size)
         return self.backy
