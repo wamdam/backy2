@@ -323,7 +323,7 @@ class Commands:
             backy.close()
 
     def initdb(self):
-        self.backy(initdb=True)
+        Backy(self.config, initdb=True)
 
 
 def main():
