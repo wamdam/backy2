@@ -3,6 +3,7 @@
 
 import logging
 import sys
+from logging.handlers import WatchedFileHandler
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ def init_logging(logfile, console_level):  # pragma: no cover
     handlers.append(console)
 
     if not logfile is None:
-        logfile = logging.FileHandler(logfile)
+        logfile = WatchedFileHandler(logfile)
         logfile.setLevel(logging.INFO)
         logfile.setFormatter(logging.Formatter('%(asctime)s [%(process)d] %(message)s'))
         handlers.append(logfile)
