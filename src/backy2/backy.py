@@ -10,8 +10,6 @@ from urllib import parse
 from dateutil.relativedelta import relativedelta
 
 from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
-from backy2.locking import Locking
-from backy2.locking import find_other_procs
 from backy2.logging import logger
 from backy2.utils import data_hexdigest, notify, parametrized_hash_function
 
@@ -55,7 +53,6 @@ class Backy:
             self.block_size = block_size
 
         self.hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
-        self.locking = Locking(config.get('lockDirectory', types=str))
         self.process_name = config.get('processName', types=str)
 
         from backy2.data_backends import DataBackend
@@ -80,12 +77,12 @@ class Backy:
             meta_backend.initdb(_destroydb=_destroydb, _migratedb=_migratedb)
 
         self.meta_backend = meta_backend.open(_migratedb=_migratedb)
+        self.locking = self.meta_backend.locking()
 
         notify(self.process_name)  # i.e. set process name without notification
 
-        if not self.locking.lock('backy'):
+        if self.locking.is_locked():
             raise AlreadyLocked('Another process is already running.')
-        self.locking.unlock('backy')
 
     def _prepare_version(self, name, snapshot_name, size=None, from_version_uid=None):
         """ Prepares the metadata for a new version.
@@ -114,7 +111,7 @@ class Backy:
             size=size,
             block_size=self.block_size,
             valid=False)
-        if not self.locking.lock(version.uid):
+        if not self.locking.lock(lock_name=version.uid, reason='Preparing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
         for id in range(num_blocks):
             if old_blocks:
@@ -159,7 +156,7 @@ class Backy:
             notify(self.process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid, (id + 1) / num_blocks * 100))
         self.meta_backend._commit()
         notify(self.process_name)
-        self.locking.unlock(version.uid)
+        self.locking.unlock(lock_name=version.uid)
         return version
 
     def clone_version(self, name, snapshot_name, from_version_uid):
@@ -203,7 +200,7 @@ class Backy:
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
         """
-        if not self.locking.lock(version_uid):
+        if not self.locking.lock(lock_name=version_uid, reason='Scrubbing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid))
         version = self.meta_backend.get_version(version_uid)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
@@ -307,12 +304,12 @@ class Backy:
 
         if source:
             io.close()  # wait for all io
-        self.locking.unlock(version_uid)
+        self.locking.unlock(lock_name=version_uid)
         notify(self.process_name)
         return state
 
     def restore(self, version_uid, target, sparse=False, force=False):
-        if not self.locking.lock(version_uid):
+        if not self.locking.lock(lock_name=version_uid, reason='Restoring version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid))
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
@@ -369,7 +366,7 @@ class Backy:
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
         io.close()
-        self.locking.unlock(version_uid)
+        self.locking.unlock(lock_name=version_uid)
 
     def protect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
@@ -384,7 +381,7 @@ class Backy:
         self.meta_backend.unprotect_version(version_uid)
 
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
-        if not self.locking.lock(version_uid):
+        if not self.locking.lock(lock_name=version_uid, reason='Removing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid))
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
@@ -400,7 +397,7 @@ class Backy:
             version_uid,
             num_blocks,
             ))
-        self.locking.unlock(version_uid)
+        self.locking.unlock(lock_name=version_uid)
 
     def _generate_auto_tags(self, version_name):
         """ Generates automatic tag suggestions by looking up versions with
@@ -473,7 +470,7 @@ class Backy:
 
         version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
 
-        if not self.locking.lock(version.uid):
+        if not self.locking.lock(lock_name=version.uid, reason='Backup'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
 
         blocks = self.meta_backend.get_blocks_by_version(version.uid)
@@ -606,13 +603,13 @@ class Backy:
             duration_seconds=int(time.time() - stats['start_time']),
             )
         logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags)))
-        self.locking.unlock(version.uid)
+        self.locking.unlock(lock_name=version.uid)
         return version.uid
 
 
     def cleanup_fast(self, dt=3600):
         """ Delete unreferenced blob UIDs """
-        if not self.locking.lock('backy-cleanup-fast'):
+        if not self.locking.lock(lock_name='cleanup-fast', reason='Cleanup fast'):
             raise AlreadyLocked('Another backy cleanup is running.')
 
         for uid_list in self.meta_backend.get_delete_candidates(dt):
@@ -620,16 +617,13 @@ class Backy:
             no_del_uids = self.data_backend.rm_many(uid_list)
             if no_del_uids:
                 logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
-        self.locking.unlock('backy-cleanup-fast')
+        self.locking.unlock(lock_name='cleanup-fast')
 
     def cleanup_full(self, prefix=None):
         """ Delete unreferenced blob UIDs starting with <prefix> """
         # in this mode, we compare all existing uids in data and meta.
         # make sure, no other backy will start
-        if not self.locking.lock('backy'):
-            raise AlreadyLocked('Other backy instances are running.')
-        # make sure, no other backy is running
-        if len(find_other_procs(self.process_name)) > 1:
+        if not self.locking.lock(reason='Cleanup full'):
             raise AlreadyLocked('Other backy instances are running.')
         active_blob_uids = set(self.data_backend.get_all_blob_uids(prefix))
         active_block_uids = set(self.meta_backend.get_all_block_uids(prefix))
@@ -641,7 +635,7 @@ class Backy:
             except FileNotFoundError:
                 continue
         logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
-        self.locking.unlock('backy')
+        self.locking.unlock()
 
     def add_tag(self, version_uid, name):
         self.meta_backend.add_tag(version_uid, name)

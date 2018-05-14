@@ -70,7 +70,7 @@ class BackendTestCase(TestCase):
                 raise ConfigurationError('Meta backend type {} not found.'.format(name))
             else:
                 meta_backend = MetaBackendLib.MetaBackend(self.config)
-                meta_backend.initdb(_migratedb=False)
+                meta_backend.initdb(_migratedb=False, _destroydb=True)
                 self.meta_backend = meta_backend.open(_migratedb=False)
 
     def tearDown(self):

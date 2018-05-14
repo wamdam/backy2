@@ -3,8 +3,10 @@
 import datetime
 import json
 import os
+import platform
 import sqlite3
 import time
+import uuid
 from binascii import hexlify, unhexlify
 from collections import namedtuple
 
@@ -12,11 +14,12 @@ import sqlalchemy
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import DateTime, TypeDecorator
 
-from backy2.exception import InputDataError
+from backy2.exception import InputDataError, InternalError
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 
@@ -140,7 +143,6 @@ class Block(Base):
             valid=self.valid,
         )
 
-
     def __repr__(self):
        return "<Block(id='%s', uid='%s', version_uid='%s')>" % (
                             self.id, self.uid, self.version_uid)
@@ -163,6 +165,18 @@ class DeletedBlock(Base):
                             self.id, self.uid)
 
 
+class Lock(Base):
+    __tablename__ = 'locks'
+    host = Column(String, nullable=False, primary_key=True)
+    process_id = Column(String, nullable=False, primary_key=True)
+    lock_name = Column(String, nullable=False, primary_key=True)
+    reason = Column(String, nullable=False)
+    date = Column("date", DateTime , default=func.now(), nullable=False)
+
+    def __repr__(self):
+        return "<Lock(host='%s' process_id='%s' lock_name='%s')>" % (
+            self.host, self.process_id, self.lock_name)
+
 class MetaBackend(_MetaBackend):
     """ Stores meta data in an sql database """
 
@@ -170,11 +184,13 @@ class MetaBackend(_MetaBackend):
 
     FLUSH_EVERY_N_BLOCKS = 1000
 
+    _locking = None
+
     def __init__(self, config):
         _MetaBackend.__init__(self)
 
         our_config = config.get('metaBackend.{}'.format(self.NAME), types=dict)
-        self.engine = sqlalchemy.create_engine(config.get_from_dict(our_config, 'engine', types=str))
+        self._engine = sqlalchemy.create_engine(config.get_from_dict(our_config, 'engine', types=str))
 
     def open(self, _migratedb=True):
         if _migratedb:
@@ -182,7 +198,7 @@ class MetaBackend(_MetaBackend):
                 self.migrate_db()
             #except sqlalchemy.exc.OperationalError:
             except:
-                raise RuntimeError('Invalid database ({}). Maybe you need to run initdb first?'.format(self.engine.url))
+                raise RuntimeError('Invalid database ({}). Maybe you need to run initdb first?'.format(self._engine.url))
 
         # SQLite 3 supports checking of foreign keys but it needs to be enabled explicitly!
         # See: http://docs.sqlalchemy.org/en/latest/dialects/sqlite.html#foreign-key-support
@@ -193,8 +209,9 @@ class MetaBackend(_MetaBackend):
                 cursor.execute("PRAGMA foreign_keys=ON")
                 cursor.close()
 
-        Session = sessionmaker(bind=self.engine)
-        self.session = Session()
+        Session = sessionmaker(bind=self._engine)
+        self._session = Session()
+        self._locking = MetaBackendLocking(self._session)
         self._flush_block_counter = 0
         return self
 
@@ -204,7 +221,7 @@ class MetaBackend(_MetaBackend):
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-        with self.engine.begin() as connection:
+        with self._engine.begin() as connection:
             alembic_cfg.attributes['connection'] = connection
             #command.upgrade(alembic_cfg, "head", sql=True)
             command.upgrade(alembic_cfg, "head")
@@ -212,25 +229,25 @@ class MetaBackend(_MetaBackend):
     def initdb(self, _destroydb=False, _migratedb=True):
         # This is dangerous and is only used by the test suite to get a clean slate
         if _destroydb:
-            Base.metadata.drop_all(self.engine)
+            Base.metadata.drop_all(self._engine)
 
         # this will create all tables. It will NOT delete any tables or data.
         # Instead, it will raise when something can't be created.
         # TODO: explicitly check if the database is empty
-        Base.metadata.create_all(self.engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
+        Base.metadata.create_all(self._engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
 
         # FIXME: fix to use supplied config
         if _migratedb:
             from alembic.config import Config
             from alembic import command
             alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-            with self.engine.begin() as connection:
+            with self._engine.begin() as connection:
                 alembic_cfg.attributes['connection'] = connection
                 # mark the version table, "stamping" it with the most recent rev:
                 command.stamp(alembic_cfg, "head")
 
     def _commit(self):
-        self.session.commit()
+        self._session.commit()
 
     def set_version(self, version_name, snapshot_name, size, block_size, valid=False, protected=False):
         version = Version(
@@ -241,8 +258,8 @@ class MetaBackend(_MetaBackend):
             valid=valid,
             protected=protected,
             )
-        self.session.add(version)
-        self.session.commit()
+        self._session.add(version)
+        self._session.commit()
         return version
 
     def set_stats(self, version_uid, version_name, version_snapshot_name, version_size, version_block_size, bytes_read,
@@ -264,22 +281,22 @@ class MetaBackend(_MetaBackend):
             blocks_sparse=blocks_sparse,
             duration_seconds=duration_seconds,
             )
-        self.session.add(stats)
-        self.session.commit()
+        self._session.add(stats)
+        self._session.commit()
 
     def get_stats(self, version_uid=None, limit=None):
         """ gets the <limit> newest entries """
         if version_uid:
             if limit is not None and limit < 1:
                 return []
-            stats = self.session.query(Stats).filter_by(version_uid=version_uid).all()
+            stats = self._session.query(Stats).filter_by(version_uid=version_uid).all()
             if stats is None:
                 raise KeyError('Statistics for version {} not found.'.format(version_uid))
             return stats
         else:
             if limit == 0:
                 return []
-            _stats = self.session.query(Stats).order_by(desc(Stats.date))
+            _stats = self._session.query(Stats).order_by(desc(Stats.date))
             if limit:
                 _stats = _stats.limit(limit)
             return reversed(_stats.all())
@@ -287,7 +304,7 @@ class MetaBackend(_MetaBackend):
     def set_version_invalid(self, uid):
         version = self.get_version(uid)
         version.valid = False
-        self.session.commit()
+        self._session.commit()
         logger.info('Marked version invalid (UID {})'.format(
             uid,
             ))
@@ -295,13 +312,13 @@ class MetaBackend(_MetaBackend):
     def set_version_valid(self, uid):
         version = self.get_version(uid)
         version.valid = True
-        self.session.commit()
+        self._session.commit()
         logger.debug('Marked version valid (UID {})'.format(
             uid,
             ))
 
     def get_version(self, uid):
-        version = self.session.query(Version).filter_by(uid=uid).first()
+        version = self._session.query(Version).filter_by(uid=uid).first()
         if version is None:
             raise KeyError('Version {} not found.'.format(uid))
         return version
@@ -309,7 +326,7 @@ class MetaBackend(_MetaBackend):
     def protect_version(self, uid):
         version = self.get_version(uid)
         version.protected = True
-        self.session.commit()
+        self._session.commit()
         logger.debug('Marked version protected (UID {})'.format(
             uid,
             ))
@@ -317,13 +334,13 @@ class MetaBackend(_MetaBackend):
     def unprotect_version(self, uid):
         version = self.get_version(uid)
         version.protected = False
-        self.session.commit()
+        self._session.commit()
         logger.debug('Marked version unprotected (UID {})'.format(
             uid,
             ))
 
     def get_versions(self):
-        return self.session.query(Version).order_by(Version.name, Version.date).all()
+        return self._session.query(Version).order_by(Version.name, Version.date).all()
 
     def add_tag(self, version_uid, name):
         """ Add a tag to a version_uid, do nothing if the tag already exists.
@@ -332,11 +349,11 @@ class MetaBackend(_MetaBackend):
             version_uid=version_uid,
             name=name,
             )
-        self.session.add(tag)
+        self._session.add(tag)
 
     def remove_tag(self, version_uid, name):
-        self.session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
-        self.session.commit()
+        self._session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
+        self._session.commit()
 
     def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):
         """ Upsert a block (or insert only when _upsert is False - this is only
@@ -344,7 +361,7 @@ class MetaBackend(_MetaBackend):
         """
         block = None
         if _upsert:
-            block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
+            block = self._session.query(Block).filter_by(id=id, version_uid=version_uid).first()
 
         if block:
             block.uid = block_uid
@@ -361,21 +378,21 @@ class MetaBackend(_MetaBackend):
                 size=size,
                 valid=valid
                 )
-            self.session.add(block)
+            self._session.add(block)
         self._flush_block_counter += 1
         if self._flush_block_counter % self.FLUSH_EVERY_N_BLOCKS == 0:
             t1 = time.time()
-            self.session.flush()  # saves some ram
+            self._session.flush()  # saves some ram
             t2 = time.time()
             logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
         if _commit:
-            self.session.commit()
+            self._session.commit()
 
     def set_blocks_invalid(self, block_uid, checksum):
-        _affected_version_uids = self.session.query(distinct(Block.version_uid)).filter_by(uid=block_uid, checksum=checksum).all()
+        _affected_version_uids = self._session.query(distinct(Block.version_uid)).filter_by(uid=block_uid, checksum=checksum).all()
         affected_version_uids = [v[0] for v in _affected_version_uids]
-        self.session.query(Block).filter_by(uid=block_uid, checksum=checksum).update({'valid': False}, synchronize_session='fetch')
-        self.session.commit()
+        self._session.query(Block).filter_by(uid=block_uid, checksum=checksum).update({'valid': False}, synchronize_session='fetch')
+        self._session.commit()
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             block_uid,
             checksum,
@@ -386,16 +403,16 @@ class MetaBackend(_MetaBackend):
         return affected_version_uids
 
     def get_block(self, block_uid):
-        return self.session.query(Block).filter_by(uid=block_uid).first()
+        return self._session.query(Block).filter_by(uid=block_uid).first()
 
     def get_block_by_checksum(self, checksum):
-        return self.session.query(Block).filter_by(checksum=checksum, valid=True).first()
+        return self._session.query(Block).filter_by(checksum=checksum, valid=True).first()
 
     def get_blocks_by_version(self, version_uid):
-        return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all()
+        return self._session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all()
 
     def rm_version(self, version_uid):
-        affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
+        affected_blocks = self._session.query(Block).filter_by(version_uid=version_uid)
         num_blocks = affected_blocks.count()
         for affected_block in affected_blocks:
             if affected_block.uid:  # uid == None means sparse
@@ -403,12 +420,12 @@ class MetaBackend(_MetaBackend):
                     uid=affected_block.uid,
                     size=affected_block.size,
                 )
-                self.session.add(deleted_block)
+                self._session.add(deleted_block)
         affected_blocks.delete()
         # The following delete statement will cascade this delete to the blocks table,
         # but we've already moved the blocks to the deleted blocks table for later inspection.
-        self.session.query(Version).filter_by(uid=version_uid).delete()
-        self.session.commit()
+        self._session.query(Version).filter_by(uid=version_uid).delete()
+        self._session.commit()
         return num_blocks
 
     def get_delete_candidates(self, dt=3600):
@@ -416,7 +433,7 @@ class MetaBackend(_MetaBackend):
         _stat_remove_from_delete_candidates = 0
         _stat_delete_candidates = 0
         while True:
-            delete_candidates = self.session.query(
+            delete_candidates = self._session.query(
                 DeletedBlock
             ).filter(
                 DeletedBlock.time < (inttime() - dt)
@@ -434,7 +451,7 @@ class MetaBackend(_MetaBackend):
                         _stat_delete_candidates,
                         ))
 
-                block = self.session.query(
+                block = self._session.query(
                     Block
                 ).filter(
                     Block.uid == candidate.uid
@@ -448,7 +465,7 @@ class MetaBackend(_MetaBackend):
 
             if _remove_from_delete_candidate_uids:
                 logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
-                self.session.query(
+                self._session.query(
                     DeletedBlock
                 ).filter(
                     DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
@@ -456,7 +473,7 @@ class MetaBackend(_MetaBackend):
 
             if _delete_candidates:
                 logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
-                self.session.query(
+                self._session.query(
                     DeletedBlock
                 ).filter(
                     DeletedBlock.uid.in_(_delete_candidates)
@@ -470,9 +487,9 @@ class MetaBackend(_MetaBackend):
 
     def get_all_block_uids(self, prefix=None):
         if prefix:
-            rows = self.session.query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
+            rows = self._session.query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
         else:
-            rows = self.session.query(distinct(Block.uid)).all()
+            rows = self._session.query(distinct(Block.uid)).all()
         return [b[0] for b in rows]
 
     # Based on: https://stackoverflow.com/questions/5022066/how-to-serialize-sqlalchemy-result-to-json/7032311,
@@ -566,20 +583,76 @@ class MetaBackend(_MetaBackend):
                 valid=version_dict['valid'],
                 protected=version_dict['protected'],
                 )
-            self.session.add(version)
-            self.session.flush()
+            self._session.add(version)
+            self._session.flush()
 
             for block_dict in version_dict['blocks']:
                 block_dict['version_uid'] = version.uid
                 block_dict['date'] = datetime.datetime.strptime(block_dict['date'], '%Y-%m-%dT%H:%M:%S')
-            self.session.bulk_insert_mappings(Block, version_dict['blocks'])
+            self._session.bulk_insert_mappings(Block, version_dict['blocks'])
 
             for tag_dict in version_dict['tags']:
                 tag_dict['version_uid'] = version.uid
-            self.session.bulk_insert_mappings(Tag, version_dict['tags'])
+            self._session.bulk_insert_mappings(Tag, version_dict['tags'])
 
-            self.session.commit()
+            self._session.commit()
+
+    def locking(self):
+        return self._locking
 
     def close(self):
-        self.session.commit()
-        self.session.close()
+        self._session.commit()
+        self._locking.unlock_all()
+        self._locking = None
+        self._session.close()
+
+class MetaBackendLocking:
+
+    GLOBAL_LOCK = 'global'
+
+    def __init__(self, session):
+        self._session = session
+        self._host = platform.node()
+        self._uuid = uuid.uuid1().hex
+        self._locks = {}
+
+    def lock(self, lock_name=GLOBAL_LOCK, reason=None):
+        if lock_name in self._locks:
+            raise InternalError('Attempt to acquire lock "{}" twice'.format(lock_name))
+
+        lock = Lock(
+            host=self._host,
+            process_id=self._uuid,
+            lock_name=lock_name,
+            reason=reason,
+        )
+        try:
+            self._session.add(lock)
+            self._session.commit()
+        except SQLAlchemyError:
+            self._session.rollback()
+            return False
+        except Exception:
+            raise
+        else:
+            self._locks[lock_name] = lock
+            return True
+
+    def is_locked(self, lock_name=GLOBAL_LOCK):
+        locks = self._session.query(Lock).filter_by(host=self._host, lock_name=lock_name, process_id=self._uuid).all()
+        return len(locks) > 0
+
+    def unlock(self, lock_name=GLOBAL_LOCK):
+        if lock_name not in self._locks:
+            raise InternalError('Attempt to release lock "{}" even though it isn\'t held'.format(lock_name))
+        lock = self._locks[lock_name]
+        self._session.delete(lock)
+        self._session.commit()
+        del self._locks[lock_name]
+
+    def unlock_all(self):
+        for lock_name, lock in self._locks.items():
+            logger.error('Lock {} not released correctly, releasing it now.'.format(lock))
+            self._session.delete(lock)
+            self._session.commit()
+        self._locks = {}

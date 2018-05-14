@@ -39,7 +39,6 @@ Topic :: System :: Archiving :: Backup
         'python-dateutil>=2.6.0',
         'alembic',
         'ruamel.yaml>=0.15.37',
-        'filelock>=3.0.4',
         ],
     extras_require={
         'PostgreSQL metadata backend': ['psycopg2-binary>=2.7.4'],

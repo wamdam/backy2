@@ -1,20 +1,10 @@
 from unittest import TestCase
 
+from backy2.exception import InternalError
 from backy2.tests.testcase import BackendTestCase
 
 
-class test_sql(BackendTestCase, TestCase):
-
-    CONFIG = """
-        configurationVersion: '1.0.0'
-        logFile: /dev/stderr
-        lockDirectory: {testpath}/lock
-        hashFunction: blake2b,digest_size=32
-        metaBackend: 
-          type: sql
-          sql:
-            engine: sqlite:///{testpath}/backy.sqlite
-        """
+class SQLTestCase:
 
     def test_version(self):
             version = self.meta_backend.set_version(
@@ -160,3 +150,53 @@ class test_sql(BackendTestCase, TestCase):
                 self.assertIn(uid, uids)
                 count += 1
         self.assertEqual(num_blocks, count)
+
+    def test_lock_version(self):
+        locking = self.meta_backend.locking()
+        self.assertTrue(locking.lock(lock_name='V0000000001', reason='locking test'))
+        self.assertRaises(InternalError, lambda: locking.lock(lock_name='V0000000001', reason='locking test'))
+        locking.unlock(lock_name='V0000000001')
+
+    def test_lock_global(self):
+        locking = self.meta_backend.locking()
+        locking.lock(reason='locking test')
+        self.assertRaises(InternalError, lambda: locking.lock(reason='locking test'))
+        locking.unlock()
+
+    def test_lock_singleton(self):
+        locking = self.meta_backend.locking()
+        locking2 = self.meta_backend.locking()
+        self.assertEqual(locking, locking2)
+
+    def test_is_locked(self):
+        locking = self.meta_backend.locking()
+        lock = locking.lock(reason='locking test')
+        self.assertTrue(locking.is_locked())
+        locking.unlock()
+        self.assertFalse(locking.is_locked())
+
+class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
+
+    CONFIG = """
+        configurationVersion: '1.0.0'
+        logFile: /dev/stderr
+        lockDirectory: {testpath}/lock
+        hashFunction: blake2b,digest_size=32
+        metaBackend: 
+          type: sql
+          sql:
+            engine: sqlite:///{testpath}/backy.sqlite
+        """
+
+class SQLTestCasePostgreSQL(SQLTestCase, BackendTestCase, TestCase):
+
+    CONFIG = """
+        configurationVersion: '1.0.0'
+        logFile: /dev/stderr
+        lockDirectory: {testpath}/lock
+        hashFunction: blake2b,digest_size=32
+        metaBackend: 
+          type: sql
+          sql:
+            engine: postgresql://backy2:verysecret@localhost:15432/backy2
+        """
