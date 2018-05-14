@@ -120,7 +120,7 @@ class SmokeTestCase:
             self.assertEqual(set(), set([version.uid for version in versions]) ^ set(version_uids))
             self.assertTrue(reduce(and_, [version.name == 'data-backup' for version in versions]))
             self.assertTrue(reduce(and_, [version.snapshot_name == 'snapshot-name' for version in versions]))
-            self.assertTrue(reduce(and_, [version.block_size == backy.block_size for version in versions]))
+            self.assertTrue(reduce(and_, [version.block_size == block_size for version in versions]))
             self.assertTrue(reduce(and_, [version.size > 0 for version in versions]))
             print('  Version list successful')
             backy.close()
