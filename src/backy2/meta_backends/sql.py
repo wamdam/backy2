@@ -26,10 +26,16 @@ class VersionUid(TypeDecorator):
     impl = Integer
 
     def process_bind_param(self, value, dialect):
-        return int(value[1:])
+        if value is not None:
+            return int(value[1:])
+        else:
+            return None
 
     def process_result_value(self, value, dialect):
-        return 'V' + str(value).zfill(10)
+        if value is not None:
+            return 'V' + str(value).zfill(10)
+        else:
+            return None
 
 class Checksum(TypeDecorator):
 
