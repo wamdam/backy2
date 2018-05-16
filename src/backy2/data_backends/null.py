@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 import hashlib
 
-import shortuuid
+from backy2.meta_backends.sql import BlockUid
 
 
 class DataBackend:
@@ -21,17 +21,24 @@ class DataBackend:
         self._read_list = []
 
     @staticmethod
-    def _data(block):
-        return (block.uid * (block.size // len(block.uid) + 1))[:block.size].encode('ascii')
+    def block_uid_to_key(block_uid):
+        key_name = '{:016x}-{:016x}'.format(block_uid.left, block_uid.right)
+        hash = hashlib.md5(key_name.encode('ascii')).hexdigest()
+        return '{}-{}'.format(hash[:8], key_name)
+
+    @staticmethod
+    def key_to_block_uid(key):
+        if len(key) != 42:
+            raise RuntimeError('Invalid key name {}'.format(key))
+        return BlockUid(int(key[9:9 + 16], 16), int(key[26:26 + 16], 16))
+
+    def _data(self, block):
+        key = self.block_uid_to_key(block.uid)
+        return (key * (block.size // len(key) + 1))[:block.size].encode('ascii')
 
     # noinspection PyMethodMayBeStatic
-    def _uid(self):
-        suuid = shortuuid.uuid()
-        hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
-        return hash[:10] + suuid
-
-    def save(self, data, sync=False):
-        return self._uid()
+    def save(self, block_uid, data, sync=False):
+        pass
 
     def read(self, block, offset=0, length=None, sync=False):
         if sync:
@@ -44,20 +51,26 @@ class DataBackend:
             block = self._read_list.pop()
             yield block, 0, self.block_size, self._data(block)
 
+    # noinspection PyMethodMayBeStatic
     def rm(self, uid):
         pass
 
+    # noinspection PyMethodMayBeStatic
     def rm_many(self, uids):
         return []
 
+    # noinspection PyMethodMayBeStatic
     def get_all_blob_uids(self, prefix=None):
         return []
 
+    # noinspection PyMethodMayBeStatic
     def wait_read_finished(self):
         pass
 
+    # noinspection PyMethodMayBeStatic
     def wait_write_finished(self):
         pass
 
+    # noinspection PyMethodMayBeStatic
     def close(self):
         pass

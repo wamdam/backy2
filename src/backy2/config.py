@@ -145,11 +145,11 @@ class Config:
             if isinstance(value, dict):
                 value['__position'] = name
             return value
-        except KeyError as e:
+        except KeyError:
             if len(args) == 1:
                 return args[0]
             else:
-                raise KeyError('Config value {} is missing.'.format(full_name)) from e
+                raise KeyError('Config value {} is missing.'.format(full_name)) from None
 
     def get(self, name, *args, **kwargs):
         return Config._get(self.config, name, *args, **kwargs)

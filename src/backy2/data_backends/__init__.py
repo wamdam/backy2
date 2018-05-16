@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import concurrent
-import hashlib
 import importlib
 import threading
 import time
+from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from threading import BoundedSemaphore
 
-import shortuuid
 from diskcache import Cache
 
 from backy2.exception import InternalError, ConfigurationError
@@ -16,7 +15,7 @@ from backy2.logging import logger
 from backy2.utils import TokenBucket, makedirs, future_results_as_completed
 
 
-class DataBackend:
+class DataBackend(metaclass=ABCMeta):
     """ Holds BLOBs
     """
 
@@ -89,6 +88,8 @@ class DataBackend:
         bandwidth_read = config.get('dataBackend.bandwidthRead', types=int)
         bandwidth_write = config.get('dataBackend.bandwidthWrite', types=int)
 
+        self._consistency_check_writes = config.get('dataBackend.{}.consistencyCheckWrites'.format(self.NAME), False, types=bool)
+
         self.read_throttling = TokenBucket()
         self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
         self.write_throttling = TokenBucket()
@@ -102,8 +103,39 @@ class DataBackend:
         self._write_futures = []
         self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
-    def _write_raw(self, uid, data, metadata):
-        raise NotImplementedError
+    def _check_write(self, uid, data, metadata):
+        # Source: https://stackoverflow.com/questions/4527942/comparing-two-dictionaries-in-python
+        def dict_compare(d1, d2):
+            d1_keys = set(d1.keys())
+            d2_keys = set(d2.keys())
+            intersect_keys = d1_keys.intersection(d2_keys)
+            added = d1_keys - d2_keys
+            removed = d2_keys - d1_keys
+            modified = {o : (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
+            same = set(o for o in intersect_keys if d1[o] == d2[o])
+            return added, removed, modified, same
+
+        rdata, rmetadata = self._read_object(self._block_uid_to_key(uid))
+
+        if metadata:
+            added, removed, modified, same = dict_compare(rmetadata, metadata)
+            logger.debug('Comparing written and read metadata of {}:'.format(uid))
+            logger.debug('  added: {}, removed: {}, modified: {}, same: {}'.format(added, removed, modified, same))
+            if removed:
+                raise InternalError('Consistency check: Metadata headers are missing in read back data: {}'
+                                    .format(', '.join(removed)))
+            different_for = []
+            for name in modified:
+                logger.debug('Metadata differences: ')
+                logger.debug('  {}: wrote {}, read {}'.format(name, metadata[name], rmetadata[name]))
+                if metadata[name] != rmetadata[name]:
+                    different_for.append(name)
+            if different_for:
+                raise InternalError('Consistency check: Written and read metadata of {} are different for {}.'
+                                    .format(', '.join(different_for)))
+        # Comparing encrypted/compressed data here
+        if data != rdata:
+            raise InternalError('Consistency check: Written and read data of {} differ.'.format(uid))
 
     def _write(self, uid, data):
         data, metadata = self._compress(data)
@@ -112,44 +144,20 @@ class DataBackend:
 
         time.sleep(self.write_throttling.consume(len(data)))
         t1 = time.time()
-        self._write_raw(uid, data, metadata)
+        self._write_object(self._block_uid_to_key(uid), data, metadata)
         t2 = time.time()
 
-        logger.debug('Writer {} wrote data. uid {} in {:.2f}s'.format(threading.current_thread().name, uid, t2-t1))
+        logger.debug('Writer {} wrote data of uid {} in {:.2f}s'.format(threading.current_thread().name, uid, t2-t1))
+        if self._consistency_check_writes:
+            self._check_write(uid, data, metadata)
 
-    def _read_raw(self, uid, offset, length):
-        raise NotImplementedError
-
-    def _read(self, block, offset, length):
-        t1 = time.time()
-        data, metadata = self._read_raw(block.uid, offset, length)
-        time.sleep(self.read_throttling.consume(len(data)))
-        t2 = time.time()
-
-        data = self._decrypt(data, metadata)
-        data = self._uncompress(data, metadata)
-
-        logger.debug('Reader {} read data. uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
-        return block, offset, len(data), data
-
-    # noinspection PyMethodMayBeStatic
-    def _uid(self):
-        # 32 chars are allowed and we need to spread the first few chars so
-        # that blobs are distributed nicely. And want to avoid hash collisions.
-        # So we create a real base57-encoded uuid (22 chars) and prefix it with
-        # its own md5 hash[:10].
-        suuid = shortuuid.uuid()
-        hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
-        return hash[:10] + suuid
-
-    def save(self, data, sync=False):
+    def save(self, uid, data, sync=False):
         for future in [future for future in self._write_futures if future.done()]:
             self._write_futures.remove(future)
             # Make sure that exceptions are delivered
             future.result()
             del future
 
-        uid = self._uid()
         if sync:
             self._write(uid, data)
         else:
@@ -165,7 +173,23 @@ class DataBackend:
 
             self._write_futures.append(self._write_executor.submit(write_with_release))
 
-        return uid
+    def update(self, block, data, offset=0):
+        """ Updates data, returns written bytes.
+            This is only available on *some* data backends.
+        """
+        raise NotImplementedError()
+
+    def _read(self, block, offset, length):
+        t1 = time.time()
+        data, metadata = self._read_object(self._block_uid_to_key(block.uid), offset, length)
+        time.sleep(self.read_throttling.consume(len(data)))
+        t2 = time.time()
+
+        data = self._decrypt(data, metadata)
+        data = self._uncompress(data, metadata)
+
+        logger.debug('Reader {} read data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
+        return block, offset, len(data), data
 
     def read(self, block, offset=0, length=None, sync=False):
         if sync:
@@ -182,25 +206,16 @@ class DataBackend:
         """
         return future_results_as_completed(self._read_futures, self._read_semaphore, timeout=timeout)
 
-    def update(self, block, data, offset=0):
-        """ Updates data, returns written bytes.
-            This is only available on *some* data backends.
-        """
-        raise NotImplementedError()
-
     def rm(self, uid):
-        """ Deletes a block """
-        raise NotImplementedError()
+        self._rm_object(self._block_uid_to_key(uid))
 
     def rm_many(self, uids):
-        """ Deletes many uids from the data backend and returns a list
-        of uids that couldn't be deleted.
-        """
-        raise NotImplementedError()
+        keys = self._rm_many_objects([self._block_uid_to_key(uid) for uid in uids])
+        return [self._key_to_block_uid(key) for key in keys]
 
-    def get_all_blob_uids(self, prefix=None):
-        """ Get all existing blob uids """
-        raise NotImplementedError()
+    def list(self, prefix=None):
+        keys = self._list_objects(prefix)
+        return [self._key_to_block_uid(key) for key in keys]
 
     def _encrypt(self, data):
         if self.encryption_active is not None:
@@ -262,6 +277,24 @@ class DataBackend:
         self._write_executor.shutdown()
         self._read_executor.shutdown()
 
+    @staticmethod
+    @abstractmethod
+    def _block_uid_to_key(block_uid):
+        raise NotImplementedError
+
+    @staticmethod
+    @abstractmethod
+    def _key_to_block_uid(key):
+        raise NotImplementedError
+
+    @abstractmethod
+    def _write_object(self, key, data, metadata):
+        raise NotImplementedError
+
+    @abstractmethod
+    def _read_object(self, key, offset, length):
+        raise NotImplementedError
+
 
 class ReadCacheDataBackend(DataBackend):
 
@@ -299,7 +332,7 @@ class ReadCacheDataBackend(DataBackend):
                                 + '(offset {} != 0, length {} != None)')
 
         if self._read_cache is not None and self._use_read_cache:
-            data = self._read_cache.get(block.uid)
+            data = self._read_cache.get(self._block_uid_to_key(block.uid))
             if data:
                 return block, offset, len(data), data
 
@@ -307,7 +340,7 @@ class ReadCacheDataBackend(DataBackend):
 
         # We always put blocks into the cache even when self._use_read_cache is False
         if self._read_cache is not None:
-            self._read_cache.set(block.uid, data)
+            self._read_cache.set(self._block_uid_to_key(block.uid), data)
 
         return block, offset, length, data
 
@@ -322,4 +355,3 @@ class ReadCacheDataBackend(DataBackend):
             (cache_hits, cache_misses) = self._read_cache.stats()
             logger.debug('Disk based cache statistics (since cache creation): {} hits, {} misses.'.format(cache_hits, cache_misses))
             self._read_cache.close()
-        

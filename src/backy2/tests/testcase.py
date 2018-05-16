@@ -60,7 +60,7 @@ class BackendTestCase(TestCase):
                 raise ConfigurationError('Data backend type {} not found.'.format(name))
             else:
                 self.data_backend = DataBackendLib.DataBackend(self.config)
-                self.data_backend.rm_many(self.data_backend.get_all_blob_uids())
+                self.data_backend.rm_many(self.data_backend.list())
 
         name = self.config.get('metaBackend.type', None, types=str)
         if name is not None:
@@ -75,7 +75,7 @@ class BackendTestCase(TestCase):
 
     def tearDown(self):
         if hasattr(self, 'data_backend'):
-            uids = self.data_backend.get_all_blob_uids()
+            uids = self.data_backend.list()
             self.assertEqual(0, len(uids))
             self.data_backend.close()
         if hasattr(self, 'meta_backend'):

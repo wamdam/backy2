@@ -35,6 +35,8 @@ def init_logging(logfile, console_level):  # pragma: no cover
     # silence b2
     logging.getLogger('b2').setLevel(logging.WARN)
 
+    #logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+
     logger.info('$ ' + ' '.join(sys.argv))
 
 # Source: https://stackoverflow.com/questions/6234405/logging-uncaught-exceptions-in-python/16993115#16993115

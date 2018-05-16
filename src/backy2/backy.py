@@ -11,6 +11,7 @@ from dateutil.relativedelta import relativedelta
 
 from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
 from backy2.logging import logger
+from backy2.meta_backends.sql import BlockUid
 from backy2.utils import data_hexdigest, notify, parametrized_hash_function
 
 
@@ -111,7 +112,7 @@ class Backy:
             size=size,
             block_size=self.block_size,
             valid=False)
-        if not self.locking.lock(lock_name=version.uid, reason='Preparing version'):
+        if not self.locking.lock(lock_name=version.uid.readable, reason='Preparing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
         for id in range(num_blocks):
             if old_blocks:
@@ -153,10 +154,10 @@ class Backy:
                 valid,
                 _commit=False,
                 _upsert=False)
-            notify(self.process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid, (id + 1) / num_blocks * 100))
+            notify(self.process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable, (id + 1) / num_blocks * 100))
         self.meta_backend._commit()
         notify(self.process_name)
-        self.locking.unlock(lock_name=version.uid)
+        self.locking.unlock(lock_name=version.uid.readable)
         return version
 
     def clone_version(self, name, snapshot_name, from_version_uid):
@@ -170,8 +171,7 @@ class Backy:
         return self.meta_backend.get_blocks_by_version(version_uid)
 
     def stats(self, version_uid=None, limit=None):
-        stats = self.meta_backend.get_stats(version_uid, limit)
-        return stats
+        return self.meta_backend.get_stats(version_uid, limit)
 
     def get_io_by_source(self, source, block_size):
         res = parse.urlparse(source)
@@ -200,8 +200,8 @@ class Backy:
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
         """
-        if not self.locking.lock(lock_name=version_uid, reason='Scrubbing version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid))
+        if not self.locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
         version = self.meta_backend.get_version(version_uid)
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
@@ -229,12 +229,13 @@ class Backy:
                     block.id,
                     block.uid,
                     ))
-            notify(self.process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid, (i + 1) / len(blocks) * 100))
+            notify(self.process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
 
         # and read
         done_jobs = 0
         for i, entry in enumerate(self.data_backend.read_get_completed()):
             block, offset, length, data = entry
+            done_jobs += 1
 
             if data is None:
                 logger.error('Blob not found: {}.'.format(str(block)))
@@ -286,8 +287,7 @@ class Backy:
                 block.id,
                 block.uid,
                 ))
-            done_jobs += 1
-            notify(self.process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid, (i + 1) / read_jobs * 100))
+            notify(self.process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, (i + 1) / read_jobs * 100))
 
         if read_jobs != done_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
@@ -300,20 +300,20 @@ class Backy:
             self.meta_backend.set_version_valid(version_uid)
         else:
             # version is set invalid by set_blocks_invalid.
-            logger.error('Marked version {} invalid because it has errors.'.format(version_uid))
+            logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
 
         if source:
             io.close()  # wait for all io
-        self.locking.unlock(lock_name=version_uid)
+        self.locking.unlock(lock_name=version_uid.readable)
         notify(self.process_name)
         return state
 
     def restore(self, version_uid, target, sparse=False, force=False):
-        if not self.locking.lock(lock_name=version_uid, reason='Restoring version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid))
+        if not self.locking.lock(lock_name=version_uid.readable, reason='Restoring version'):
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        notify(self.process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid, target))
+        notify(self.process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
         io = self.get_io_by_source(target, version.block_size)
@@ -335,9 +335,9 @@ class Backy:
                     block.id,
                     ))
             if sparse:
-                notify(self.process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
+                notify(self.process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
             else:
-                notify(self.process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid, target, (i + 1) / len(blocks) * 100))
+                notify(self.process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -362,42 +362,42 @@ class Backy:
                     block.size,
                     ))
 
-            notify(self.process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
+            notify(self.process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
         io.close()
-        self.locking.unlock(lock_name=version_uid)
+        self.locking.unlock(lock_name=version_uid.readable)
 
     def protect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
-            raise NoChange('Version {} is already protected.'.format(version_uid))
+            raise NoChange('Version {} is already protected.'.format(version_uid.readable))
         self.meta_backend.protect_version(version_uid)
 
     def unprotect(self, version_uid):
         version = self.meta_backend.get_version(version_uid)
         if not version.protected:
-            raise NoChange('Version {} is not protected.'.format(version_uid))
+            raise NoChange('Version {} is not protected.'.format(version_uid.readable))
         self.meta_backend.unprotect_version(version_uid)
 
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
-        if not self.locking.lock(lock_name=version_uid, reason='Removing version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid))
+        if not self.locking.lock(lock_name=version_uid.readable, reason='Removing version'):
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
         version = self.meta_backend.get_version(version_uid)
         if version.protected:
-            raise RuntimeError('Version {} is protected. Will not delete.'.format(version_uid))
+            raise RuntimeError('Version {} is protected. Will not delete.'.format(version_uid.readable))
         if not force:
             # check if disallow_rm_when_younger_than_days allows deletion
             age_days = (datetime.datetime.now() - version.date).days
             if disallow_rm_when_younger_than_days > age_days:
-                raise RuntimeError('Version {} is too young. Will not delete.'.format(version_uid))
+                raise RuntimeError('Version {} is too young. Will not delete.'.format(version_uid.readable))
 
         num_blocks = self.meta_backend.rm_version(version_uid)
         logger.info('Removed backup version {} with {} blocks.'.format(
-            version_uid,
+            version_uid.readable,
             num_blocks,
             ))
-        self.locking.unlock(lock_name=version_uid)
+        self.locking.unlock(lock_name=version_uid.readable)
 
     def _generate_auto_tags(self, version_name):
         """ Generates automatic tag suggestions by looking up versions with
@@ -470,7 +470,7 @@ class Backy:
 
         version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
 
-        if not self.locking.lock(lock_name=version.uid, reason='Backup'):
+        if not self.locking.lock(lock_name=version.uid.readable, reason='Backup'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
 
         blocks = self.meta_backend.get_blocks_by_version(version.uid)
@@ -525,7 +525,7 @@ class Backy:
             else:
                 # Block is already in database, no need to update it
                 logger.debug('Keeping block {}'.format(block.id))
-            notify(self.process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid, source, (i + 1) / len(blocks) * 100))
+            notify(self.process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid.readable, source, (i + 1) / len(blocks) * 100))
 
         # precompute checksum of a sparse block
         sparse_block_checksum = data_hexdigest(self.hash_function, b'\0' * self.block_size)
@@ -558,13 +558,14 @@ class Backy:
                 stats['bytes_found_dedup'] += len(data)
                 logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
             else:
-                block_uid = self.data_backend.save(data)
+                block_uid = BlockUid(version.uid.int, block.id + 1)
+                self.data_backend.save(block_uid, data)
                 self.meta_backend.set_block(block.id, version.uid, block_uid, data_checksum, block.size, valid=True, _commit=False)
                 stats['blocks_written'] += 1
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
-            notify(self.process_name, 'Backup version {} from {} ({:.1f}%)'.format(version.uid, source, done_jobs / read_jobs * 100))
+            notify(self.process_name, 'Backup version {} from {} ({:.1f}%)'.format(version.uid.readable, source, done_jobs / read_jobs * 100))
             if done_jobs % _log_every_jobs == 0 or done_jobs == read_jobs:
                 logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_jobs, read_jobs,  done_jobs / read_jobs * 100))
 
@@ -603,7 +604,7 @@ class Backy:
             duration_seconds=int(time.time() - stats['start_time']),
             )
         logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags)))
-        self.locking.unlock(lock_name=version.uid)
+        self.locking.unlock(lock_name=version.uid.readable)
         return version.uid
 
 
@@ -625,7 +626,7 @@ class Backy:
         # make sure, no other backy will start
         if not self.locking.lock(reason='Cleanup full'):
             raise AlreadyLocked('Other backy instances are running.')
-        active_blob_uids = set(self.data_backend.get_all_blob_uids(prefix))
+        active_blob_uids = set(self.data_backend.list(prefix))
         active_block_uids = set(self.meta_backend.get_all_block_uids(prefix))
         delete_candidates = active_blob_uids.difference(active_block_uids)
         for delete_candidate in delete_candidates:

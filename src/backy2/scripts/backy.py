@@ -15,7 +15,7 @@ import backy2.exception
 from backy2.backy import Backy
 from backy2.config import Config
 from backy2.logging import logger, init_logging
-from backy2.meta_backends.sql import Version
+from backy2.meta_backends.sql import Version, VersionUid
 from backy2.utils import hints_from_rbd_diff, parametrized_hash_function
 
 __version__ = pkg_resources.get_distribution('backy2').version
@@ -28,20 +28,22 @@ class Commands:
         self.machine_output = machine_output
         self.config = config
 
-    def backup(self, name, snapshot_name, source, rbd, from_version, block_size=None, tag=None):
+    def backup(self, name, snapshot_name, source, rbd, from_version_uid, block_size=None, tag=None):
+        from_version_uid = VersionUid.create_from_readables(from_version_uid)
         backy = Backy(self.config, block_size=block_size)
         try:
             hints = None
             if rbd:
                 data = ''.join([line for line in fileinput.input(rbd).readline()])
                 hints = hints_from_rbd_diff(data)
-            backy.backup(name, snapshot_name, source, hints, from_version, tag)
+            backy.backup(name, snapshot_name, source, hints, from_version_uid, tag)
         except Exception:
             raise
         finally:
             backy.close()
 
     def restore(self, version_uid, target, sparse, force):
+        version_uid = VersionUid.create_from_readables(version_uid)
         backy = Backy(self.config)
         try:
             backy.restore(version_uid, target, sparse, force)
@@ -51,6 +53,7 @@ class Commands:
             backy.close()
 
     def protect(self, version_uid):
+        version_uid = VersionUid.create_from_readables(version_uid)
         backy = Backy(self.config)
         try:
             backy.protect(version_uid)
@@ -62,6 +65,7 @@ class Commands:
             backy.close()
 
     def unprotect(self, version_uid):
+        version_uid = VersionUid.create_from_readables(version_uid)
         backy = Backy(self.config)
         try:
             backy.unprotect(version_uid)
@@ -71,6 +75,7 @@ class Commands:
             backy.close()
 
     def rm(self, version_uids, force):
+        version_uids = VersionUid.create_from_readables(version_uids)
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
         backy = Backy(self.config)
         try:
@@ -82,6 +87,7 @@ class Commands:
             backy.close()
 
     def scrub(self, version_uid, source, percentile):
+        version_uid = VersionUid.create_from_readables(version_uid)
         if percentile:
             percentile = int(percentile)
         backy = Backy(self.config)
@@ -105,12 +111,12 @@ class Commands:
         tbl.align['block_size'] = 'r'
         for version in versions:
             tbl.add_row([
-                version.date,
+                version.date.isoformat(timespec='seconds'),
                 version.name,
                 version.snapshot_name,
                 version.size,
                 version.block_size,
-                version.uid,
+                version.uid.readable,
                 version.valid,
                 version.protected,
                 ",".join(sorted([t.name for t in version.tags])),
@@ -138,8 +144,8 @@ class Commands:
         tbl.align['duration (s)'] = 'r'
         for stat in stats:
             tbl.add_row([
-                stat.date,
-                stat.version_uid,
+                stat.date.isoformat(timespec='seconds'),
+                stat.version_uid.readable,
                 stat.version_name,
                 stat.version_snapshot_name,
                 stat.version_size,
@@ -184,6 +190,8 @@ class Commands:
     def diff_meta(self, version_uid1, version_uid2):
         """ Output difference between two version in blocks.
         """
+        version_uid1 = VersionUid.create_from_readables(version_uid1)
+        version_uid2 = VersionUid.create_from_readables(version_uid2)
         # TODO: Feel free to create a default diff format.
         backy = Backy(self.config)
         try:
@@ -219,6 +227,7 @@ class Commands:
             backy.close()
 
     def stats(self, version_uid, limit=None):
+        version_uid = VersionUid.create_from_readables(version_uid)
         if limit:
             limit = int(limit)
         backy = Backy(self.config)
@@ -251,6 +260,7 @@ class Commands:
             backy.close()
 
     def export(self, version_uid, filename='-'):
+        version_uid = VersionUid.create_from_readables(version_uid)
         backy = Backy(self.config)
         try:
             if filename == '-':
@@ -265,7 +275,7 @@ class Commands:
         finally:
             backy.close()
 
-    def nbd(self, version_uid, bind_address, bind_port, read_only):
+    def nbd(self, bind_address, bind_port, read_only):
         from backy2.nbd.nbdserver import Server as NbdServer
         from backy2.nbd.nbd import BackyStore
         backy = Backy(self.config)
@@ -301,6 +311,7 @@ class Commands:
             backy.close()
 
     def add_tag(self, version_uid, name):
+        version_uid = VersionUid.create_from_readables(version_uid)
         try:
             backy = Backy(self.config)
             backy.add_tag(version_uid, name)
@@ -312,6 +323,7 @@ class Commands:
             backy.close()
 
     def remove_tag(self, version_uid, name):
+        version_uid = VersionUid.create_from_readables(version_uid)
         backy = Backy(self.config)
         try:
             backy.remove_tag(version_uid, name)
@@ -360,10 +372,10 @@ def main():
         help='Backup name (e.g. the hostname)')
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the rbd snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
-    p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
+    p.add_argument('-f', '--from-version', dest='from_version_uid', default=None, help='Use this version-uid as base')
     p.add_argument('-t', '--tag', action='append',  dest='tag', default=None,
                    help='Use a specific tag for the target backup version-uid')
-    p.add_argument('--block-size', help='Block size to use for this backup in bytes')
+    p.add_argument('--block-size', type=int, help='Block size to use for this backup in bytes')
     p.set_defaults(func='backup')
 
     # RESTORE
@@ -477,7 +489,6 @@ def main():
     p = subparsers.add_parser(
         'nbd',
         help="Start an nbd server")
-    p.add_argument('version_uid', nargs='?', default=None, help='Start an nbd server for this version')
     p.add_argument('-a', '--bind-address', default='127.0.0.1',
             help="Bind to this ip address (default: 127.0.0.1)")
     p.add_argument('-p', '--bind-port', default=10809,

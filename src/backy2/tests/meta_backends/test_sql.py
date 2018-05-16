@@ -1,6 +1,7 @@
 from unittest import TestCase
 
-from backy2.exception import InternalError
+from backy2.exception import InternalError, NoChange
+from backy2.meta_backends.sql import BlockUid
 from backy2.tests.testcase import BackendTestCase
 
 
@@ -25,34 +26,31 @@ class SQLTestCase:
             self.assertFalse(version.protected)
 
             self.meta_backend.set_version_valid(version.uid)
-            self.meta_backend._commit()
             version = self.meta_backend.get_version(version.uid)
             self.assertTrue(version.valid)
 
             self.meta_backend.set_version_invalid(version.uid)
-            self.meta_backend._commit()
             version = self.meta_backend.get_version(version.uid)
             self.assertFalse(version.valid)
 
             self.meta_backend.protect_version(version.uid)
-            self.meta_backend._commit()
             version = self.meta_backend.get_version(version.uid)
             self.assertTrue(version.protected)
 
             self.meta_backend.unprotect_version(version.uid)
-            self.meta_backend._commit()
             version = self.meta_backend.get_version(version.uid)
             self.assertFalse(version.protected)
 
             self.meta_backend.add_tag(version.uid, 'tag-123')
-            self.meta_backend._commit()
+            self.assertRaises(NoChange, lambda: self.meta_backend.add_tag(version.uid, 'tag-123'))
+
             version = self.meta_backend.get_version(version.uid)
             self.assertEqual(1, len(version.tags))
             self.assertIn(version.uid, map(lambda tag: tag.version_uid, version.tags))
             self.assertIn('tag-123', map(lambda tag: tag.name, version.tags))
 
             self.meta_backend.remove_tag(version.uid, 'tag-123')
-            self.meta_backend._commit()
+            self.assertRaises(NoChange, lambda: self.meta_backend.remove_tag(version.uid, 'tag-123'))
             version = self.meta_backend.get_version(version.uid)
             self.assertEqual(0, len(version.tags))
 
@@ -85,7 +83,7 @@ class SQLTestCase:
         num_blocks = 256
         for id in range(num_blocks):
             checksums.append(self.random_hex(64))
-            uids.append(self.random_string(32))
+            uids.append(BlockUid(1, id))
             self.meta_backend.set_block(
                 id,
                 version.uid,
@@ -129,7 +127,8 @@ class SQLTestCase:
             dereferenced_block = block.deref()
             self.assertEqual(id, dereferenced_block.id)
             self.assertEqual(version.uid, dereferenced_block.version_uid)
-            self.assertEqual(uids[id], dereferenced_block.uid)
+            self.assertEqual(uids[id].left, dereferenced_block.uid.left)
+            self.assertEqual(uids[id].right, dereferenced_block.uid.right)
             self.assertEqual(checksums[id], dereferenced_block.checksum)
             self.assertEqual(1024 * 4096, dereferenced_block.size)
             self.assertTrue(dereferenced_block.valid)
@@ -174,6 +173,7 @@ class SQLTestCase:
         self.assertTrue(locking.is_locked())
         locking.unlock()
         self.assertFalse(locking.is_locked())
+
 
 class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
 

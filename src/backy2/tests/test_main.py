@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 import backy2.backy
-from backy2.meta_backends.sql import Block
+from backy2.meta_backends.sql import Block, BlockUid
 from backy2.tests.testcase import BackendTestCase
 
 BLOCK_SIZE = 1024*4096
@@ -78,7 +78,8 @@ class MiscTestCase(BackendTestCase, TestCase):
 
     def test_FileBackend_save_read(self):
         backend = self.data_backend
-        uid = backend.save(b'test', sync=True)
+        uid = BlockUid(1, 2)
+        backend.save(uid, b'test', sync=True)
         block = Mock(Block, uid=uid)
         self.assertEqual(backend.read(block, sync=True), b'test')
         backend.rm(uid)
@@ -105,7 +106,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.meta_backend
         name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        block_uid = 'asdfgh'
+        block_uid = BlockUid(1, 2)
         checksum = '1234567890'
         size = 5000
         id = 0
@@ -138,7 +139,7 @@ class MiscTestCase(BackendTestCase, TestCase):
             block_size=5000,
             valid=True
         )
-        block_uids = [uuid.uuid1().hex for i in range(TESTLEN)]
+        block_uids = [BlockUid(i + 1, i + 2) for i in range(TESTLEN)]
         checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
         size = 5000
 

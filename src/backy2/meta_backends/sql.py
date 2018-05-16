@@ -11,34 +11,102 @@ from binascii import hexlify, unhexlify
 from collections import namedtuple
 
 import sqlalchemy
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event, Index
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.mutable import MutableComposite
+from sqlalchemy.orm import sessionmaker, composite, CompositeProperty
 from sqlalchemy.types import DateTime, TypeDecorator
 
-from backy2.exception import InputDataError, InternalError
+from backy2.exception import InputDataError, InternalError, NoChange
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 
 
-class VersionUid(TypeDecorator):
+class VersionUid:
+
+    def __init__(self, value):
+        self._value = value
+
+    @staticmethod
+    def create_from_readables(readables):
+        if readables is None:
+            return None
+        input_is_list = isinstance(readables, (list, tuple))
+        if not input_is_list:
+            readables = [readables]
+        version_uids = []
+        for readable in readables:
+            if isinstance(readable, int):
+                pass
+            elif isinstance(readable, str):
+                if len(readable) < 2:
+                    raise ValueError('Version UID {} is too short.'.format(readable))
+                if readable[0].lower() != 'v':
+                    raise ValueError('Version UID {} doesn\'t start with the letter V.'.format(readable))
+                try:
+                    readable = int(readable[1:])
+                except ValueError:
+                    raise ValueError('Version UID {} is invalid.'.format(readable)) from None
+            else:
+                raise ValueError('Version UID {} has unsupported type {}.'.format(str(readable), type(readable)))
+            version_uids.append(VersionUid(readable))
+        return version_uids if input_is_list else version_uids[0]
+
+    @property
+    def int(self):
+        return self._value
+
+    @property
+    def readable(self):
+        return 'V' + str(self._value).zfill(10)
+
+    def __repr__(self):
+        return self.readable
+
+    def __eq__(self, other):
+        if isinstance(other, VersionUid):
+            return self.int == other.int
+        elif isinstance(other, int):
+            return self.int == other
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.int)
+
+
+class VersionUidType(TypeDecorator):
 
     impl = Integer
 
     def process_bind_param(self, value, dialect):
-        if value is not None:
-            return int(value[1:])
-        else:
+        if value is None:
             return None
+        elif isinstance(value, int):
+            return value
+        elif isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                raise InternalError('Supplied string value "{}" represents no integer VersionUidType.process_bind_param'
+                                    .format(value)) from None
+        elif isinstance(value, VersionUid):
+            return value.int
+        else:
+            raise InternalError('Unexpected type {} for value in VersionUidType.process_bind_param'.format(type(value))) from None
 
     def process_result_value(self, value, dialect):
         if value is not None:
-            return 'V' + str(value).zfill(10)
+            return VersionUid(value)
         else:
             return None
+
 
 class Checksum(TypeDecorator):
 
@@ -56,13 +124,66 @@ class Checksum(TypeDecorator):
         else:
             return None
 
+
+class BlockUidComparator(CompositeProperty.Comparator):
+
+    def in_(self, other):
+        clauses = self.__clause_element__().clauses
+        other_tuples = [element.__composite_values__() for element in other]
+        return sqlalchemy.sql.or_(*[sqlalchemy.sql.and_(*[clauses[0] == element[0], clauses[1] == element[1]]) for element in other_tuples])
+
+
+DereferencedBlockUid = namedtuple('BlockUid', ['left', 'right'])
+class BlockUid(MutableComposite):
+
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def __setattr__(self, key, value):
+        object.__setattr__(self, key, value)
+        self.changed()
+
+    def __composite_values__(self):
+        return self.left, self.right
+
+    def __repr__(self):
+        return "{:x}-{:x}".format(
+            self.left if self.left is not None else 0,
+            self.right if self.right is not None else 0
+        )
+
+    def __eq__(self, other):
+        return isinstance(other, BlockUid) and \
+               other.left == self.left and \
+               other.right == self.right
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __bool__(self):
+        return self.left is not None and self.right is not None
+
+    def __hash__(self):
+        return hash((self.left, self.right))
+
+    # This object includes a dict to other SQLAlchemy objects in _parents. Use the same approach as with Blocks
+    # to get rid of them when passing information between threads.
+    # The named tuple doesn't have all the semantics of the original object.
+    def deref(self):
+        return DereferencedBlockUid(
+            left=self.left,
+            right=self.right,
+        )
+
+
 Base = declarative_base()
 
 class Stats(Base):
     __tablename__ = 'stats'
     date = Column("date", DateTime , default=func.now(), nullable=False)
     # No foreign key references here, so that we can keep the stats around even when the version is deleted
-    version_uid = Column(VersionUid, primary_key=True)
+    version_uid = Column(VersionUidType, primary_key=True)
     version_name = Column(String, nullable=False)
     version_snapshot_name = Column(String, nullable=False)
     version_size = Column(BigInteger, nullable=False)
@@ -80,7 +201,7 @@ class Stats(Base):
 
 class Version(Base):
     __tablename__ = 'versions'
-    uid = Column(VersionUid, primary_key=True, nullable=False)
+    uid = Column(VersionUidType, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     name = Column(String, nullable=False, default='')
     snapshot_name = Column(String, nullable=False, server_default='', default='')
@@ -110,7 +231,7 @@ class Version(Base):
 
 class Tag(Base):
     __tablename__ = 'tags'
-    version_uid = Column(VersionUid, ForeignKey('versions.uid', ondelete='CASCADE'), primary_key=True, nullable=False)
+    version_uid = Column(VersionUidType, ForeignKey('versions.uid', ondelete='CASCADE'), primary_key=True, nullable=False)
     name = Column(String, nullable=False, primary_key=True)
 
     def __repr__(self):
@@ -120,21 +241,31 @@ class Tag(Base):
 DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
 class Block(Base):
     __tablename__ = 'blocks'
-    uid = Column(String(32), nullable=True, index=True)
-    version_uid = Column(VersionUid, ForeignKey('versions.uid', ondelete='CASCADE'), primary_key=True, nullable=False)
-    id = Column(Integer, primary_key=True, nullable=False)
-    date = Column("date", DateTime , default=func.now(), nullable=False)
-    checksum = Column(Checksum(_MetaBackend.MAXIMUM_CHECKSUM_LENGTH), index=True, nullable=True)
-    size = Column(Integer, nullable=True)
-    valid = Column(Boolean, nullable=False)
+    # Sorted for best alignment to safe space (with PostgreSQL in mind)
+    # id and uid_right are first because they are most likely to go to BigInteger in the future
+    date = Column("date", DateTime , default=func.now(), nullable=False) # 8 bytes
+    id = Column(Integer, primary_key=True, nullable=False) # 4 bytes
+    uid_right = Column(Integer, nullable=True) # 4 bytes
+    uid_left = Column(Integer, nullable=True) # 4 bytes
+    size = Column(Integer, nullable=True) # 4 bytes
+    version_uid = Column(VersionUidType, ForeignKey('versions.uid', ondelete='CASCADE'), primary_key=True, nullable=False) # 4 bytes
+    valid = Column(Boolean, nullable=False) # 1 byte
+    checksum = Column(Checksum(_MetaBackend.MAXIMUM_CHECKSUM_LENGTH), nullable=True) # 2 to 33 bytes
 
+    uid = composite(BlockUid, uid_left, uid_right, comparator_factory=BlockUidComparator)
+    __table_args__ = (
+        Index('ix_blocks_uid_left_uid_right', 'uid_left', 'uid_right'),
+        # Maybe using an hash index on PostgeSQL might be beneficial in the future
+        # Index('ix_blocks_checksum', 'checksum', postgresql_using='hash'),
+        Index('ix_blocks_checksum', 'checksum'),
+    )
 
     def deref(self):
         """ Dereference this to a namedtuple so that we can pass it around
         without any thread inconsistencies
         """
         return DereferencedBlock(
-            uid=self.uid,
+            uid=self.uid.deref(),
             version_uid=self.version_uid,
             id=self.id,
             date=self.date,
@@ -144,7 +275,7 @@ class Block(Base):
         )
 
     def __repr__(self):
-       return "<Block(id='%s', uid='%s', version_uid='%s')>" % (
+       return "<Block(id='%s', uid=%s, version_uid='%s')>" % (
                             self.id, self.uid, self.version_uid)
 
 
@@ -155,10 +286,14 @@ def inttime():
 class DeletedBlock(Base):
     __tablename__ = 'deleted_blocks'
     id = Column(Integer, primary_key=True)
-    uid = Column(String(32), nullable=True, index=True)
+    uid_left = Column(Integer, nullable=True)
+    uid_right = Column(Integer, nullable=True)
     size = Column(Integer, nullable=True)
     # we need a date in order to find only delete candidates that are older than 1 hour.
     time = Column(BigInteger, default=inttime, nullable=False)
+
+    uid = composite(BlockUid, uid_left, uid_right, comparator_factory=BlockUidComparator)
+    __table_args__ = (Index('ix_blocks_uid_left_uid_right_2', 'uid_left', 'uid_right'),)
 
     def __repr__(self):
        return "<DeletedBlock(id='%s', uid='%s')>" % (
@@ -349,10 +484,19 @@ class MetaBackend(_MetaBackend):
             version_uid=version_uid,
             name=name,
             )
-        self._session.add(tag)
+        try:
+            self._session.add(tag)
+            self._session.commit()
+        except IntegrityError:
+            self._session.rollback()
+            raise NoChange('Version {} already has tag {}.'.format(version_uid.readable, name)) from None
+        except Exception:
+            raise
 
     def remove_tag(self, version_uid, name):
-        self._session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
+        deleted = self._session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
+        if deleted != 1:
+            raise NoChange('Version {} has not tag {}.'.format(version_uid.readable, name))
         self._session.commit()
 
     def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):
@@ -396,7 +540,7 @@ class MetaBackend(_MetaBackend):
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             block_uid,
             checksum,
-            ', '.join(affected_version_uids)
+            ', '.join([version_uid.readable for version_uid in affected_version_uids])
             ))
         for version_uid in affected_version_uids:
             self.set_version_invalid(version_uid)
@@ -489,8 +633,8 @@ class MetaBackend(_MetaBackend):
         if prefix:
             rows = self._session.query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
         else:
-            rows = self._session.query(distinct(Block.uid)).all()
-        return [b[0] for b in rows]
+            rows = self._session.query(Block.uid_left, Block.uid_right).group_by(Block.uid_left, Block.uid_right).all()
+        return [BlockUid(b[0], b[1]) for b in rows]
 
     # Based on: https://stackoverflow.com/questions/5022066/how-to-serialize-sqlalchemy-result-to-json/7032311,
     # https://stackoverflow.com/questions/1958219/convert-sqlalchemy-row-object-to-python-dict
@@ -500,6 +644,15 @@ class MetaBackend(_MetaBackend):
             def default(self, obj):
                 if isinstance(obj.__class__, DeclarativeMeta):
                     fields = {}
+
+                    for field in inspect(obj).mapper.composites:
+                        ignore = False
+                        for types, names in ignore_fields:
+                            if isinstance(obj, types) and field.key in names:
+                                ignore = True
+                                break
+                        if not ignore:
+                            fields[field.key] = getattr(obj, field.key)
 
                     for field in inspect(obj).mapper.column_attrs:
                         ignore = False
@@ -523,6 +676,10 @@ class MetaBackend(_MetaBackend):
 
                 if isinstance(obj, datetime.datetime):
                     return obj.isoformat(timespec='seconds')
+                elif isinstance(obj, VersionUid):
+                    return obj.int
+                elif isinstance(obj, BlockUid):
+                    return {'left': obj.left, 'right': obj.right}
 
                 return super().default(obj)
         return Backy2Encoder
@@ -534,6 +691,8 @@ class MetaBackend(_MetaBackend):
         # These are always ignored because they'd lead to a circle
         ignore_fields.append(((Tag, Block), ('version_uid',)))
         ignore_relationships.append(((Tag, Block), ('version',)))
+        # Ignore these as we favor the composite attribute
+        ignore_fields.append(((Block,), ('uid_left','uid_right')))
 
         json.dump({'metadataVersion': self.METADATA_VERSION,
                    root_key: root_value },
@@ -589,6 +748,9 @@ class MetaBackend(_MetaBackend):
             for block_dict in version_dict['blocks']:
                 block_dict['version_uid'] = version.uid
                 block_dict['date'] = datetime.datetime.strptime(block_dict['date'], '%Y-%m-%dT%H:%M:%S')
+                block_dict['uid_left'] = int(block_dict['uid']['left']) if block_dict['uid']['left'] is not None else None
+                block_dict['uid_right'] = int(block_dict['uid']['right']) if block_dict['uid']['right'] is not None else None
+                del block_dict['uid']
             self._session.bulk_insert_mappings(Block, version_dict['blocks'])
 
             for tag_dict in version_dict['tags']:

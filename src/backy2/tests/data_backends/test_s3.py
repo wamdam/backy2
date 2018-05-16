@@ -18,6 +18,7 @@ class test_s3(DatabackendTestCase, unittest.TestCase):
             port: 9901
             isSecure: False
             bucketName: backy2
+            consistencyCheckWrites: True
           simultaneousWrites: 5
           simultaneousReads: 5
           bandwidthRead: 0

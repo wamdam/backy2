@@ -32,7 +32,8 @@ class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
                   masterKey: !!binary |
                     e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
                 active: true
-
+                
+            consistencyCheckWrites: True
           simultaneousWrites: 5
           simultaneousReads: 5
           bandwidthRead: 0

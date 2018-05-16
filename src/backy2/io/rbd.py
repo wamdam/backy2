@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import re
 import threading
 import time
-
-import re
 from functools import reduce
 from operator import or_
 
@@ -44,12 +43,12 @@ class IO(_IO):
         try:
             ioctx = self.cluster.open_ioctx(self.pool_name)
         except rados.ObjectNotFound:
-            raise FileNotFoundError('Pool not found: {}'.format(self.pool_name))
+            raise FileNotFoundError('Pool not found: {}'.format(self.pool_name)) from None
 
         try:
             rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True)
         except rbd.ImageNotFound:
-            raise FileNotFoundError('Image or snapshot not found: {}'.format(self.io_name))
+            raise FileNotFoundError('Image or snapshot not found: {}'.format(self.io_name)) from None
 
     def open_w(self, io_name, size=None, force=False):
         # io_name has the form rbd://pool/imagename@snapshotname or rbd://pool/imagename
@@ -62,7 +61,7 @@ class IO(_IO):
         try:
             ioctx = self.cluster.open_ioctx(self.pool_name)
         except rados.ObjectNotFound:
-            raise FileNotFoundError('Pool not found: {}'.format(self.pool_name))
+            raise FileNotFoundError('Pool not found: {}'.format(self.pool_name)) from None
 
         try:
             rbd.Image(ioctx, self.image_name)
