@@ -27,14 +27,8 @@ class Config:
     lockDirectory: /tmp
     process_name: backy2
     disallowRemoveWhenYounger: 6
-    metaBackend:
-      type: sql
-      sql:
-        engine: sqlite:////tmp/backy.sqlite
+    exportMetadata: True
     dataBackend:
-      type: file
-      file:
-        path: /var/lib/backy2/data
       simultaneousWrites: 1
       simultaneousReads: 1
       bandwidthRead: 0
@@ -44,6 +38,9 @@ class Config:
         useSsl: true
         addressingStyle: path
         disableEncodingType: false
+      b2:
+        writeObjectAttempts: 1
+        uploadAttempts: 5
     nbd:
       cacheDirectory: /tmp
     io:
@@ -129,7 +126,7 @@ class Config:
         return sources
 
     @staticmethod
-    def _get(dict_, name, *args, types=None):
+    def _get(dict_, name, *args, types=None, check_func=None, check_message=None):
         if '__position' in dict_:
             full_name = '{}.{}'.format(dict_['__position'], name)
         else:
@@ -142,6 +139,13 @@ class Config:
             value = reduce(operator.getitem, name.split('.'), dict_)
             if types is not None and not isinstance(value, types):
                 raise TypeError('Config value {} has wrong type {}, expected {}.'.format(full_name, type(value), types))
+            if check_func is not None and not check_func(value):
+                if check_message is None:
+                    raise ConfigurationError('Config option {} has the right type but the supplied value is invalid.'
+                                             .format(full_name))
+                else:
+                    raise ConfigurationError('Config option {} is invalid: {}.'
+                                             .format(full_name, check_message))
             if isinstance(value, dict):
                 value['__position'] = name
             return value
@@ -149,7 +153,7 @@ class Config:
             if len(args) == 1:
                 return args[0]
             else:
-                raise KeyError('Config value {} is missing.'.format(full_name)) from None
+                raise KeyError('Config option {} is missing.'.format(full_name)) from None
 
     def get(self, name, *args, **kwargs):
         return Config._get(self.config, name, *args, **kwargs)

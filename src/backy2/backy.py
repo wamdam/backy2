@@ -5,13 +5,15 @@ import importlib
 import math
 import random
 import time
+from concurrent.futures import CancelledError, TimeoutError
+from io import StringIO
 from urllib import parse
 
 from dateutil.relativedelta import relativedelta
 
 from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
 from backy2.logging import logger
-from backy2.meta_backends.sql import BlockUid
+from backy2.meta_backend import BlockUid, MetaBackend
 from backy2.utils import data_hexdigest, notify, parametrized_hash_function
 
 
@@ -41,20 +43,19 @@ def blocks_from_hints(hints, block_size):
 
 
 class Backy:
-    """
-    """
 
     def __init__(self, config, block_size=None, initdb=False, _destroydb=False, _migratedb=True):
 
         self.config = config
 
         if block_size is None:
-            self.block_size = config.get('blockSize', types=int)
+            self._block_size = config.get('blockSize', types=int)
         else:
-            self.block_size = block_size
+            self._block_size = block_size
 
-        self.hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
-        self.process_name = config.get('processName', types=str)
+        self._hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
+        self._process_name = config.get('processName', types=str)
+        self._export_metadata = config.get('exportMetadata', types=bool)
 
         from backy2.data_backends import DataBackend
         name = config.get('dataBackend.type', types=str)
@@ -63,26 +64,19 @@ class Backy:
         except ImportError:
             raise ConfigurationError('Data backend type {} not found.'.format(name))
         else:
-            self.data_backend = DataBackendLib.DataBackend(config)
+            self._data_backend = DataBackendLib.DataBackend(config)
 
-        from backy2.meta_backends import MetaBackend
-        name = config.get('metaBackend.type', types=str)
-        try:
-            MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
-        except ImportError:
-            raise ConfigurationError('Meta backend type {} not found.'.format(name))
-        else:
-            meta_backend = MetaBackendLib.MetaBackend(config)
+        meta_backend = MetaBackend(config)
 
         if initdb:
             meta_backend.initdb(_destroydb=_destroydb, _migratedb=_migratedb)
 
-        self.meta_backend = meta_backend.open(_migratedb=_migratedb)
-        self.locking = self.meta_backend.locking()
+        self._meta_backend = meta_backend.open(_migratedb=_migratedb)
+        self._locking = self._meta_backend.locking()
 
-        notify(self.process_name)  # i.e. set process name without notification
+        notify(self._process_name)  # i.e. set process name without notification
 
-        if self.locking.is_locked():
+        if self._locking.is_locked():
             raise AlreadyLocked('Another process is already running.')
 
     def _prepare_version(self, name, snapshot_name, size=None, from_version_uid=None):
@@ -91,12 +85,12 @@ class Backy:
         a pure sparse version is created.
         """
         if from_version_uid:
-            old_version = self.meta_backend.get_version(from_version_uid)  # raise if not exists
+            old_version = self._meta_backend.get_version(from_version_uid)  # raise if not exists
             if not old_version.valid:
                 raise UsageError('You cannot base new version on an invalid one.')
-            if old_version.block_size != self.block_size:
+            if old_version.block_size != self._block_size:
                 raise UsageError('You cannot base new version on an old version with a different block size.')
-            old_blocks = self.meta_backend.get_blocks_by_version(from_version_uid)
+            old_blocks = self._meta_backend.get_blocks_by_version(from_version_uid)
             if not size:
                 size = old_version.size
         else:
@@ -104,15 +98,15 @@ class Backy:
             if not size:
                 raise InternalError('Size needs to be specified if there is no base version.')
 
-        num_blocks = int(math.ceil(size / self.block_size))
+        num_blocks = int(math.ceil(size / self._block_size))
         # we always start with invalid versions, then validate them after backup
-        version = self.meta_backend.set_version(
+        version = self._meta_backend.set_version(
             version_name=name,
             snapshot_name=snapshot_name,
             size=size,
-            block_size=self.block_size,
+            block_size=self._block_size,
             valid=False)
-        if not self.locking.lock(lock_name=version.uid.readable, reason='Preparing version'):
+        if not self._locking.lock(lock_name=version.uid.readable, reason='Preparing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
         for id in range(num_blocks):
             if old_blocks:
@@ -121,7 +115,7 @@ class Backy:
                 except IndexError:
                     uid = None
                     checksum = None
-                    block_size = self.block_size
+                    block_size = self._block_size
                     valid = True
                 else:
                     assert old_block.id == id
@@ -132,12 +126,12 @@ class Backy:
             else:
                 uid = None
                 checksum = None
-                block_size = self.block_size
+                block_size = self._block_size
                 valid = True
 
             # the last block can differ in size, so let's check
-            _offset = id * self.block_size
-            new_block_size = min(self.block_size, size - _offset)
+            _offset = id * self._block_size
+            new_block_size = min(self._block_size, size - _offset)
             if new_block_size != block_size:
                 # last block changed, so set back all info
                 block_size = new_block_size
@@ -145,33 +139,25 @@ class Backy:
                 checksum = None
                 valid = False
 
-            self.meta_backend.set_block(
-                id,
-                version.uid,
-                uid,
-                checksum,
-                block_size,
-                valid,
-                _commit=False,
-                _upsert=False)
-            notify(self.process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable, (id + 1) / num_blocks * 100))
-        self.meta_backend._commit()
-        notify(self.process_name)
-        self.locking.unlock(lock_name=version.uid.readable)
+            self._meta_backend.set_block(id, version.uid, uid, checksum, block_size, valid, upsert=False)
+            notify(self._process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable, (id + 1) / num_blocks * 100))
+        self._meta_backend.commit()
+        notify(self._process_name)
+        self._locking.unlock(lock_name=version.uid.readable)
         return version
 
     def clone_version(self, name, snapshot_name, from_version_uid):
         return self._prepare_version(name, snapshot_name, None, from_version_uid)
 
     def ls(self):
-        return self.meta_backend.get_versions()
+        return self._meta_backend.get_versions()
 
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.
-        return self.meta_backend.get_blocks_by_version(version_uid)
+        return self._meta_backend.get_blocks_by_version(version_uid)
 
     def stats(self, version_uid=None, limit=None):
-        return self.meta_backend.get_stats(version_uid, limit)
+        return self._meta_backend.get_stats(version_uid, limit)
 
     def get_io_by_source(self, source, block_size):
         res = parse.urlparse(source)
@@ -193,211 +179,246 @@ class Backy:
         return IOLib.IO(
                 config=self.config,
                 block_size=block_size,
-                hash_function=self.hash_function,
+                hash_function=self._hash_function,
                 )
 
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
         """
-        if not self.locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
+        if not self._locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-        version = self.meta_backend.get_version(version_uid)
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+
+        version = self._meta_backend.get_version(version_uid)
+        blocks = self._meta_backend.get_blocks_by_version(version_uid)
+
         if source:
             io = self.get_io_by_source(source, version.block_size)
             io.open_r(source)
 
         state = True
-
-        # prepare
-        old_use_read_cache = self.data_backend.use_read_cache(False)
-        read_jobs = 0
-        for i, block in enumerate(blocks):
-            if block.uid:
-                if percentile < 100 and random.randint(1, 100) > percentile:
-                    logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
+        try:
+            old_use_read_cache = self._data_backend.use_read_cache(False)
+            read_jobs = 0
+            for i, block in enumerate(blocks):
+                if block.uid:
+                    if percentile < 100 and random.randint(1, 100) > percentile:
+                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
+                            block.id,
+                            block.uid,
+                            percentile,
+                            ))
+                    else:
+                        self._data_backend.read(block.deref())  # async queue
+                        read_jobs += 1
+                else:
+                    logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
                         block.id,
                         block.uid,
-                        percentile,
                         ))
-                else:
-                    self.data_backend.read(block.deref())  # async queue
-                    read_jobs += 1
-            else:
-                logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
+                notify(self._process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
+
+            done_read_jobs = 0
+            for i, entry in enumerate(self._data_backend.read_get_completed()):
+                block, offset, length, data = entry
+                done_read_jobs += 1
+
+                if data is None:
+                    logger.error('Blob not found: {}.'.format(str(block)))
+                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    state = False
+                    continue
+
+                if len(data) != block.size:
+                    logger.error('Blob {} has wrong size {}, it should be {}.'.format(
+                        block.uid,
+                        len(data),
+                        block.size,
+                        ))
+                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    state = False
+                    continue
+
+                data_checksum = data_hexdigest(self._hash_function, data)
+                if data_checksum != block.checksum:
+                    logger.error('Checksum mismatch during scrub for block '
+                        '{} (UID {}) (is: {} should-be: {}).'.format(
+                            block.id,
+                            block.uid,
+                            data_checksum,
+                            block.checksum,
+                            ))
+                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    state = False
+                    continue
+
+                if source:
+                    source_data = io.read(block, sync=True)
+                    if source_data != data:
+                        logger.error('Source data has changed for block {} '
+                            '(UID {}) (is: {} should-be: {}). NOT setting '
+                            'this block invalid, because the source looks '
+                            'wrong.'.format(
+                                block.id,
+                                block.uid,
+                                data_hexdigest(self._hash_function, source_data),
+                                data_checksum,
+                                ))
+                        state = False
+                        # We are not setting the block invalid here because
+                        # when the block is there AND the checksum is good,
+                        # then the source is invalid.
+
+                logger.debug('Scrub of block {} (UID {}) ok.'.format(
                     block.id,
                     block.uid,
                     ))
-            notify(self.process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
-
-        # and read
-        done_jobs = 0
-        for i, entry in enumerate(self.data_backend.read_get_completed()):
-            block, offset, length, data = entry
-            done_jobs += 1
-
-            if data is None:
-                logger.error('Blob not found: {}.'.format(str(block)))
-                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                state = False
-                continue
-
-            if len(data) != block.size:
-                logger.error('Blob {} has wrong size {}, it should be {}.'.format(
-                    block.uid,
-                    len(data),
-                    block.size,
-                    ))
-                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                state = False
-                continue
-
-            data_checksum = data_hexdigest(self.hash_function, data)
-            if data_checksum != block.checksum:
-                logger.error('Checksum mismatch during scrub for block '
-                    '{} (UID {}) (is: {} should-be: {}).'.format(
-                        block.id,
-                        block.uid,
-                        data_checksum,
-                        block.checksum,
-                        ))
-                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                state = False
-                continue
-
+                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, (i + 1) / read_jobs * 100))
+        except:
+            raise
+        finally:
             if source:
-                source_data = io.read(block, sync=True)
-                if source_data != data:
-                    logger.error('Source data has changed for block {} '
-                        '(UID {}) (is: {} should-be: {}). NOT setting '
-                        'this block invalid, because the source looks '
-                        'wrong.'.format(
-                            block.id,
-                            block.uid,
-                            data_hexdigest(self.hash_function, source_data),
-                            data_checksum,
-                            ))
-                    state = False
-                    # We are not setting the block invalid here because
-                    # when the block is there AND the checksum is good,
-                    # then the source is invalid.
+                io.close()
 
-            logger.debug('Scrub of block {} (UID {}) ok.'.format(
-                block.id,
-                block.uid,
-                ))
-            notify(self.process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, (i + 1) / read_jobs * 100))
-
-        if read_jobs != done_jobs:
+        if read_jobs != done_read_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
-                                .format(read_jobs, done_jobs))
+                                .format(read_jobs, done_read_jobs))
 
         # Restore old read cache setting
-        self.data_backend.use_read_cache(old_use_read_cache)
+        self._data_backend.use_read_cache(old_use_read_cache)
 
         if state == True:
-            self.meta_backend.set_version_valid(version_uid)
+            self._meta_backend.set_version_valid(version_uid)
         else:
             # version is set invalid by set_blocks_invalid.
             logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
 
         if source:
             io.close()  # wait for all io
-        self.locking.unlock(lock_name=version_uid.readable)
-        notify(self.process_name)
+        self._locking.unlock(lock_name=version_uid.readable)
+        notify(self._process_name)
         return state
 
     def restore(self, version_uid, target, sparse=False, force=False):
-        if not self.locking.lock(lock_name=version_uid.readable, reason='Restoring version'):
+        if not self._locking.lock(lock_name=version_uid.readable, reason='Restoring version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
 
-        version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        notify(self.process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        version = self._meta_backend.get_version(version_uid)  # raise if version not exists
+        notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
+        blocks = self._meta_backend.get_blocks_by_version(version_uid)
 
         io = self.get_io_by_source(target, version.block_size)
         io.open_w(target, version.size, force)
 
-        read_jobs = 0
-        for i, block in enumerate(blocks):
-            if block.uid:
-                self.data_backend.read(block.deref())  # adds a read job
-                read_jobs += 1
-            elif not sparse:
-                io.write(block, b'\0'*block.size)
-                logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
-                    block.id,
-                    block.size,
-                    ))
-            else:
-                logger.debug('Ignored sparse block {}.'.format(
-                    block.id,
-                    ))
-            if sparse:
-                notify(self.process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
-            else:
-                notify(self.process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
-
-        done_jobs = 0
-        _log_every_jobs = read_jobs // 200 + 1  # about every half percent
-        for i, entry in enumerate(self.data_backend.read_get_completed()):
-            block, offset, length, data = entry
-            assert len(data) == block.size
-            data_checksum = data_hexdigest(self.hash_function, data)
-            io.write(block, data)
-            if data_checksum != block.checksum:
-                logger.error('Checksum mismatch during restore for block '
-                    '{} (is: {} should-be: {}, block-valid: {}). Block '
-                    'restored is invalid. Continuing.'.format(
+        try:
+            read_jobs = 0
+            for i, block in enumerate(blocks):
+                if block.uid:
+                    self._data_backend.read(block.deref())  # adds a read job
+                    read_jobs += 1
+                elif not sparse:
+                    io.write(block, b'\0'*block.size)
+                    logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
                         block.id,
-                        data_checksum,
-                        block.checksum,
-                        block.valid,
+                        block.size,
                         ))
-                self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
-            else:
-                logger.debug('Restored block {} successfully ({} bytes).'.format(
-                    block.id,
-                    block.size,
-                    ))
+                else:
+                    logger.debug('Ignored sparse block {}.'.format(
+                        block.id,
+                        ))
+                if sparse:
+                    notify(self._process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
+                else:
+                    notify(self._process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
 
-            notify(self.process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / read_jobs * 100))
-            if i % _log_every_jobs == 0 or i + 1 == read_jobs:
-                logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
-        io.close()
-        self.locking.unlock(lock_name=version_uid.readable)
+            done_read_jobs = 0
+            log_every_jobs = read_jobs // 200 + 1  # about every half percent
+            for i, entry in enumerate(self._data_backend.read_get_completed()):
+                block, offset, length, data = entry
+                assert len(data) == block.size
+                data_checksum = data_hexdigest(self._hash_function, data)
+                io.write(block, data)
+                if data_checksum != block.checksum:
+                    logger.error('Checksum mismatch during restore for block '
+                        '{} (is: {} should-be: {}, block-valid: {}). Block '
+                        'restored is invalid. Continuing.'.format(
+                            block.id,
+                            data_checksum,
+                            block.checksum,
+                            block.valid,
+                            ))
+                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                else:
+                    logger.debug('Restored block {} successfully ({} bytes).'.format(
+                        block.id,
+                        block.size,
+                        ))
+
+                done_read_jobs += 1
+                notify(self._process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / read_jobs * 100))
+                if i % log_every_jobs == 0 or i + 1 == read_jobs:
+                    logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+        except:
+            raise
+        finally:
+            io.close()
+
+        if read_jobs != done_read_jobs:
+            raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
+                                .format(read_jobs, done_read_jobs))
+
+        self._locking.unlock(lock_name=version_uid.readable)
 
     def protect(self, version_uid):
-        version = self.meta_backend.get_version(version_uid)
+        version = self._meta_backend.get_version(version_uid)
         if version.protected:
             raise NoChange('Version {} is already protected.'.format(version_uid.readable))
-        self.meta_backend.protect_version(version_uid)
+        self._meta_backend.protect_version(version_uid)
 
     def unprotect(self, version_uid):
-        version = self.meta_backend.get_version(version_uid)
+        version = self._meta_backend.get_version(version_uid)
         if not version.protected:
             raise NoChange('Version {} is not protected.'.format(version_uid.readable))
-        self.meta_backend.unprotect_version(version_uid)
+        self._meta_backend.unprotect_version(version_uid)
 
-    def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0):
-        if not self.locking.lock(lock_name=version_uid.readable, reason='Removing version'):
+    def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0, keep_backend_metadata=False):
+        if not self._locking.lock(lock_name=version_uid.readable, reason='Removing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-        version = self.meta_backend.get_version(version_uid)
-        if version.protected:
-            raise RuntimeError('Version {} is protected. Will not delete.'.format(version_uid.readable))
-        if not force:
-            # check if disallow_rm_when_younger_than_days allows deletion
-            age_days = (datetime.datetime.now() - version.date).days
-            if disallow_rm_when_younger_than_days > age_days:
-                raise RuntimeError('Version {} is too young. Will not delete.'.format(version_uid.readable))
+        try:
+            version = self._meta_backend.get_version(version_uid)
 
-        num_blocks = self.meta_backend.rm_version(version_uid)
-        logger.info('Removed backup version {} with {} blocks.'.format(
-            version_uid.readable,
-            num_blocks,
-            ))
-        self.locking.unlock(lock_name=version_uid.readable)
+            if version.protected:
+                raise RuntimeError('Version {} is protected. Will not delete.'.format(version_uid.readable))
+
+            if not force:
+                # check if disallow_rm_when_younger_than_days allows deletion
+                age_days = (datetime.datetime.now() - version.date).days
+                if disallow_rm_when_younger_than_days > age_days:
+                    raise RuntimeError('Version {} is too young. Will not delete.'.format(version_uid.readable))
+
+            num_blocks = self._meta_backend.rm_version(version_uid)
+
+            if not keep_backend_metadata:
+                try:
+                    self._data_backend.rm_version(version_uid)
+                    logger.info('Removed version {} metdata from backend storage.'.format(version_uid.readable))
+                except FileNotFoundError:
+                    logger.warn('Unable to remove version {} metadata from backend storage, the object wasn\'t found.'
+                                .format(version_uid.readable))
+                    pass
+
+            logger.info('Removed backup version {} with {} blocks.'.format(version_uid.readable, num_blocks))
+        finally:
+            self._locking.unlock(lock_name=version_uid.readable)
+
+    def rm_from_backend(self, version_uid):
+        if not self._locking.lock(lock_name=version_uid.readable, reason='Removing version from backend storage'):
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+        try:
+            self._data_backend.rm_version(version_uid)
+            logger.info('Removed backup version {} metadata from backend storage.'.format(version_uid.readable))
+        finally:
+            self._locking.unlock(lock_name=version_uid.readable)
 
     def _generate_auto_tags(self, version_name):
         """ Generates automatic tag suggestions by looking up versions with
@@ -407,7 +428,7 @@ class Backy:
         - give the tag 'b_weekly' if the last b_weekly tagged version for this name is > 6 days ago
         - give the tag 'b_monthly' if the last b_monthly tagged version for this name is > 1 month ago
         """
-        all_versions = self.meta_backend.get_versions()
+        all_versions = self._meta_backend.get_versions()
         versions = [{'date': v.date.date(), 'tags': [t.name for t in v.tags]} for v in all_versions if v.name == version_name]
 
         for version in versions:
@@ -451,11 +472,11 @@ class Backy:
                 'blocks_sparse': 0,
                 'start_time': time.time(),
             }
-        io = self.get_io_by_source(source, self.block_size)
+        io = self.get_io_by_source(source, self._block_size)
         io.open_r(source)
         source_size = io.size()
 
-        num_blocks = int(math.ceil(source_size / self.block_size))
+        num_blocks = int(math.ceil(source_size / self._block_size))
 
         if hints is not None and len(hints) > 0:
             # Sanity check: check hints for validity, i.e. too high offsets, ...
@@ -463,17 +484,17 @@ class Backy:
             if max_offset > source_size:
                 raise InputDataError('Hints have higher offsets than source file.')
 
-            sparse_blocks, read_blocks = blocks_from_hints(hints, self.block_size)
+            sparse_blocks, read_blocks = blocks_from_hints(hints, self._block_size)
         else:
             sparse_blocks = set()
             read_blocks = set(range(num_blocks))
 
         version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
 
-        if not self.locking.lock(lock_name=version.uid.readable, reason='Backup'):
+        if not self._locking.lock(lock_name=version.uid.readable, reason='Backup'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
 
-        blocks = self.meta_backend.get_blocks_by_version(version.uid)
+        blocks = self._meta_backend.get_blocks_by_version(version.uid)
 
         if from_version_uid and hints:
             # SANITY CHECK:
@@ -502,79 +523,114 @@ class Backy:
                     logger.error("Looks like the hints don't match or the source is different.")
                     logger.error("Found wrong source data at block {}: offset {} with max. length {}".format(
                         source_block.id,
-                        source_block.id * self.block_size,
-                        self.block_size
+                        source_block.id * self._block_size,
+                        self._block_size
                         ))
                     # remove version
-                    self.meta_backend.rm_version(version.uid)
+                    self._meta_backend.rm_version(version.uid)
                     raise InputDataError('Source changed in regions outside of ones indicated by the hints.')
             logger.info('Finished sanity check. Checked {} blocks {}.'.format(num_reading, check_block_ids))
 
-        read_jobs = 0
-        for i, block in enumerate(blocks):
-            if block.id in read_blocks or not block.valid:
-                io.read(block.deref())  # adds a read job.
-                read_jobs += 1
-            elif block.id in sparse_blocks:
-                # This "elif" is very important. Because if the block is in read_blocks
-                # AND sparse_blocks, it *must* be read.
-                self.meta_backend.set_block(block.id, version.uid, None, None, block.size, valid=True, _commit=False)
-                stats['blocks_sparse'] += 1
-                stats['bytes_sparse'] += block.size
-                logger.debug('Skipping block (sparse) {}'.format(block.id))
-            else:
-                # Block is already in database, no need to update it
-                logger.debug('Keeping block {}'.format(block.id))
-            notify(self.process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid.readable, source, (i + 1) / len(blocks) * 100))
+        try:
+            read_jobs = 0
+            for i, block in enumerate(blocks):
+                if block.id in read_blocks or not block.valid:
+                    io.read(block.deref())  # adds a read job.
+                    read_jobs += 1
+                elif block.id in sparse_blocks:
+                    # This "elif" is very important. Because if the block is in read_blocks
+                    # AND sparse_blocks, it *must* be read.
+                    self._meta_backend.set_block(block.id, version.uid, None, None, block.size, valid=True)
+                    stats['blocks_sparse'] += 1
+                    stats['bytes_sparse'] += block.size
+                    logger.debug('Skipping block (sparse) {}'.format(block.id))
+                else:
+                    # Block is already in database, no need to update it
+                    logger.debug('Keeping block {}'.format(block.id))
+                notify(self._process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid.readable, source, (i + 1) / len(blocks) * 100))
 
-        # precompute checksum of a sparse block
-        sparse_block_checksum = data_hexdigest(self.hash_function, b'\0' * self.block_size)
+            # precompute checksum of a sparse block
+            sparse_block_checksum = data_hexdigest(self._hash_function, b'\0' * self._block_size)
 
-        # now use the readers and write
-        done_jobs = 0
-        _log_every_jobs = read_jobs // 200 + 1  # about every half percent
-        for block, data, data_checksum in io.read_get_completed():
-            stats['blocks_read'] += 1
-            stats['bytes_read'] += len(data)
+            done_read_jobs = 0
+            write_jobs = 0
+            done_write_jobs = 0
+            log_every_jobs = read_jobs // 200 + 1  # about every half percent
+            for block, data, data_checksum in io.read_get_completed():
+                stats['blocks_read'] += 1
+                stats['bytes_read'] += len(data)
 
-            # dedup
-            existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
-            if data_checksum == sparse_block_checksum and block.size == self.block_size:
-                # if the block is only \0, set it as a sparse block.
-                stats['blocks_sparse'] += 1
-                stats['bytes_sparse'] += block.size
-                logger.debug('Skipping block (detected sparse) {}'.format(block.id))
-                self.meta_backend.set_block(block.id, version.uid, None, None, block.size, valid=True, _commit=False)
-            # Don't try to detect sparse partial blocks as it counteracts the optimisation above
-            #elif data == b'\0' * block.size:
-            #    # if the block is only \0, set it as a sparse block.
-            #    stats['blocks_sparse'] += 1
-            #    stats['bytes_sparse'] += block.size
-            #    logger.debug('Skipping block (detected sparse) {}'.format(block.id))
-            #    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True, _commit=False)
-            elif existing_block:
-                self.meta_backend.set_block(block.id, version.uid, existing_block.uid, existing_block.checksum, existing_block.size, valid=True, _commit=False)
-                stats['blocks_found_dedup'] += 1
-                stats['bytes_found_dedup'] += len(data)
-                logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
-            else:
-                block_uid = BlockUid(version.uid.int, block.id + 1)
-                self.data_backend.save(block_uid, data)
-                self.meta_backend.set_block(block.id, version.uid, block_uid, data_checksum, block.size, valid=True, _commit=False)
-                stats['blocks_written'] += 1
-                stats['bytes_written'] += len(data)
-                logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
-            done_jobs += 1
-            notify(self.process_name, 'Backup version {} from {} ({:.1f}%)'.format(version.uid.readable, source, done_jobs / read_jobs * 100))
-            if done_jobs % _log_every_jobs == 0 or done_jobs == read_jobs:
-                logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_jobs, read_jobs,  done_jobs / read_jobs * 100))
+                # dedup
+                existing_block = self._meta_backend.get_block_by_checksum(data_checksum)
+                if data_checksum == sparse_block_checksum and block.size == self._block_size:
+                    # if the block is only \0, set it as a sparse block.
+                    stats['blocks_sparse'] += 1
+                    stats['bytes_sparse'] += block.size
+                    logger.debug('Skipping block (detected sparse) {}'.format(block.id))
+                    self._meta_backend.set_block(block.id, version.uid, None, None, block.size, valid=True)
+                # Don't try to detect sparse partial blocks as it counteracts the optimisation above
+                #elif data == b'\0' * block.size:
+                #    # if the block is only \0, set it as a sparse block.
+                #    stats['blocks_sparse'] += 1
+                #    stats['bytes_sparse'] += block.size
+                #    logger.debug('Skipping block (detected sparse) {}'.format(block.id))
+                #    self.meta_backend.set_block(block.id, version_uid, None, None, block.size, valid=True)
+                elif existing_block:
+                    self._meta_backend.set_block(block.id, version.uid, existing_block.uid, existing_block.checksum, existing_block.size, valid=True)
+                    stats['blocks_found_dedup'] += 1
+                    stats['bytes_found_dedup'] += len(data)
+                    logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
+                else:
+                    block.uid = BlockUid(version.uid.int, block.id + 1)
+                    block.checksum = data_checksum
+                    self._data_backend.save(block, data)
+                    write_jobs += 1
+                    logger.debug('Queued block {} for write (checksum {}...)'.format(block.id, data_checksum[:16]))
 
-        io.close()  # wait for all readers
-        if read_jobs != done_jobs:
+                done_read_jobs += 1
+
+                try:
+                    for saved_block in self._data_backend.save_get_completed(timeout=0):
+                        self._meta_backend.set_block(saved_block.id, saved_block.version_uid, saved_block.uid,
+                                                     saved_block.checksum, saved_block.size, valid=True)
+                        done_write_jobs += 1
+                        stats['blocks_written'] += 1
+                        stats['bytes_written'] += saved_block.size
+                except (TimeoutError, CancelledError):
+                    pass
+
+                notify(self._process_name, 'Backup version {} from {} ({:.1f}%)'.format(version.uid.readable, source, done_read_jobs / read_jobs * 100))
+                if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
+                    logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,  done_read_jobs / read_jobs * 100))
+
+            try:
+                for saved_block in self._data_backend.save_get_completed():
+                    self._meta_backend.set_block(saved_block.id, saved_block.version_uid, saved_block.uid,
+                                                 saved_block.checksum, saved_block.size, valid=True)
+                    done_write_jobs += 1
+                    stats['blocks_written'] += 1
+                    stats['bytes_written'] += saved_block.size
+            except CancelledError:
+                pass
+
+        except:
+            raise
+        finally:
+            # This will also cancel any outstanding read jobs
+            io.close()
+
+        if read_jobs != done_read_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
-                                .format(read_jobs, done_jobs))
+                                .format(read_jobs, done_read_jobs))
 
-        self.meta_backend.set_version_valid(version.uid)
+        if  write_jobs != done_write_jobs:
+            raise InternalError('Number of submitted and completed write jobs inconsistent (submitted: {}, completed {}).'
+                                .format(write_jobs, done_write_jobs))
+
+        self._meta_backend.set_version_valid(version.uid)
+
+        if self._export_metadata:
+            self.export_to_backend([version.uid], overwrite=True, locking=False)
 
         if tag is not None:
             if isinstance(tag, list):
@@ -584,15 +640,15 @@ class Backy:
         else:
             tags = self._generate_auto_tags(name)
         for tag in tags:
-            self.meta_backend.add_tag(version.uid, tag)
+            self._meta_backend.add_tag(version.uid, tag)
 
         logger.debug('Stats: {}'.format(stats))
-        self.meta_backend.set_stats(
+        self._meta_backend.set_stats(
             version_uid=version.uid,
             version_name=name,
             version_snapshot_name=snapshot_name,
             version_size=source_size,
-            version_block_size=self.block_size,
+            version_block_size=self._block_size,
             bytes_read=stats['bytes_read'],
             blocks_read=stats['blocks_read'],
             bytes_written=stats['bytes_written'],
@@ -603,53 +659,108 @@ class Backy:
             blocks_sparse=stats['blocks_sparse'],
             duration_seconds=int(time.time() - stats['start_time']),
             )
+
         logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags)))
-        self.locking.unlock(lock_name=version.uid.readable)
+        self._locking.unlock(lock_name=version.uid.readable)
         return version.uid
 
 
     def cleanup_fast(self, dt=3600):
         """ Delete unreferenced blob UIDs """
-        if not self.locking.lock(lock_name='cleanup-fast', reason='Cleanup fast'):
+        if not self._locking.lock(lock_name='cleanup-fast', reason='Cleanup fast'):
             raise AlreadyLocked('Another backy cleanup is running.')
+        try:
+            for uid_list in self._meta_backend.get_delete_candidates(dt):
+                logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
+                no_del_uids = self._data_backend.rm_many(uid_list)
+                if no_del_uids:
+                    logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
+        finally:
+            self._locking.unlock(lock_name='cleanup-fast')
 
-        for uid_list in self.meta_backend.get_delete_candidates(dt):
-            logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
-            no_del_uids = self.data_backend.rm_many(uid_list)
-            if no_del_uids:
-                logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
-        self.locking.unlock(lock_name='cleanup-fast')
-
-    def cleanup_full(self, prefix=None):
+    def cleanup_full(self):
         """ Delete unreferenced blob UIDs starting with <prefix> """
         # in this mode, we compare all existing uids in data and meta.
         # make sure, no other backy will start
-        if not self.locking.lock(reason='Cleanup full'):
+        if not self._locking.lock(reason='Cleanup full'):
             raise AlreadyLocked('Other backy instances are running.')
-        active_blob_uids = set(self.data_backend.list(prefix))
-        active_block_uids = set(self.meta_backend.get_all_block_uids(prefix))
-        delete_candidates = active_blob_uids.difference(active_block_uids)
-        for delete_candidate in delete_candidates:
-            logger.debug('Cleanup: Removing UID {}'.format(delete_candidate))
-            try:
-                self.data_backend.rm(delete_candidate)
-            except FileNotFoundError:
-                continue
-        logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
-        self.locking.unlock()
+        try:
+            active_blob_uids = set(self._data_backend.list_blocks())
+            active_block_uids = set(self._meta_backend.get_all_block_uids())
+            delete_candidates = active_blob_uids.difference(active_block_uids)
+            for delete_candidate in delete_candidates:
+                logger.debug('Cleanup: Removing UID {}'.format(delete_candidate))
+                try:
+                    self._data_backend.rm(delete_candidate)
+                except FileNotFoundError:
+                    continue
+            logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
+        finally:
+            self._locking.unlock()
 
     def add_tag(self, version_uid, name):
-        self.meta_backend.add_tag(version_uid, name)
+        self._meta_backend.add_tag(version_uid, name)
 
-    def remove_tag(self, version_uid, name):
-        self.meta_backend.remove_tag(version_uid, name)
+    def rm_tag(self, version_uid, name):
+        self._meta_backend.rm_tag(version_uid, name)
 
     def close(self):
-        self.meta_backend.close()
-        self.data_backend.close()
+        if hasattr(self, '_meta_backend') and self._meta_backend:
+            self._meta_backend.close()
+        if hasattr(self, '_data_backend') and self._data_backend:
+            self._data_backend.close()
 
     def export(self, version_uids, f):
-        self.meta_backend.export(version_uids, f)
+        try:
+            locked_version_uids = []
+            for version_uid in version_uids:
+                if not self._locking.lock(lock_name=version_uid.readable, reason='Exporting version(s)'):
+                    raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+                locked_version_uids.append(version_uid)
+
+            self._meta_backend.export(version_uids, f)
+            logger.info('Exported version {} metadata.'.format(version_uid.readable))
+        finally:
+            for version_uid in locked_version_uids:
+                self._locking.unlock(lock_name=version_uid.readable)
+
+    def export_to_backend(self, version_uids, overwrite=False, locking=True):
+        try:
+            locked_version_uids = []
+            if locking:
+                for version_uid in version_uids:
+                    if not self._locking.lock(lock_name=version_uid.readable, reason='Exporting verion(s) to backend storage'):
+                        raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+                    locked_version_uids.append(version_uid)
+
+            for version_uid in version_uids:
+                with StringIO() as metadata_export:
+                    self._meta_backend.export([version_uid], metadata_export)
+                    self._data_backend.save_version(version_uid, metadata_export.getvalue(), overwrite=overwrite)
+                logger.info('Exported version {} metadata to backend storage.'.format(version_uid.readable))
+        finally:
+            for version_uid in locked_version_uids:
+                self._locking.unlock(lock_name=version_uid.readable)
 
     def import_(self, f):
-        self.meta_backend.import_(f)
+        # TODO: Find a good way to lock here
+        version_uids = self._meta_backend.import_(f)
+        for version_uid in version_uids:
+            logger.info('Imported version {} metadata.'.format(version_uid.readable))
+
+    def import_from_backend(self, version_uids):
+        try:
+            locked_version_uids = []
+            for version_uid in version_uids:
+                if not self._locking.lock(lock_name=version_uid.readable, reason='Importing version(s) from backend storage'):
+                    raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+                locked_version_uids.append(version_uid)
+
+            for version_uid in version_uids:
+                metadata_import_data = self._data_backend.read_version(version_uid)
+                with StringIO(metadata_import_data) as metadata_import:
+                    self._meta_backend.import_(metadata_import)
+                logger.info('Imported version {} metadata from backend storage.'.format(version_uid.readable))
+        finally:
+            for version_uid in locked_version_uids:
+                self._locking.unlock(lock_name=version_uid.readable)

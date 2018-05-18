@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import BoundedSemaphore
 
+from backy2.logging import logger
 from backy2.utils import future_results_as_completed
 
 
@@ -51,7 +52,7 @@ class IO:
     def read_get_completed(self, timeout=None):
         """ Returns a generator for all completed read jobs
         """
-        return future_results_as_completed(self._read_futures, self._read_semaphore, timeout=timeout)
+        return future_results_as_completed(self._read_futures, semaphore=self._read_semaphore, timeout=timeout)
 
     def write(self, block, data):
         """ Writes data to the given block
@@ -62,4 +63,9 @@ class IO:
         """ Close the io
         """
         if self._read_executor:
+            if len(self._read_futures) > 0:
+                logger.warn('IO backend closed with {} outstanding read jobs, cancelling them.'.format(len(self._read_futures)))
+                for future in self._read_futures:
+                    future.cancel()
+                self._read_futures = []
             self._read_executor.shutdown()

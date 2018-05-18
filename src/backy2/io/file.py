@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import threading
-import time
-
 import os
 import re
+import threading
+import time
 
 from backy2.exception import UsageError
 from backy2.io import IO as _IO
@@ -82,7 +81,7 @@ class IO(_IO):
 
         data_checksum = data_hexdigest(self._hash_function, data)
 
-        logger.debug('IO {} read block {} (checksum {}...) in {:.2f}s)'.format(
+        logger.debug('{} read block {} (checksum {}...) in {:.2f}s'.format(
             threading.current_thread().name,
             block.id,
             data_checksum[:16],

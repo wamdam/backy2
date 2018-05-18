@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 import backy2.backy
-from backy2.meta_backends.sql import Block, BlockUid
+from backy2.meta_backend import BlockUid
 from backy2.tests.testcase import BackendTestCase
 
 BLOCK_SIZE = 1024*4096
@@ -16,6 +16,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         logFile: /dev/stderr
         lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32
+        exportMetadata: True
         dataBackend:
           type: file
           file:
@@ -25,9 +26,7 @@ class MiscTestCase(BackendTestCase, TestCase):
           bandwidthRead: 0
           bandwidthWrite: 0
         metaBackend: 
-          type: sql
-          sql:
-            engine: sqlite:///{testpath}/backy.sqlite                  
+          engine: sqlite:///{testpath}/backy.sqlite                  
         """
 
     def test_blocks_from_hints(self):
@@ -46,43 +45,12 @@ class MiscTestCase(BackendTestCase, TestCase):
         self.assertEqual(sparse_blocks, {32, 33, 34, 35, 36, 64, 65})
         self.assertEqual(read_blocks, {0, 1, 2, 4, 5, 6, 8, 9, 13, 15, 16, 36, 64, 65})
 
-
-    def test_FileBackend_path(self):
-        uid = 'c2cac25a7afd11e5b45aa44e314f9270'
-
-        backend = self.data_backend
-        backend.DEPTH = 2
-        backend.SPLIT = 2
-        path = backend._path(uid)
-        assert path == 'c2/ca'
-
-        backend.DEPTH = 3
-        backend.SPLIT = 2
-        path = backend._path(uid)
-        assert path == 'c2/ca/c2'
-
-        backend.DEPTH = 3
-        backend.SPLIT = 3
-        path = backend._path(uid)
-        assert path == 'c2c/ac2/5a7'
-
-        backend.DEPTH = 3
-        backend.SPLIT = 1
-        path = backend._path(uid)
-        assert path == 'c/2/c'
-
-        backend.DEPTH = 1
-        backend.SPLIT = 2
-        path = backend._path(uid)
-        assert path == 'c2'
-
     def test_FileBackend_save_read(self):
         backend = self.data_backend
-        uid = BlockUid(1, 2)
-        backend.save(uid, b'test', sync=True)
-        block = Mock(Block, uid=uid)
+        block = Mock('Block', uid=BlockUid(1, 2))
+        backend.save(block, b'test', sync=True)
         self.assertEqual(backend.read(block, sync=True), b'test')
-        backend.rm(uid)
+        backend.rm(block.uid)
 
     def test_metabackend_set_version(self):
         backend = self.meta_backend

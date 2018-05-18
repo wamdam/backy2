@@ -6,7 +6,6 @@ import fileinput
 import logging
 import os
 import sys
-from io import StringIO
 
 import pkg_resources
 from prettytable import PrettyTable
@@ -15,7 +14,7 @@ import backy2.exception
 from backy2.backy import Backy
 from backy2.config import Config
 from backy2.logging import logger, init_logging
-from backy2.meta_backends.sql import Version, VersionUid
+from backy2.meta_backend import Version, VersionUid
 from backy2.utils import hints_from_rbd_diff, parametrized_hash_function
 
 __version__ = pkg_resources.get_distribution('backy2').version
@@ -30,73 +29,81 @@ class Commands:
 
     def backup(self, name, snapshot_name, source, rbd, from_version_uid, block_size=None, tag=None):
         from_version_uid = VersionUid.create_from_readables(from_version_uid)
-        backy = Backy(self.config, block_size=block_size)
+        backy = None
         try:
+            backy = Backy(self.config, block_size=block_size)
             hints = None
             if rbd:
                 data = ''.join([line for line in fileinput.input(rbd).readline()])
                 hints = hints_from_rbd_diff(data)
             backy.backup(name, snapshot_name, source, hints, from_version_uid, tag)
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
     def restore(self, version_uid, target, sparse, force):
         version_uid = VersionUid.create_from_readables(version_uid)
-        backy = Backy(self.config)
+        backy = None
         try:
+            backy = Backy(self.config)
             backy.restore(version_uid, target, sparse, force)
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def protect(self, version_uid):
-        version_uid = VersionUid.create_from_readables(version_uid)
-        backy = Backy(self.config)
+    def protect(self, version_uids):
+        version_uids = VersionUid.create_from_readables(version_uids)
+        backy = None
         try:
-            backy.protect(version_uid)
-        except backy2.exception.NoChange:
-            logger.warn('Version {} already was protected.'.format(version_uid))
-        except Exception:
-            raise
+            backy = Backy(self.config)
+            for version_uid in version_uids:
+                try:
+                    backy.protect(version_uid)
+                except backy2.exception.NoChange:
+                    logger.warn('Version {} already was protected.'.format(version_uid))
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def unprotect(self, version_uid):
-        version_uid = VersionUid.create_from_readables(version_uid)
-        backy = Backy(self.config)
+    def unprotect(self, version_uids):
+        version_uids = VersionUid.create_from_readables(version_uids)
+        backy = None
         try:
-            backy.unprotect(version_uid)
-        except backy2.exception.NoChange:
-            logger.warn('Version {} already was unprotected.'.format(version_uid))
+            backy = Backy(self.config)
+            for version_uid in version_uids:
+                try:
+                    backy.unprotect(version_uid)
+                except backy2.exception.NoChange:
+                    logger.warn('Version {} already was unprotected.'.format(version_uid))
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def rm(self, version_uids, force):
+    def rm(self, version_uids, force, keep_backend_metadata):
         version_uids = VersionUid.create_from_readables(version_uids)
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
-        backy = Backy(self.config)
+        backy = None
         try:
+            backy = Backy(self.config)
             for version_uid in version_uids:
-                backy.rm(version_uid, force, disallow_rm_when_younger_than_days)
-        except Exception:
-            raise
+                backy.rm(version_uid, force=force,
+                        disallow_rm_when_younger_than_days=disallow_rm_when_younger_than_days,
+                        keep_backend_metadata=keep_backend_metadata)
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
     def scrub(self, version_uid, source, percentile):
         version_uid = VersionUid.create_from_readables(version_uid)
         if percentile:
             percentile = int(percentile)
-        backy = Backy(self.config)
+        backy = None
         try:
+            backy = Backy(self.config)
             backy.scrub(version_uid, source, percentile)
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
     @staticmethod
     def _ls_versions_tbl_output(versions):
@@ -163,8 +170,9 @@ class Commands:
         print(tbl)
 
     def ls(self, name, snapshot_name, tag, include_blocks):
-        backy = Backy(self.config)
+        backy = None
         try:
+            backy = Backy(self.config)
             versions = backy.ls()
 
             if name:
@@ -175,17 +183,16 @@ class Commands:
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
             if self.machine_output:
-                backy.meta_backend.export_any('versions',
-                                              versions,
-                                              sys.stdout,
-                                              ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
-                                              )
+                backy._meta_backend.export_any('versions',
+                                               versions,
+                                               sys.stdout,
+                                               ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
+                                               )
             else:
                 self._ls_versions_tbl_output(versions)
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
     def diff_meta(self, version_uid1, version_uid2):
         """ Output difference between two version in blocks.
@@ -193,8 +200,9 @@ class Commands:
         version_uid1 = VersionUid.create_from_readables(version_uid1)
         version_uid2 = VersionUid.create_from_readables(version_uid2)
         # TODO: Feel free to create a default diff format.
-        backy = Backy(self.config)
+        backy = None
         try:
+            backy = Backy(self.config)
             blocks1 = backy.ls_version(version_uid1)
             blocks2 = backy.ls_version(version_uid2)
             max_len = max(len(blocks1), len(blocks2))
@@ -221,65 +229,80 @@ class Commands:
                         print('DIFF      {}'.format(b1.id))
                 except BrokenPipeError:
                     pass
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
     def stats(self, version_uid, limit=None):
         version_uid = VersionUid.create_from_readables(version_uid)
+
         if limit:
             limit = int(limit)
-        backy = Backy(self.config)
+            if limit <= 0:
+                raise backy2.UsageError('Limit has to be a positive integer.')
+
+        backy = None
         try:
+            backy = Backy(self.config)
             stats = backy.stats(version_uid, limit)
 
             if self.machine_output:
                 stats = list(stats) # resolve iterator, otherwise it's not serializable
-                backy.meta_backend.export_any('stats',
-                                              stats,
-                                              sys.stdout,
-                                              )
+                backy._meta_backend.export_any('stats',
+                                               stats,
+                                               sys.stdout,
+                                               )
             else:
                 self._stats_tbl_output(stats)
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def cleanup(self, full, prefix=None):
-        backy = Backy(self.config)
+    def cleanup(self, full):
+        backy = None
         try:
+            backy = Backy(self.config)
             if full:
-                backy.cleanup_full(prefix)
+                backy.cleanup_full()
             else:
                 backy.cleanup_fast()
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def export(self, version_uid, filename='-'):
-        version_uid = VersionUid.create_from_readables(version_uid)
-        backy = Backy(self.config)
+    def export(self, version_uids, output_file=None, force=False):
+        version_uids = VersionUid.create_from_readables(version_uids)
+        backy = None
         try:
-            if filename == '-':
-                with StringIO() as f:
-                    backy.export([version_uid], f)
-                    print(f.getvalue())
+            backy = Backy(self.config)
+            if output_file is None:
+                backy.export(version_uids, sys.stdout)
             else:
-                with open(filename, 'w') as f:
-                    backy.export([version_uid], f)
-        except Exception:
-            raise
+                if os.path.exists(output_file) and not force:
+                    raise FileExistsError('The output file already exists.')
+
+                with open(output_file, 'w') as f:
+                    backy.export(version_uids, f)
         finally:
-            backy.close()
+            if backy:
+                backy.close()
+
+    def export_to_backend(self, version_uids, force=False):
+        version_uids = VersionUid.create_from_readables(version_uids)
+        backy = None
+        try:
+            backy = Backy(self.config)
+            backy.export_to_backend(version_uids, overwrite=force)
+        finally:
+            if backy:
+                backy.close()
 
     def nbd(self, bind_address, bind_port, read_only):
         from backy2.nbd.nbdserver import Server as NbdServer
         from backy2.nbd.nbd import BackyStore
-        backy = Backy(self.config)
+        backy = None
         try:
+            backy = Backy(self.config)
             hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
             cache_dir = self.config.get('nbd.cacheDirectory', types=str)
             store = BackyStore(backy, cachedir=cache_dir, hash_function=hash_function)
@@ -292,47 +315,60 @@ class Commands:
             logger.info("  modprobe nbd")
             logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
             server.serve_forever()
-        except Exception:
-            raise
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def import_(self, filename='-'):
-        backy = Backy(self.config)
-        try:
-            if filename=='-':
-                backy.import_(sys.stdin)
-            else:
-                with open(filename, 'r') as f:
-                    backy.import_(f)
-        except Exception:
-            raise
-        finally:
-            backy.close()
-
-    def add_tag(self, version_uid, name):
-        version_uid = VersionUid.create_from_readables(version_uid)
+    def import_(self, input_file=None):
+        backy = None
         try:
             backy = Backy(self.config)
-            backy.add_tag(version_uid, name)
-        except backy2.exception.NoChange:
-            logger.warn('Version {} already tagged with {}.'.format(version_uid, name))
-        except Exception:
-            raise
+            if input_file is None:
+                backy.import_(sys.stdin)
+            else:
+                with open(input_file, 'r') as f:
+                    backy.import_(f)
         finally:
-            backy.close()
+            if backy:
+                backy.close()
 
-    def remove_tag(self, version_uid, name):
-        version_uid = VersionUid.create_from_readables(version_uid)
-        backy = Backy(self.config)
+    def import_from_backend(self, version_uids):
+        version_uids = VersionUid.create_from_readables(version_uids)
+        backy = None
         try:
-            backy.remove_tag(version_uid, name)
-        except backy2.exception.NoChange:
-            logger.warn('Version {} has no tag {}.'.format(version_uid, name))
-        except Exception:
-            raise
+            backy = Backy(self.config)
+            backy.import_from_backend(version_uids)
         finally:
-            backy.close()
+            if backy:
+                backy.close()
+
+    def add_tag(self, version_uid, names):
+        version_uid = VersionUid.create_from_readables(version_uid)
+        backy = None
+        try:
+            backy = Backy(self.config)
+            for name in names:
+                try:
+                    backy.add_tag(version_uid, name)
+                except backy2.exception.NoChange:
+                    logger.warn('Version {} already tagged with {}.'.format(version_uid, name))
+        finally:
+            if backy:
+                backy.close()
+
+    def rm_tag(self, version_uid, names):
+        version_uid = VersionUid.create_from_readables(version_uid)
+        backy = None
+        try:
+            backy = Backy(self.config)
+            for name in names:
+                try:
+                    backy.rm_tag(version_uid, name)
+                except backy2.exception.NoChange:
+                    logger.warn('Version {} has no tag {}.'.format(version_uid, name))
+        finally:
+            if backy:
+                backy.close()
 
     def initdb(self):
         Backy(self.config, initdb=True)
@@ -344,7 +380,7 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
-        '-v', '--verbose', action='store_true', help='verbose output')
+        '-v', '--verbose', action='store_true', help='Verbose output')
     parser.add_argument(
         '-m', '--machine-output', action='store_true', default=False)
     parser.add_argument(
@@ -370,38 +406,38 @@ def main():
     p.add_argument(
         'name',
         help='Backup name (e.g. the hostname)')
-    p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the rbd snapshot)')
-    p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
-    p.add_argument('-f', '--from-version', dest='from_version_uid', default=None, help='Use this version-uid as base')
+    p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the RBD snapshot)')
+    p.add_argument('-r', '--rbd', default=None, help='Hints as RBD JSON format')
+    p.add_argument('-f', '--from-version', dest='from_version_uid', default=None, help='Use this version as base')
     p.add_argument('-t', '--tag', action='append',  dest='tag', default=None,
-                   help='Use a specific tag for the target backup version-uid')
-    p.add_argument('--block-size', type=int, help='Block size to use for this backup in bytes')
+                   help='Tag this verion with the specified tag(s)')
+    p.add_argument('-b', '--block-size', type=int, help='Block size to use for this backup in bytes')
     p.set_defaults(func='backup')
 
     # RESTORE
     p = subparsers.add_parser(
         'restore',
         help="Restore a given backup to a given target.")
-    p.add_argument('-s', '--sparse', action='store_true', help='Faster. Restore '
-        'only existing blocks (works only with file- and rbd-restore, not with lvm)')
+    p.add_argument('-s', '--sparse', action='store_true', help='Restore only existing blocks. Works only with file '
+                                                               + 'and RBD targets, not with LVM. Faster.')
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
     p.add_argument('version_uid')
     p.add_argument('target',
-        help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename)')
+        help='Source (URL like, e.g. file:///dev/sda or rbd://pool/imagename)')
     p.set_defaults(func='restore')
 
     # PROTECT
     p = subparsers.add_parser(
         'protect',
         help="Protect a backup version. Protected versions cannot be removed.")
-    p.add_argument('version_uid')
+    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.set_defaults(func='protect')
 
     # UNPROTECT
     p = subparsers.add_parser(
         'unprotect',
         help="Unprotect a backup version. Unprotected versions can be removed.")
-    p.add_argument('version_uid')
+    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.set_defaults(func='unprotect')
 
     # RM
@@ -409,6 +445,7 @@ def main():
         'rm',
         help="Remove the given backup versions. This will only remove meta data and you will have to cleanup after this.")
     p.add_argument('-f', '--force', action='store_true', help="Force removal of version, even if it's younger than the configured disallow_rm_when_younger_than_days.")
+    p.add_argument('-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
     p.add_argument('version_uids', metavar='version_uid', nargs='+')
     p.set_defaults(func='rm')
 
@@ -417,26 +454,42 @@ def main():
         'scrub',
         help="Scrub a given backup and check for consistency.")
     p.add_argument('-s', '--source', default=None,
-        help="Source, optional. If given, check if source matches backup in addition to checksum tests. url-like format as in backup.")
+        help='Source, optional. If given, check if source matches backup in addition to checksum tests. URL-like format as in backup.')
     p.add_argument('-p', '--percentile', default=100,
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
-    p.add_argument('version_uid')
+    p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='scrub')
 
     # Export
     p = subparsers.add_parser(
         'export',
-        help="Export the metadata of a backup uid into a file.")
-    p.add_argument('version_uid', help="Version UID. Can be given multiple times.")
-    p.add_argument('filename', help="Export into this filename ('-' is for stdout)")
+        help='Export the metadata of one or more versions to a file or standard out.')
+    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
+    p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing output file')
+    p.add_argument('-o', '--output-file', help='Write export into this file (stdout is used if this option isn\'t specified)')
     p.set_defaults(func='export')
 
     # Import
     p = subparsers.add_parser(
         'import',
-        help="Import the metadata of a backup from a file.")
-    p.add_argument('filename', help="Read from this file ('-' is for stdin)")
+        help='Import the metadata of one or more versions from a file or standard input.')
+    p.add_argument('-i', '--input-file', help='Read from this file (stdin is used if this option isn\'t specified)')
     p.set_defaults(func='import_')
+
+    # Export to data backend
+    p = subparsers.add_parser(
+        'export-to-backend',
+        help='Export metadata of one or more versions to the data backend')
+    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
+    p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing metadata in data backend')
+    p.set_defaults(func='export_to_backend')
+
+    # Import from data backend
+    p = subparsers.add_parser(
+        'import-from-backend',
+        help="Import metadata of one ore more versions from the data backend")
+    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
+    p.set_defaults(func='import_from_backend')
 
     # CLEANUP
     p = subparsers.add_parser(
@@ -446,13 +499,7 @@ def main():
         '-f', '--full', action='store_true', default=False,
         help='Do a full cleanup. This will read the full metadata from the data backend (i.e. backup storage) '
              'and compare it to the metadata in the meta backend. Unused data will then be deleted. '
-             'This is a slow, but complete process. A full cleanup must not be run parallel to ANY other backy '
-             'jobs.')
-    p.add_argument(
-        '-p', '--prefix', default=None,
-        help='If you perform a full cleanup, you may add --prefix to only cleanup block uids starting '
-             'with this prefix. This is for iterative cleanups. Example: '
-             'cleanup --full --prefix=a')
+             'This is a slow, but complete process. A full cleanup must not run in parallel to ANY other jobs.')
     p.set_defaults(func='cleanup')
 
     # LS
@@ -503,32 +550,29 @@ def main():
         'add-tag',
         help="Add a named tag to a backup version.")
     p.add_argument('version_uid')
-    p.add_argument('name')
+    p.add_argument('names', metavar='name', nargs='+')
     p.set_defaults(func='add_tag')
 
     # REMOVE TAG
     p = subparsers.add_parser(
-        'remove-tag',
+        'rm-tag',
         help="Remove a named tag from a backup version.")
     p.add_argument('version_uid')
-    p.add_argument('name')
-    p.set_defaults(func='remove_tag')
-
+    p.add_argument('names', metavar='name', nargs='+')
+    p.set_defaults(func='rm_tag')
 
     args = parser.parse_args()
 
     if args.version:
         print(__version__)
-        exit(0)
+        exit(os.EX_OK)
 
     if not hasattr(args, 'func'):
         parser.print_usage()
-        exit(1)
+        exit(os.EX_USAGE)
 
     if args.verbose:
         console_level = logging.DEBUG
-    #elif args.func == 'scheduler':
-        #console_level = logging.INFO
     else:
         console_level = logging.INFO
 
@@ -537,7 +581,7 @@ def main():
             cfg = open(args.configfile, 'r', encoding='utf-8').read()
         except FileNotFoundError:
             logger.error('File {} not found.'.format(args.configfile))
-            exit(1)
+            exit(os.EX_USAGE)
         config = Config(cfg=cfg)
     else:
         config = Config()
@@ -582,7 +626,7 @@ def main():
         func(**func_args)
         logger.info('Backy complete.\n')
         exit(0)
-    except Exception as exception:
+    except BaseException as exception:
         for case in exit_code_list:
             if isinstance(exception, case['exception']):
                 logger.exception(case['msg'])

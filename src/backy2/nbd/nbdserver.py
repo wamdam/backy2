@@ -132,7 +132,7 @@ class Server(object):
                 header = yield from reader.readexactly(16)
                 try:
                     (magic, opt, length) = struct.unpack(">QLL", header)
-                except struct.error as ex:
+                except struct.error:
                     raise IOError("Negotiation failed: Invalid request, disconnecting")
 
                 if magic != self.NBD_HANDSHAKE:
@@ -184,9 +184,9 @@ class Server(object):
                     break
 
                 elif opt == self.NBD_OPT_LIST:
-                    for _version in self.store.get_versions():
-                        writer.write(struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_SERVER, len(_version.uid) + 4))
-                        version_encoded = _version.uid.encode("utf-8")
+                    for version in self.store.get_versions():
+                        version_encoded = version.uid.readable.encode("ascii")
+                        writer.write(struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_SERVER, len(version_encoded) + 4))
                         writer.write(struct.pack(">L", len(version_encoded)))
                         writer.write(version_encoded)
                         yield from writer.drain()
@@ -237,9 +237,9 @@ class Server(object):
                         cow_version = self.store.get_cow_version(version)
                     try:
                         self.store.write(cow_version, offset, data)
-                    except Exception as ex:
-                        self.log.error("[%s:%s] NBD_CMD_WRITE: %s\n%s" % (host, port, ex, traceback.format_exc()))
-                        yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
+                    except Exception as exception:
+                        self.log.error("[%s:%s] NBD_CMD_WRITE: %s\n%s" % (host, port, exception, traceback.format_exc()))
+                        yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle)
@@ -250,9 +250,9 @@ class Server(object):
                             data = self.store.read(cow_version, offset, length)
                         else:
                             data = self.store.read(version, offset, length)
-                    except Exception as ex:
-                        self.log.error("[%s:%s] NBD_CMD_READ: %s\n%s" % (host, port, ex, traceback.format_exc()))
-                        yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
+                    except Exception as exception:
+                        self.log.error("[%s:%s] NBD_CMD_READ: %s\n%s" % (host, port, exception, traceback.format_exc()))
+                        yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle, data=data)
@@ -264,9 +264,9 @@ class Server(object):
 
                     try:
                         self.store.flush(cow_version)
-                    except Exception as ex:
-                        self.log.error("[%s:%s] NBD_CMD_FLUSH: %s\n%s" % (host, port, ex, traceback.format_exc()))
-                        yield from self.nbd_response(writer, handle, error=ex.errno if hasattr(ex, 'errno') else errno.EIO)
+                    except Exception as exception:
+                        self.log.error("[%s:%s] NBD_CMD_FLUSH: %s\n%s" % (host, port, exception, traceback.format_exc()))
+                        yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle)
@@ -278,8 +278,8 @@ class Server(object):
         except NbdServerAbortedNegotiationError:
             self.log.info("[%s:%s] Client aborted negotiation" % (host, port))
 
-        except (asyncio.IncompleteReadError, IOError) as ex:
-            self.log.error("[%s:%s] %s" % (host, port, ex))
+        except (asyncio.IncompleteReadError, IOError) as exception:
+            self.log.error("[%s:%s] %s" % (host, port, exception))
 
         finally:
             if cow_version:

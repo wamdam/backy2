@@ -3,7 +3,6 @@
 import concurrent
 import hashlib
 import json
-import os
 import setproctitle
 import sys
 from ast import literal_eval
@@ -37,10 +36,10 @@ def parametrized_hash_function(config_hash_function):
     logger.debug('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
     hash_function_w_kwargs = hash_function(**kwargs)
 
-    from backy2.meta_backends import MetaBackend
-    if len(hash_function_w_kwargs.digest()) > MetaBackend.MAXIMUM_CHECKSUM_LENGTH:
+    from backy2.meta_backend import Block
+    if len(hash_function_w_kwargs.digest()) > Block.MAXIMUM_CHECKSUM_LENGTH:
         raise ConfigurationError('Specified hash function exceeds maximum digest length of {}.'
-                                 .format(MetaBackend.MAXIMUM_CHECKSUM_LENGTH))
+                                 .format(Block.MAXIMUM_CHECKSUM_LENGTH))
 
     return hash_function_w_kwargs
 
@@ -69,23 +68,17 @@ def notify(process_name, msg='', old_msg = ''):
         setproctitle.setproctitle(new_msg)
 
 
-def makedirs(path):
-    try:
-        os.makedirs(path)
-    except FileExistsError:
-        pass
-
-
 # This is tricky to implement as we need to make sure that we don't hold a reference to the completed Future anymore.
 # Indeed it's so tricky that older Python versions had the same problem. See https://bugs.python.org/issue27144.
-def future_results_as_completed(futures, semaphore, timeout=None):
+def future_results_as_completed(futures, semaphore=None, timeout=None):
     if sys.version_info < (3,6,4):
         logger.warn('Large backup jobs are likely to fail because of excessive memory usage. '
                     + 'Upgrade your Python to at least 3.6.4.')
 
     for future in concurrent.futures.as_completed(futures, timeout=timeout):
         futures.remove(future)
-        semaphore.release()
+        if semaphore:
+            semaphore.release()
         result = future.result()
         del future
         yield result

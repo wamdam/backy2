@@ -11,7 +11,7 @@ from backy2.config import Config
 from backy2.data_backends import DataBackend
 from backy2.exception import ConfigurationError
 from backy2.logging import init_logging
-from backy2.meta_backends import MetaBackend
+from backy2.meta_backend import MetaBackend
 
 
 class TestCase():
@@ -60,22 +60,17 @@ class BackendTestCase(TestCase):
                 raise ConfigurationError('Data backend type {} not found.'.format(name))
             else:
                 self.data_backend = DataBackendLib.DataBackend(self.config)
-                self.data_backend.rm_many(self.data_backend.list())
+                self.data_backend.rm_many(self.data_backend.list_blocks())
+                for version_uid in self.data_backend.list_versions():
+                    self.data_backend.rm_version(version_uid)
 
-        name = self.config.get('metaBackend.type', None, types=str)
-        if name is not None:
-            try:
-                MetaBackendLib = importlib.import_module('{}.{}'.format(MetaBackend.PACKAGE_PREFIX, name))
-            except ImportError:
-                raise ConfigurationError('Meta backend type {} not found.'.format(name))
-            else:
-                meta_backend = MetaBackendLib.MetaBackend(self.config)
-                meta_backend.initdb(_migratedb=False, _destroydb=True)
-                self.meta_backend = meta_backend.open(_migratedb=False)
+        meta_backend = MetaBackend(self.config)
+        meta_backend.initdb(_migratedb=False, _destroydb=True)
+        self.meta_backend = meta_backend.open(_migratedb=False)
 
     def tearDown(self):
         if hasattr(self, 'data_backend'):
-            uids = self.data_backend.list()
+            uids = self.data_backend.list_blocks()
             self.assertEqual(0, len(uids))
             self.data_backend.close()
         if hasattr(self, 'meta_backend'):

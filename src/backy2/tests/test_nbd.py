@@ -79,7 +79,7 @@ class NbdTestCase:
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
 
-        self.assertEqual({self.version_uid[0], 'V0000000002'}, set([version.uid for version  in backy.ls()]))
+        self.assertEqual({self.version_uid[0].readable}, set([version.uid for version  in backy.ls()]))
 
         backy.close()
 
@@ -102,10 +102,10 @@ class NbdTestCase:
 
     def nbd_client(self, version_uid):
         self.subprocess_run(args=['sudo', 'nbd-client', '127.0.0.1', '-p', str(self.SERVER_PORT), '-l'],
-                            success_regexp='^Negotiation: ..\n{}\n$'.format(version_uid[0]))
+                            success_regexp='^Negotiation: ..\n{}\n$'.format(version_uid[0].readable))
 
         version_uid, size = version_uid
-        self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid, '127.0.0.1', '-p', str(self.SERVER_PORT), self.NBD_DEVICE],
+        self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid.readable, '127.0.0.1', '-p', str(self.SERVER_PORT), self.NBD_DEVICE],
                             success_regexp='^Negotiation: ..size = \d+MB\nbs=1024, sz=\d+ bytes\n$')
 
         count = 0

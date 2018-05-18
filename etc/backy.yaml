@@ -29,18 +29,16 @@ processName: backy2
 # able to delete any version)
 disallowRemoveWhenYounger: 6
 
-metaBackend:
-  # Of which type is the Metadata Backend Engine?
-  # Available types: sql
-  type: sql
+# Export metadata to the data backend
+exportMetadata: True
 
-  sql:
-    # Which SQL Server?
-    # Available servers:
-    #   sqlite:////path/to/sqlitefile
-    #   postgresql:///database
-    #   postgresql://user:password@host:port/database
-    engine: sqlite:////var/lib/backy2/backy.sqlite
+metaBackend:
+  # Which SQL Server?
+  # Available servers:
+  #   sqlite:////path/to/sqlitefile
+  #   postgresql:///database
+  #   postgresql://user:password@host:port/database
+  engine: sqlite:////var/lib/backy2/backy.sqlite
 
 dataBackend:
   # Which data backend to use?
@@ -79,6 +77,23 @@ dataBackend:
   #   applicationKey: *************
   #   bucketName: backy2
   #   accountInfoFile: .... (optional)
+  #   writeObjectAttempts: 1
+  #   uploadAttempts: 5
+
+  # These are part of the backend specific configuration
+  #
+  #   encryption:
+  #     - name: aws_s3_cse
+  #       materials:
+  #       masterKey: !!binary |
+  #         e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+  #       active: true
+
+  #   compression:
+  #     - name: zstd
+  #       materials:
+  #         level: 1
+  #       active: true
 
   # How many writes to perform in parallel. This is useful if your backup space
   # can perform parallel writes faster than serial ones.
@@ -92,19 +107,6 @@ dataBackend:
   # bytes per second
   #bandwidthRead: 78643200
   #bandwidthWrite: 78643200
-
-  #encryption:
-  #  - name: aws_s3_cse
-  #    materials:
-  #      masterKey: !!binary |
-  #        e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
-  #    active: true
-
-  #compression:
-  #  - name: zstd
-  #    materials:
-  #      level: 1
-  #    active: true
 
   #readCache:
   #  directory: /var/lib/backy2/read-cache

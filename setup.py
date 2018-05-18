@@ -26,7 +26,7 @@ Topic :: System :: Archiving :: Backup
         '': 'src',
     },
     package_data={
-        'src': ['meta_backends/sql_migrations/alembic.ini'],
+        'src': ['sql_migrations/alembic.ini'],
     },
     include_package_data=True,
     zip_safe=False,  # ONLY because of alembic.ini. The rest is zip-safe.

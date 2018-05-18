@@ -27,8 +27,10 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
                  materials:
                    masterKey: !!binary |
                      e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
-                 active: true       
-             consistencyCheckWrites: True      
+                 active: true    
+             writeObjectAttempts: 1
+             uploadAttempts: 5   
+             consistencyCheckWrites: True
           simultaneousWrites: 5
           simultaneousReads: 5
           bandwidthRead: 0

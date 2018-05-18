@@ -1,7 +1,7 @@
 from unittest import TestCase
 
 from backy2.exception import InternalError, NoChange
-from backy2.meta_backends.sql import BlockUid
+from backy2.meta_backend import BlockUid, VersionUid
 from backy2.tests.testcase import BackendTestCase
 
 
@@ -15,7 +15,7 @@ class SQLTestCase:
                 block_size=4 * 1024 * 4096,
                 valid=False
             )
-            self.meta_backend._commit()
+            self.meta_backend.commit()
 
             version = self.meta_backend.get_version(version.uid)
             self.assertEqual('backup-name', version.name)
@@ -49,8 +49,8 @@ class SQLTestCase:
             self.assertIn(version.uid, map(lambda tag: tag.version_uid, version.tags))
             self.assertIn('tag-123', map(lambda tag: tag.name, version.tags))
 
-            self.meta_backend.remove_tag(version.uid, 'tag-123')
-            self.assertRaises(NoChange, lambda: self.meta_backend.remove_tag(version.uid, 'tag-123'))
+            self.meta_backend.rm_tag(version.uid, 'tag-123')
+            self.assertRaises(NoChange, lambda: self.meta_backend.rm_tag(version.uid, 'tag-123'))
             version = self.meta_backend.get_version(version.uid)
             self.assertEqual(0, len(version.tags))
 
@@ -76,7 +76,7 @@ class SQLTestCase:
             block_size=1024 * 4096,
             valid=False
         )
-        self.meta_backend._commit()
+        self.meta_backend.commit()
 
         checksums = []
         uids = []
@@ -90,10 +90,8 @@ class SQLTestCase:
                 uids[id],
                 checksums[id],
                 1024 * 4096,
-                True,
-                _commit=False,
-                _upsert=False)
-        self.meta_backend._commit()
+                True)
+        self.meta_backend.commit()
 
         for id, checksum in enumerate(checksums):
             block = self.meta_backend.get_block_by_checksum(checksum)
@@ -139,7 +137,7 @@ class SQLTestCase:
         self.assertEqual(num_blocks, len(uids_all))
 
         self.meta_backend.rm_version(version.uid)
-        self.meta_backend._commit()
+        self.meta_backend.commit()
         blocks = self.meta_backend.get_blocks_by_version(version.uid)
         self.assertEqual(0, len(blocks))
 
@@ -174,6 +172,19 @@ class SQLTestCase:
         locking.unlock()
         self.assertFalse(locking.is_locked())
 
+    def test_version_uid_create_from_readable(self):
+        self.assertEqual(VersionUid(1), VersionUid.create_from_readables(1))
+        self.assertEqual(VersionUid(1), VersionUid.create_from_readables('V1'))
+        uids = VersionUid.create_from_readables(['V1'])
+        self.assertTrue(isinstance(uids, list))
+        self.assertTrue(len(uids) == 1)
+        self.assertEqual(VersionUid(1), uids[0])
+        uids = VersionUid.create_from_readables(['V1', 'V2', 3])
+        self.assertTrue(isinstance(uids, list))
+        self.assertTrue(len(uids) == 3)
+        self.assertEqual(VersionUid(1), uids[0])
+        self.assertEqual(VersionUid(2), uids[1])
+        self.assertEqual(VersionUid(3), uids[2])
 
 class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
 
@@ -183,9 +194,7 @@ class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
         lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32
         metaBackend: 
-          type: sql
-          sql:
-            engine: sqlite:///{testpath}/backy.sqlite
+          engine: sqlite:///{testpath}/backy.sqlite
         """
 
 class SQLTestCasePostgreSQL(SQLTestCase, BackendTestCase, TestCase):
@@ -196,7 +205,5 @@ class SQLTestCasePostgreSQL(SQLTestCase, BackendTestCase, TestCase):
         lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32
         metaBackend: 
-          type: sql
-          sql:
-            engine: postgresql://backy2:verysecret@localhost:15432/backy2
+          engine: postgresql://backy2:verysecret@localhost:15432/backy2
         """

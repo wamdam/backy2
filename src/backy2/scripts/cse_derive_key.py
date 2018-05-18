@@ -68,9 +68,9 @@ def main():
     try:
         derive_key(password, a2b_base64(args.salt), args.rounds)
         exit(0)
-    except Exception as e:
+    except Exception as exception:
         logger.error('Unexpected exception')
-        logger.exception(e)
+        logger.exception(exception)
         exit(100)
 
 if __name__ == '__main__':

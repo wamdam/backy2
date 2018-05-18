@@ -3,10 +3,10 @@ from __future__ import with_statement
 from alembic import context
 from sqlalchemy import create_engine
 
-from backy2.config import Config as _backy_config
+from backy2.config import Config as BackyConfig
 
-backy_config = _backy_config()
-engine_url = backy_config.get('metaBackend.sql.engine', types=str)
+backy_config = BackyConfig()
+engine_url = backy_config.get('metaBackend.engine', types=str)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,7 +20,7 @@ config = context.config
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from backy2.meta_backends.sql import Base
+from backy2.meta_backend import Base
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

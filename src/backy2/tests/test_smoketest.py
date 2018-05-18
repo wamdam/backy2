@@ -107,6 +107,16 @@ class SmokeTestCase:
             version_uids.append(version_uid)
 
             backy = self.backyOpen(initdb=initdb)
+            backy.rm(version_uid, force=True, keep_backend_metadata=True)
+            print('  Remove version successful')
+            backy.close()
+
+            backy = self.backyOpen(initdb=initdb)
+            backy.import_from_backend([version_uid])
+            print('  Import version from backend successful')
+            backy.close()
+
+            backy = self.backyOpen(initdb=initdb)
             blocks = backy.ls_version(version_uid)
             self.assertEqual(list(range(len(blocks))), sorted([block.id for block in blocks]))
             self.assertTrue(len(blocks) > 0)
@@ -145,7 +155,7 @@ class SmokeTestCase:
             # delete old versions
             if len(version_uids) > 10:
                 backy = self.backyOpen(initdb=initdb)
-                backy.rm(version_uids.pop(0))
+                backy.rm(version_uids.pop(0), force=True)
                 backy.close()
 
             if (i%7) == 0:
@@ -162,6 +172,7 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -169,14 +180,13 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
               type: file
               file:
                 path: {testpath}/data
+                consistencyCheckWrites: True
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/backy.sqlite
             """
 class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
 
@@ -187,6 +197,7 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -194,14 +205,13 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
               type: file
               file:
                 path: {testpath}/data
+                consistencyCheckWrites: True
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: postgresql://backy2:verysecret@localhost:15432/backy2
+              engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
 class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
 
@@ -212,6 +222,7 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -224,14 +235,13 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
                 port: 9901
                 isSecure: False
                 bucketName: backy2
+                consistencyCheckWrites: True
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: postgresql://backy2:verysecret@localhost:15432/backy2
+              engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
 
 class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
@@ -243,6 +253,7 @@ class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -256,14 +267,13 @@ class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
                 multiDelete: true
                 addressingStyle: path
                 disableEncodingType: false
+                consistencyCheckWrites: True
               simultaneousWrites: 1
               simultaneousReads: 1
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/backy.sqlite
             """
 
 class SmokeTestCasePostgreSQL_S3_Boto3_ReadCache(SmokeTestCase, BackyTestCase, TestCase):
@@ -274,7 +284,8 @@ class SmokeTestCasePostgreSQL_S3_Boto3_ReadCache(SmokeTestCase, BackyTestCase, T
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
-            blockSize: 4194304
+            blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -288,16 +299,16 @@ class SmokeTestCasePostgreSQL_S3_Boto3_ReadCache(SmokeTestCase, BackyTestCase, T
                 multiDelete: false
                 addressingStyle: path
                 disableEncodingType: false
+                consistencyCheckWrites: True
               simultaneousWrites: 1
               simultaneousReads: 1
               bandwidthRead: 0
               bandwidthWrite: 0
-              readCacheDirectory: {testpath}/read-cache
-              readCacheMaximumSize: 16777216
+              readCache:
+                directory: {testpath}/read-cache
+                maximumSize: 16777216
             metaBackend: 
-              type: sql
-              sql:
-                engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/backy.sqlite
             """
 
 class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
@@ -309,6 +320,7 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -323,7 +335,5 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: postgresql://backy2:verysecret@localhost:15432/backy2
+              engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """

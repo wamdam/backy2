@@ -6,8 +6,7 @@ import random
 from io import StringIO
 from unittest import TestCase
 
-from backy2.meta_backends import MetaBackend
-from backy2.meta_backends.sql import VersionUid
+from backy2.meta_backend import MetaBackend, VersionUid
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.tests.testcase import BackyTestCase
 
@@ -109,7 +108,7 @@ class ImportExportTestCase():
     def test_import(self):
         backy = self.backyOpen(initdb=True)
         backy.import_(StringIO(self.IMPORT))
-        version = backy.meta_backend.get_version(VersionUid(1))
+        version = backy._meta_backend.get_version(VersionUid(1))
         self.assertTrue(isinstance(version.uid, VersionUid))
         self.assertEqual(1, version.uid)
         self.assertEqual('data-backup', version.name)
@@ -121,7 +120,7 @@ class ImportExportTestCase():
         self.assertIsInstance(version.tags, list)
         self.assertEqual({'b_daily', 'b_weekly', 'b_monthly'}, set([tag.name for tag in version.tags]))
         self.assertEqual(datetime.datetime.strptime('2018-05-16T11:57:10', '%Y-%m-%dT%H:%M:%S'), version.date)
-        blocks = backy.meta_backend.get_blocks_by_version(VersionUid(1))
+        blocks = backy._meta_backend.get_blocks_by_version(VersionUid(1))
         self.assertTrue(len(blocks) > 0)
         max_i = len(blocks) - 1
         for i, block in enumerate(blocks):
@@ -1268,6 +1267,7 @@ class ImportExportCaseSQLLite_File(ImportExportTestCase, BackyTestCase, TestCase
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 5
@@ -1280,9 +1280,7 @@ class ImportExportCaseSQLLite_File(ImportExportTestCase, BackyTestCase, TestCase
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/backy.sqlite
             """
 
 class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BackyTestCase, TestCase):
@@ -1296,6 +1294,7 @@ class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BackyTestCase, T
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
+            exportMetadata: True
             io:
               file:
                 simultaneousReads: 5
@@ -1308,8 +1307,6 @@ class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BackyTestCase, T
               bandwidthRead: 0
               bandwidthWrite: 0                
             metaBackend: 
-              type: sql
-              sql:
-                engine: postgresql://backy2:verysecret@localhost:15432/backy2
+              engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
 

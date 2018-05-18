@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import hashlib
 import socket
 
 import boto.exception
@@ -8,7 +7,6 @@ import boto.s3.connection
 
 from backy2.data_backends import ReadCacheDataBackend
 from backy2.logging import logger
-from backy2.meta_backends.sql import BlockUid
 
 
 class DataBackend(ReadCacheDataBackend):
@@ -54,18 +52,6 @@ class DataBackend(ReadCacheDataBackend):
             pass
 
         self.bucket = self.conn.get_bucket(bucket_name)
-
-    @staticmethod
-    def _block_uid_to_key(block_uid):
-        key_name = '{:016x}-{:016x}'.format(block_uid.left, block_uid.right)
-        hash = hashlib.md5(key_name.encode('ascii')).hexdigest()
-        return '{}/{}/{}-{}'.format(hash[0:2], hash[2:4], hash[:8], key_name)
-
-    @staticmethod
-    def _key_to_block_uid(key):
-        if len(key) != 48:
-            raise RuntimeError('Invalid key name {}'.format(key))
-        return BlockUid(int(key[15:15 + 16], 16), int(key[32:32 + 16], 16))
 
     def _write_object(self, key, data, metadata):
         key_obj = self.bucket.new_key(key)

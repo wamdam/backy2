@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import hashlib
 import logging
 import urllib
 
@@ -13,8 +12,7 @@ from b2.account_info.sqlite_account_info import SqliteAccountInfo
 from b2.download_dest import DownloadDestBytes
 from b2.exception import B2Error, FileNotPresent, UnknownError
 from backy2.data_backends import ReadCacheDataBackend
-from backy2.exception import UsageError
-from backy2.meta_backends.sql import BlockUid
+from backy2.logging import logger
 
 
 class DataBackend(ReadCacheDataBackend):
@@ -36,12 +34,20 @@ class DataBackend(ReadCacheDataBackend):
         account_id = config.get_from_dict(our_config, 'accountId', types=str)
         application_key = config.get_from_dict(our_config, 'applicationKey', types=str)
         bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
-        account_info_file = config.get_from_dict(our_config, 'accountInfoFile', None, types=str)
 
+        account_info_file = config.get_from_dict(our_config, 'accountInfoFile', None, types=str)
         if account_info_file is not None:
             account_info = SqliteAccountInfo(file_name=account_info_file)
         else:
             account_info = InMemoryAccountInfo()
+
+        b2.bucket.Bucket.MAX_UPLOAD_ATTEMPTS  = config.get_from_dict(our_config, 'uploadAttempts', types=int,
+                                                                     check_func=lambda v: v >= 1,
+                                                                     check_message='Must be a positive integer')
+
+        self._write_object_attempts = config.get_from_dict(our_config, 'writeObjectAttempts', types=int,
+                                                           check_func=lambda  v: v >= 1,
+                                                           check_message='Must be a positive integer')
 
         self.service = b2.api.B2Api(account_info)
         if account_info_file is not None:
@@ -58,23 +64,21 @@ class DataBackend(ReadCacheDataBackend):
             
         self.bucket = self.service.get_bucket_by_name(bucket_name)
 
-    @staticmethod
-    def _block_uid_to_key(block_uid):
-        key_name = '{:016x}-{:016x}'.format(block_uid.left, block_uid.right)
-        hash = hashlib.md5(key_name.encode('ascii')).hexdigest()
-        return '{}/{}/{}-{}'.format(hash[0:2], hash[2:4], hash[:8], key_name)
-
-    @staticmethod
-    def _key_to_block_uid(key):
-        if len(key) != 48:
-            raise RuntimeError('Invalid key name {}'.format(key))
-        return BlockUid(int(key[15:15 + 16], 16), int(key[32:32 + 16], 16))
-
     def _write_object(self, key, data, metadata):
         if len(metadata) > 10:
             raise RuntimeError('Maximum number of metadata entries exceed. ' +
                                'Please change your compression or encryption settings for this backend.')
-        self.bucket.upload_bytes(data, key, file_infos=metadata)
+
+        for i in range(self._write_object_attempts):
+            try:
+                self.bucket.upload_bytes(data, key, file_infos=metadata)
+            except B2Error:
+                if i + 1 < self._write_object_attempts:
+                    logger.warn('Upload of object with key {} to B2 failed repeatedly, will try again.'.format(key))
+                    continue
+                raise
+            else:
+                break
 
     def _read_object(self, key, offset=0, length=None):
         data_io = DownloadDestBytes()
@@ -103,7 +107,7 @@ class DataBackend(ReadCacheDataBackend):
             if file_version_info.file_name == key:
                 return file_version_info
 
-        raise FileNotFoundError('UID {} not found.'.format(key))
+        raise FileNotFoundError('Object {} not found.'.format(key))
 
     def _rm_object(self, key):
         try:
@@ -114,7 +118,7 @@ class DataBackend(ReadCacheDataBackend):
             # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
             if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
             #if isinstance(e, FileNotPresent):
-                raise FileNotFoundError('UID {} not found.'.format(key)) from None
+                raise FileNotFoundError('Object {} not found.'.format(key)) from None
             else:
                 raise
 
@@ -131,9 +135,7 @@ class DataBackend(ReadCacheDataBackend):
                 errors.append(key)
         return errors
 
-    def _list_objects(self, prefix=None):
-        if prefix:
-            raise UsageError('Specifying a prefix isn\t implemented for this backend yet.')
-        return [file_version_info.file_name
-                for (file_version_info, folder_name) in self.bucket.ls()]
+    def _list_objects(self, prefix=''):
+        return [file_version_info.file_name for (file_version_info, folder_name) in
+                                                            self.bucket.ls(folder_to_list=prefix, recursive=True)]
 
