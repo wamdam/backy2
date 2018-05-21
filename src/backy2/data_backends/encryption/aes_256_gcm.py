@@ -46,8 +46,6 @@ class Encryption:
         envelope_key = aes_wrap_key(self._master_key, envelope_key)
 
         materials = {
-            'wrap_alg': 'AESWrap',
-            'cek_alg': 'AES/GCM/NoPadding',
             'envelope_key': base64.b64encode(envelope_key).decode('ascii'),
             'iv': base64.b64encode(envelope_iv).decode('ascii'),
         }
@@ -56,18 +54,9 @@ class Encryption:
 
     def decrypt(self, data, materials):
 
-        for key in ['wrap_alg', 'cek_alg', 'envelope_key', 'iv']:
+        for key in ['envelope_key', 'iv']:
             if key not in materials:
                 raise KeyError('Encryption materials are missing required key {}.'.format(key))
-
-        wrap_alg = materials['wrap_alg']
-        cek_alg = materials['cek_alg']
-        if wrap_alg.lower() != 'aeswrap':
-            raise ValueError('AESWrap is the only currently supported key wrapping algorithm, object specifies {}.'
-                             .format(wrap_alg))
-        if cek_alg.lower() != 'aes/gcm/nopadding':
-            raise ValueError('AES/GCM/Nopadding is the only currently supported content encryption algorithm, '
-                             + 'object specifies {}.'.format(wrap_alg))
 
         envelope_key = materials['envelope_key']
         iv = materials['iv']
