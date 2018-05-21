@@ -1,6 +1,5 @@
-import unittest
-
 import os
+import unittest
 
 from backy2.config import Config
 from backy2.exception import ConfigurationError
@@ -14,7 +13,6 @@ class ConfigTestCase(TestCase, unittest.TestCase):
         logFile: /var/log/backy.log
         blockSize: 4194304
         hashFunction: sha512
-        lockDirectory: /run
         processName: backy2
         metaBackend:
           type: sql

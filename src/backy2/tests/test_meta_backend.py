@@ -191,7 +191,6 @@ class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
     CONFIG = """
         configurationVersion: '1.0.0'
         logFile: /dev/stderr
-        lockDirectory: {testpath}/lock
         hashFunction: blake2b,digest_size=32
         metaBackend: 
           engine: sqlite:///{testpath}/backy.sqlite

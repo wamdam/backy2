@@ -24,7 +24,6 @@ class Config:
     logFile: /tmp/backy.log
     blockSize: 4194304
     hashFunction: blake2b,digest_size=32
-    lockDirectory: /tmp
     process_name: backy2
     disallowRemoveWhenYounger: 6
     exportMetadata: True
@@ -53,9 +52,6 @@ class Config:
 
     REDACT = """
         dataBackend:
-          s3_boto3:
-            awsAccessKeyId: '<redacted>'
-            awsSecretAccessKey: '<redacted>'
           s3:
             awsAccessKeyId: '<redacted>'
             awsSecretAccessKey: '<redacted>'

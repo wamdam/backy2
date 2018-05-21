@@ -169,7 +169,6 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
             configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
-            lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
             exportMetadata: True
@@ -220,7 +219,6 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
             configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
-            lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
             exportMetadata: True
@@ -287,7 +285,6 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
             configurationVersion: '1.0.0'
             processName: backy2
             logFile: /dev/stderr
-            lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
             exportMetadata: True
