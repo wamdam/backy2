@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import logging
-import urllib
 
 import b2
 import b2.api
@@ -22,10 +21,6 @@ class DataBackend(ReadCacheDataBackend):
 
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
-
-    SUPPORTS_PARTIAL_READS = False
-    SUPPORTS_PARTIAL_WRITES = False
-    SUPPORTS_METADATA = True
 
     def __init__(self, config):
         super().__init__(config)
@@ -64,14 +59,10 @@ class DataBackend(ReadCacheDataBackend):
             
         self.bucket = self.service.get_bucket_by_name(bucket_name)
 
-    def _write_object(self, key, data, metadata):
-        if len(metadata) > 10:
-            raise RuntimeError('Maximum number of metadata entries exceed. ' +
-                               'Please change your compression or encryption settings for this backend.')
-
+    def _write_object(self, key, data):
         for i in range(self._write_object_attempts):
             try:
-                self.bucket.upload_bytes(data, key, file_infos=metadata)
+                self.bucket.upload_bytes(data, key)
             except B2Error:
                 if i + 1 < self._write_object_attempts:
                     logger.warn('Upload of object with key {} to B2 failed repeatedly, will try again.'.format(key))
@@ -80,7 +71,7 @@ class DataBackend(ReadCacheDataBackend):
             else:
                 break
 
-    def _read_object(self, key, offset=0, length=None):
+    def _read_object(self, key):
         data_io = DownloadDestBytes()
         try:
             self.bucket.download_file_by_name(key, data_io)
@@ -93,12 +84,7 @@ class DataBackend(ReadCacheDataBackend):
             else:
                 raise
 
-        # B2 URL escapes the value so we need to decode it
-        metadata = data_io.file_info
-        for name in metadata.keys():
-            metadata[name] = urllib.parse.unquote(metadata[name])
-
-        return data_io.get_bytes_written(), metadata
+        return data_io.get_bytes_written()
 
     def _file_info(self, key):
         r = self.bucket.list_file_names(key, 1)

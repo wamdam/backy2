@@ -15,7 +15,7 @@ from backy2.backy import Backy
 from backy2.config import Config
 from backy2.logging import logger, init_logging
 from backy2.meta_backend import Version, VersionUid
-from backy2.utils import hints_from_rbd_diff, parametrized_hash_function
+from backy2.utils import hints_from_rbd_diff, parametrized_hash_function, human_readable_duration
 
 __version__ = pkg_resources.get_distribution('backy2').version
 
@@ -165,7 +165,7 @@ class Commands:
                 stat.blocks_found_dedup,
                 stat.bytes_sparse,
                 stat.blocks_sparse,
-                stat.duration_seconds,
+                human_readable_duration(stat.duration_seconds),
                 ])
         print(tbl)
 

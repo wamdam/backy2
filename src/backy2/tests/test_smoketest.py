@@ -213,6 +213,7 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BackyTestCase, TestCase):
             metaBackend: 
               engine: postgresql://backy2:verysecret@localhost:15432/backy2
             """
+
 class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
@@ -231,37 +232,6 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
               s3:
                 awsAccessKeyId: minio
                 awsSecretAccessKey: minio123
-                host: 127.0.0.1
-                port: 9901
-                isSecure: False
-                bucketName: backy2
-                consistencyCheckWrites: True
-              simultaneousWrites: 5
-              simultaneousReads: 5
-              bandwidthRead: 0
-              bandwidthWrite: 0
-            metaBackend: 
-              engine: postgresql://backy2:verysecret@localhost:15432/backy2
-            """
-
-class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
-
-    CONFIG = """
-            configurationVersion: '1.0.0'
-            processName: backy2
-            logFile: /dev/stderr
-            lockDirectory: {testpath}/lock
-            hashFunction: blake2b,digest_size=32
-            blockSize: 4096
-            exportMetadata: True
-            io:
-              file:
-                simultaneousReads: 2
-            dataBackend:
-              type: s3_boto3
-              s3_boto3:
-                awsAccessKeyId: minio
-                awsSecretAccessKey: minio123
                 endpointUrl: http://127.0.0.1:9901/
                 bucketName: backy2
                 multiDelete: true
@@ -276,7 +246,7 @@ class SmokeTestCasePostgreSQL_S3_Boto3(SmokeTestCase, BackyTestCase, TestCase):
               engine: sqlite:///{testpath}/backy.sqlite
             """
 
-class SmokeTestCasePostgreSQL_S3_Boto3_ReadCache(SmokeTestCase, BackyTestCase, TestCase):
+class SmokeTestCasePostgreSQL_S3_ReadCache(SmokeTestCase, BackyTestCase, TestCase):
 
     CONFIG = """
             configurationVersion: '1.0.0'
@@ -290,8 +260,8 @@ class SmokeTestCasePostgreSQL_S3_Boto3_ReadCache(SmokeTestCase, BackyTestCase, T
               file:
                 simultaneousReads: 2
             dataBackend:
-              type: s3_boto3
-              s3_boto3:
+              type: s3
+              s3:
                 awsAccessKeyId: minio
                 awsSecretAccessKey: minio123
                 endpointUrl: http://127.0.0.1:9901/
@@ -330,6 +300,10 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
                  accountId: **************
                  applicationKey: **************
                  bucketName: backy2
+                 accountInfoFile: {testpath}/b2_account_info
+                 writeObjectAttempts: 1
+                 uploadAttempts: 5
+                 consistencyCheckWrites: True
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0

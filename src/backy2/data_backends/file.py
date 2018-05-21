@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-import fnmatch
 import os
 
 from backy2.data_backends import DataBackend as _DataBackend
@@ -18,12 +17,6 @@ class DataBackend(_DataBackend):
     WRITE_QUEUE_LENGTH = 10
     READ_QUEUE_LENGTH = 20
 
-    SUPPORTS_PARTIAL_READS = True
-    SUPPORTS_PARTIAL_WRITES = True
-    SUPPORTS_METADATA = False
-
-    _SUFFIX = '.blob'
-
     def __init__(self, config):
         super().__init__(config)
 
@@ -37,8 +30,8 @@ class DataBackend(_DataBackend):
         if not self.path.endswith('/'):
             self.path = self.path + '/'
 
-    def _write_object(self, key, data, metadata):
-        filename = os.path.join(self.path, key) + self._SUFFIX
+    def _write_object(self, key, data):
+        filename = os.path.join(self.path, key)
 
         try:
             with open(filename, 'wb') as f:
@@ -48,35 +41,19 @@ class DataBackend(_DataBackend):
             with open(filename, 'wb') as f:
                 f.write(data)
 
-    def _read_object(self, key, offset=0, length=None):
-        filename = os.path.join(self.path, key) + self._SUFFIX
+    def _read_object(self, key):
+        filename = os.path.join(self.path, key)
 
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
 
-        if offset == 0 and length is None:
-            with open(filename, 'rb') as f:
-                data = f.read()
-            return data, {}
-        else:
-            with open(filename, 'rb') as f:
-                if offset:
-                    f.seek(offset)
-                if length:
-                    data = f.read(length)
-                else:
-                    data = f.read()
-            return data, {}
+        with open(filename, 'rb') as f:
+            data = f.read()
 
-    def update(self, block, data, offset=0):
-        filename = os.path.join(self.path, self.block_uid_to_key(block.uid)) + self._SUFFIX
-
-        with open(filename, 'r+b') as f:
-            f.seek(offset)
-            return f.write(data)
+        return data
 
     def _rm_object(self, key):
-        filename = os.path.join(self.path, key) + self._SUFFIX
+        filename = os.path.join(self.path, key)
 
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
@@ -94,10 +71,7 @@ class DataBackend(_DataBackend):
     def _list_objects(self, prefix):
         matches = []
         for root, dirnames, filenames in os.walk(os.path.join(self.path, prefix)):
-            for filename in fnmatch.filter(filenames, '*' + self._SUFFIX):
-                key = (os.path.join(root, filename[:-len(self._SUFFIX)]))[len(self.path):]
+            for filename in filenames:
+                key = (os.path.join(root, filename))[len(self.path):]
                 matches.append(key)
         return matches
-
-
-

@@ -43,7 +43,7 @@ metaBackend:
 dataBackend:
   # Which data backend to use?
   # Available types:
-  #   file, s3, s3_boto3, b2
+  #   file, s3, b2
   type: file
 
   file:
@@ -53,14 +53,6 @@ dataBackend:
     path: /var/lib/backy2/data
 
   #s3:
-  #  awsAccessKeyId: ********
-  #  awsSecretAccessKey: ********
-  #  host: www.example.com
-  #  port: 80
-  #  isSecure: false
-  #  bucketName: backy2
-
-  #s3_boto3:
   #  awsAccessKeyId: ********
   #  awsSecretAccessKey: ********
   #  regionName: (optional)
@@ -80,20 +72,18 @@ dataBackend:
   #   writeObjectAttempts: 1
   #   uploadAttempts: 5
 
-  # These are part of the backend specific configuration
-  #
-  #   encryption:
-  #     - name: aws_s3_cse
-  #       materials:
+  # encryption:
+  #   - name: aws_s3_cse
+  #     materials:
   #       masterKey: !!binary |
   #         e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
-  #       active: true
+  #     active: true
 
-  #   compression:
-  #     - name: zstd
-  #       materials:
-  #         level: 1
-  #       active: true
+  # compression:
+  #   - name: zstd
+  #     materials:
+  #       level: 1
+  #     active: true
 
   # How many writes to perform in parallel. This is useful if your backup space
   # can perform parallel writes faster than serial ones.

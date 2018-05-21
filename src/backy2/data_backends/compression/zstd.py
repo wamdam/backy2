@@ -15,5 +15,5 @@ class Compression:
     def compress(self, data):
         return zstd.compress(data, self.level), {}
 
-    def uncompress(self, data, metadata):
+    def uncompress(self, data, materials):
         return zstd.uncompress(data)

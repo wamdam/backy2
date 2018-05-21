@@ -9,6 +9,10 @@ from ast import literal_eval
 from threading import Lock
 from time import time
 
+from Crypto.Hash import SHA512
+from Crypto.Protocol.KDF import PBKDF2
+from dateutil.relativedelta import relativedelta
+
 from backy2.exception import ConfigurationError
 from backy2.logging import logger
 
@@ -83,6 +87,19 @@ def future_results_as_completed(futures, semaphore=None, timeout=None):
         del future
         yield result
 
+def derive_key(password, key_length):
+    salt = bytes([77, 49, 148, 173, 79, 106, 209, 205, 89, 167, 100, 234, 201, 166, 196, 189])
+    return PBKDF2(password=password, salt=salt, dkLen=key_length, count=16384, hmac_hash_module=SHA512)
+
+# Based on https://code.activestate.com/recipes/578113-human-readable-format-for-a-given-time-delta/
+def human_readable_duration(duration):
+    delta = relativedelta(seconds=duration)
+    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
+    readable = []
+    for attr in attrs:
+        if getattr(delta, attr) or attr == attrs[-1]:
+            readable.append('{}{}'.format(getattr(delta, attr), attr[:1]))
+    return ' '.join(readable)
 
 # token_bucket.py
 class TokenBucket:

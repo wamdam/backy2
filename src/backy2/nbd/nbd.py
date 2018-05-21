@@ -69,20 +69,17 @@ class BackyStore:
         return read_list
 
     def _read(self, block, offset=0, length=None):
-        if self.backy.data_backend.SUPPORTS_PARTIAL_READS:
-            return self.backy.data_backend.read(block, offset=offset, length=length, sync=True)
-        else:
-            if block.uid not in self.block_cache:
-                data = self.backy.data_backend.read(block, sync=True)
-                with open(os.path.join(self.cachedir, block.uid), 'wb') as f:
-                    f.write(data)
-                self.block_cache.add(block.uid)
-            with open(os.path.join(self.cachedir, block.uid), 'rb') as f:
-                f.seek(offset)
-                if length is None:
-                    return f.read()
-                else:
-                    return f.read(length)
+        if block.uid not in self.block_cache:
+            data = self.backy.data_backend.read(block, sync=True)
+            with open(os.path.join(self.cachedir, block.uid), 'wb') as f:
+                f.write(data)
+            self.block_cache.add(block.uid)
+        with open(os.path.join(self.cachedir, block.uid), 'rb') as f:
+            f.seek(offset)
+            if length is None:
+                return f.read()
+            else:
+                return f.read(length)
 
     def read(self, version, offset, length):
         read_list = self._block_list(version, offset, length)
@@ -100,25 +97,12 @@ class BackyStore:
         self.cow[cow_version.uid] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version
 
-    def _update(self, block, data, offset=0):
-        # update a given block_uid
-        if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
-            return self.backy.data_backend.update(block, data, offset)
-        else:
-            # update local copy
-            with open(os.path.join(self.cachedir, block.uid), 'r+b') as f:
-                f.seek(offset)
-                return f.write(data)
-
     def _save(self, block, data):
         # update a given block_uid
-        if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
-            self.backy.data_backend.save(block, data, sync=True)
-        else:
-            filename = '{:016x}-{:016x}'.format(block.uid.left, block.uid.right)
-            with open(os.path.join(self.cachedir, filename), 'wb') as f:
-                f.write(data)
-            self.block_cache.add(block.uid)
+        filename = '{:016x}-{:016x}'.format(block.uid.left, block.uid.right)
+        with open(os.path.join(self.cachedir, filename), 'wb') as f:
+            f.write(data)
+        self.block_cache.add(block.uid)
 
     def write(self, version, offset, data):
         """ Copy on write backup writer """
@@ -131,7 +115,8 @@ class BackyStore:
                 continue
             if block.id in cow:
                 # the block is already copied, so update it.
-                self._update(cow[block.id], dataio.read(length), _offset)
+                with open(os.path.join(self.cachedir, block.uid), 'r+b') as f:
+                    f.seek(offset)
                 logger.debug('COW: Updated block {}'.format(block.id))
             else:
                 # read the block from the original, update it and write it back
@@ -162,10 +147,9 @@ class BackyStore:
             logger.debug('Fixating block {} uid {}'.format(block.id, block.uid))
             data = self._read(block)
 
-            if not self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
-                # dump changed data
-                self.backy.data_backend.save(block, data, sync=True)
-                logger.debug('Stored block {} uid {}'.format(block.id, block.uid))
+            # dump changed data
+            self.backy.data_backend.save(block, data, sync=True)
+            logger.debug('Stored block {} uid {}'.format(block.id, block.uid))
 
             checksum = data_hexdigest(self.hash_function, data)
             self.backy.meta_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
@@ -174,18 +158,13 @@ class BackyStore:
         self.backy.meta_backend.commit()
         logger.info('Fixation done. Deleting temporary data (PLEASE WAIT)')
         # TODO: Delete COW blocks and also those from block_cache
-        if self.backy.data_backend.SUPPORTS_PARTIAL_WRITES:
-            for block_uid in self.block_cache:
-                # TODO if this block is in the current version (and in no other?)
-                # rm this block from cache
-                # rm block uid from self.block_cache
-                pass
-            for block_id, block in self.cow[cow_version.uid].items():
-                # TODO: rm block_uid from cache
-                pass
-        else:
-            # backends that support partial writes will be written to directly.
-            # So there's no need to cleanup.
+        for block_uid in self.block_cache:
+            # TODO if this block is in the current version (and in no other?)
+            # rm this block from cache
+            # rm block uid from self.block_cache
+            pass
+        for block_id, block in self.cow[cow_version.uid].items():
+            # TODO: rm block_uid from cache
             pass
         del(self.cow[cow_version.uid])
         logger.info('Finished.')

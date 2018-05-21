@@ -23,7 +23,7 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
                  active: true
               
              encryption:
-               - name: aws_s3_cse
+               - name: aes_256_gcm
                  materials:
                    masterKey: !!binary |
                      e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=

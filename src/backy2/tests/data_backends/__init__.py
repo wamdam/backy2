@@ -14,7 +14,7 @@ class DatabackendTestCase(BackendTestCase):
         saved_uids = self.data_backend.list_blocks()
         self.assertEqual(0, len(saved_uids))
 
-        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100)) for i in range(NUM_BLOBS)]
+        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100), size=BLOB_SIZE, checksum='CHECKSUM') for i in range(NUM_BLOBS)]
         data_by_uid = {}
         for block in blocks:
             data = self.random_bytes(BLOB_SIZE)
@@ -47,7 +47,8 @@ class DatabackendTestCase(BackendTestCase):
         saved_uids = self.data_backend.list_blocks()
         self.assertEqual(0, len(saved_uids))
 
-        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100)) for i in range(NUM_BLOBS)]
+        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100), size=BLOB_SIZE, checksum='CHECKSUM')
+                                                                                for i in range(NUM_BLOBS)]
         data_by_uid = {}
         for block in blocks:
             data = self.random_bytes(BLOB_SIZE)
@@ -74,9 +75,7 @@ class DatabackendTestCase(BackendTestCase):
 
         self.data_backend.wait_reads_finished()
 
-        for block, offset, length, data in self.data_backend.read_get_completed(timeout=1):
-            self.assertEqual(0, offset)
-            self.assertEqual(BLOB_SIZE, length)
+        for block, data in self.data_backend.read_get_completed(timeout=1):
             self.assertEqual(data_by_uid[block.uid], data)
 
         self.assertEqual([], [future for future in self.data_backend.read_get_completed(timeout=1)])
@@ -89,7 +88,7 @@ class DatabackendTestCase(BackendTestCase):
     def _test_rm_many(self):
         NUM_BLOBS = 15
 
-        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100)) for i in range(NUM_BLOBS)]
+        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100), size=1, checksum='CHECKSUM') for i in range(NUM_BLOBS)]
         for block in blocks:
             self.data_backend.save(block, b'B', sync=True)
 
@@ -109,7 +108,7 @@ class DatabackendTestCase(BackendTestCase):
             self.skipTest('not applicable to this backend')
 
     def test_not_exists(self):
-        block = Mock(Block, uid=BlockUid(1,2))
+        block = Mock(Block, uid=BlockUid(1,2), size=15, checksum='CHECKSUM')
         self.data_backend.save(block, b'test_not_exists', sync=True)
 
         data = self.data_backend.read(block, sync=True)
@@ -122,7 +121,7 @@ class DatabackendTestCase(BackendTestCase):
 
     def test_compression(self):
         if self.data_backend.compression_active is not None:
-            block = Mock('Block', uid=BlockUid(1, 2))
+            block = Mock('Block', uid=BlockUid(1, 2), size=8192, checksum='CHECKSUM')
             self.data_backend.save(block, b'\0' * 8192, sync=True)
             self.data_backend.rm(block.uid)
         else:

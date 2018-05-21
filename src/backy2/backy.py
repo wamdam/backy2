@@ -220,7 +220,7 @@ class Backy:
 
             done_read_jobs = 0
             for i, entry in enumerate(self._data_backend.read_get_completed()):
-                block, offset, length, data = entry
+                block, data = entry
                 done_read_jobs += 1
 
                 if data is None:
@@ -334,7 +334,7 @@ class Backy:
             done_read_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
             for i, entry in enumerate(self._data_backend.read_get_completed()):
-                block, offset, length, data = entry
+                block, data = entry
                 assert len(data) == block.size
                 data_checksum = data_hexdigest(self._hash_function, data)
                 io.write(block, data)

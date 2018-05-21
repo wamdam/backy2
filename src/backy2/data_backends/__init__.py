@@ -3,6 +3,7 @@
 import concurrent
 import hashlib
 import importlib
+import json
 import os
 import threading
 import time
@@ -19,18 +20,12 @@ from backy2.utils import TokenBucket, future_results_as_completed
 
 
 class DataBackend(metaclass=ABCMeta):
-    """ Holds BLOBs
-    """
 
-    # Does this data store support partial reads of blocks?
-    SUPPORTS_PARTIAL_READS = False
-    # Does this data store support partial reads of blocks?
-    SUPPORTS_PARTIAL_WRITES = False
-    # Does this data store support saving metadata?
-    SUPPORTS_METADATA = False
-
-    _COMPRESSION_HEADER = "x-backy2-comp-type"
-    _ENCRYPTION_HEADER = "x-backy2-enc-type"
+    _COMPRESSION_KEY = 'compression'
+    _ENCRYPTION_KEY = 'encryption'
+    _SIZE_KEY = 'size'
+    _OBJECT_SIZE_KEY = 'object_size'
+    _CHECKSUM_KEY = 'checksum'
 
     PACKAGE_PREFIX = 'backy2.data_backends'
     _ENCRYPTION_PACKAGE_PREFIX = PACKAGE_PREFIX + '.encryption'
@@ -39,6 +34,8 @@ class DataBackend(metaclass=ABCMeta):
     # For the benefit of the file and B2 backends these must end in a slash
     _BLOCKS_PREFIX = 'blocks/'
     _VERSIONS_PREFIX = 'versions/'
+
+    _META_SUFFIX = '.meta'
 
     def __init__(self, config):
         self.encryption = {}
@@ -66,6 +63,7 @@ class DataBackend(metaclass=ABCMeta):
                 if config.get_from_dict(encryption_module_dict, 'active', types=bool):
                     if self.encryption_active is not None:
                         raise ConfigurationError('Only one encryption module can be active at the same time.')
+                    logger.info('Encryption is enabled for the data backend.')
                     self.encryption_active = self.encryption[name]
 
         compression_modules = config.get('dataBackend.{}.compression'.format(self.NAME), None, types=list)
@@ -110,7 +108,7 @@ class DataBackend(metaclass=ABCMeta):
         self._write_futures = []
         self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
-    def _check_write(self, key, data, metadata):
+    def _check_write(self, key, metadata_key, data, metadata):
         # Source: https://stackoverflow.com/questions/4527942/comparing-two-dictionaries-in-python
         def dict_compare(d1, d2):
             d1_keys = set(d1.keys())
@@ -122,7 +120,9 @@ class DataBackend(metaclass=ABCMeta):
             same = set(o for o in intersect_keys if d1[o] == d2[o])
             return added, removed, modified, same
 
-        rdata, rmetadata = self._read_object(key)
+        rdata = self._read_object(key)
+        rmetadata = self._read_object(metadata_key)
+        rmetadata = json.loads(rmetadata.decode('utf-8'))
 
         if metadata:
             added, removed, modified, same = dict_compare(rmetadata, metadata)
@@ -148,16 +148,34 @@ class DataBackend(metaclass=ABCMeta):
         data, metadata = self._compress(data)
         data, metadata_2 = self._encrypt(data)
         metadata.update(metadata_2)
-        key = self._block_uid_to_key(block.uid)
 
-        time.sleep(self.write_throttling.consume(len(data)))
+        metadata[self._SIZE_KEY] = block.size
+        metadata[self._OBJECT_SIZE_KEY] = len(data)
+        metadata[self._CHECKSUM_KEY] = block.checksum
+        metadata_json = json.dumps(metadata, separators=(',', ':')).encode('utf-8')
+
+        logger.debug('Metadata of block {}: {}'.format(block.uid, metadata))
+
+        key = self._block_uid_to_key(block.uid)
+        metadata_key = key + self._META_SUFFIX
+
+        time.sleep(self.write_throttling.consume(len(data) + len(metadata_json)))
         t1 = time.time()
-        self._write_object(key, data, metadata)
+        try:
+            self._write_object(key, data)
+            self._write_object(metadata_key, metadata_json)
+        except:
+            try:
+                self._rm_object(key)
+                self._rm_object(metadata_key)
+            except FileNotFoundError:
+                pass
+            raise
         t2 = time.time()
 
         logger.debug('{} wrote data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
         if self._consistency_check_writes:
-            self._check_write(key, data, metadata)
+            self._check_write(key, metadata_key, data, metadata)
 
         return block
 
@@ -183,31 +201,40 @@ class DataBackend(metaclass=ABCMeta):
         """
         return future_results_as_completed(self._write_futures, timeout=timeout)
 
-    def update(self, block, data, offset=0):
-        """ Updates data, returns written bytes.
-            This is only available on *some* data backends.
-        """
-        raise NotImplementedError()
-
-    def _read(self, block, offset, length):
+    def _read(self, block):
+        key = self._block_uid_to_key(block.uid)
+        metadata_key = key + self._META_SUFFIX
         t1 = time.time()
-        data, metadata = self._read_object(self._block_uid_to_key(block.uid), offset, length)
-        time.sleep(self.read_throttling.consume(len(data)))
+        data = self._read_object(key)
+        metadata = self._read_object(metadata_key)
+        time.sleep(self.read_throttling.consume(len(data) + len(metadata_key)))
         t2 = time.time()
+
+        metadata = json.loads(metadata.decode('utf-8'))
+        if self._OBJECT_SIZE_KEY not in metadata:
+            raise KeyError('Required metadata key {} is missing for object {}.', self._OBJECT_SIZE_KEY, key)
+
+        if len(data) != metadata[self._OBJECT_SIZE_KEY]:
+            raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'
+                                .format(key, metadata[self.self._OBJECT_SIZE_KEY], len(data)))
 
         data = self._decrypt(data, metadata)
         data = self._uncompress(data, metadata)
 
-        logger.debug('{} read data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
-        return block, offset, len(data), data
+        if len(data) != metadata[self._SIZE_KEY]:
+            raise ValueError('Length mismatch of original data for object {}. Expected: {}, got: {}.'
+                             .format(key, metadata[self.self._SIZE_KEY], len(data)))
 
-    def read(self, block, offset=0, length=None, sync=False):
+        logger.debug('{} read data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
+        return block, data
+
+    def read(self, block, sync=False):
         if sync:
-            return self._read(block, offset, length)[3]
+            return self._read(block)[1]
         else:
             def read_with_acquire():
                 self._read_semaphore.acquire()
-                return self._read(block, offset, length)
+                return self._read(block)
 
             self._read_futures.append(self._read_executor.submit(read_with_acquire))
 
@@ -217,16 +244,30 @@ class DataBackend(metaclass=ABCMeta):
         return future_results_as_completed(self._read_futures, semaphore=self._read_semaphore, timeout=timeout)
 
     def rm(self, uid):
-        self._rm_object(self._block_uid_to_key(uid))
+        key = self._block_uid_to_key(uid)
+        metadata_key = key + self._META_SUFFIX
+        try:
+            self._rm_object(key)
+        finally:
+            try:
+                self._rm_object(metadata_key)
+            except FileNotFoundError:
+                pass
 
     def rm_many(self, uids):
-        keys = self._rm_many_objects([self._block_uid_to_key(uid) for uid in uids])
-        return [self._key_to_block_uid(key) for key in keys]
+        keys =  [self._block_uid_to_key(uid) for uid in uids]
+        metadata_keys = [key + self._META_SUFFIX for key in keys]
+
+        errors = self._rm_many_objects(keys)
+        self._rm_many_objects(metadata_keys)
+        return [self._key_to_block_uid(error) for error in errors]
 
     def list_blocks(self):
         keys = self._list_objects(self._BLOCKS_PREFIX)
         block_uids = []
         for key in keys:
+            if key.endswith(self._META_SUFFIX):
+                continue
             try:
                 block_uids.append(self._key_to_block_uid(key))
             except (RuntimeError, ValueError):
@@ -238,6 +279,8 @@ class DataBackend(metaclass=ABCMeta):
         keys = self._list_objects(self._VERSIONS_PREFIX)
         version_uids = []
         for key in keys:
+            if key.endswith(self._META_SUFFIX):
+                continue
             try:
                 version_uids.append(self._key_to_version_uid(key))
             except (RuntimeError, ValueError):
@@ -246,16 +289,29 @@ class DataBackend(metaclass=ABCMeta):
         return version_uids
 
     def read_version(self, version_uid):
-        data, metadata = self._read_object(self._version_uid_to_key(version_uid))
+        key = self._version_uid_to_key(version_uid)
+        metadata_key = key + self._META_SUFFIX
+        data = self._read_object(key)
+        metadata = self._read_object(metadata_key)
+
+        metadata = json.loads(metadata.decode('utf-8'))
+        if len(data) != metadata[self._OBJECT_SIZE_KEY]:
+            raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'
+                                 .format(key, metadata[self.self._OBJECT_SIZE_KEY], len(data)))
 
         data = self._decrypt(data, metadata)
         data = self._uncompress(data, metadata)
-        data = data.decode('utf-8')
 
+        if len(data) != metadata[self._SIZE_KEY]:
+            raise ValueError('Length mismatch of original data for object {}. Expected: {}, got: {}.'
+                             .format(key, metadata[self.self._SIZE_KEY], len(data)))
+
+        data = data.decode('utf-8')
         return data
 
     def save_version(self, version_uid, data, overwrite=False):
         key = self._version_uid_to_key(version_uid)
+        metadata_key = key + self._META_SUFFIX
 
         if not overwrite:
             try:
@@ -266,30 +322,58 @@ class DataBackend(metaclass=ABCMeta):
                 raise FileExistsError('Version {} already exists in data backend.'.format(version_uid.readable))
 
         data = data.encode('utf-8')
+        size = len(data)
         data, metadata = self._compress(data)
         data, metadata_2 = self._encrypt(data)
         metadata.update(metadata_2)
 
-        self._write_object(key, data, metadata)
+        metadata[self._SIZE_KEY] = size
+        metadata[self._OBJECT_SIZE_KEY] = len(data)
+        metadata_json = json.dumps(metadata, separators=(',', ':')).encode('utf-8')
+
+        try:
+            self._write_object(key, data)
+            self._write_object(metadata_key, metadata_json)
+        except:
+            try:
+                self._rm_object(key)
+                self._rm_object(metadata_key)
+            except FileNotFoundError:
+                pass
+            raise
+
         if self._consistency_check_writes:
-            self._check_write(key, data, metadata)
+            self._check_write(key, metadata_key, data, metadata)
 
     def rm_version(self, version_uid):
-        self._rm_object(self._version_uid_to_key(version_uid))
+        key = self._version_uid_to_key(version_uid)
+        metadata_key = key + self._META_SUFFIX
+        try:
+            self._rm_object(key)
+        finally:
+            try:
+                self._rm_object(metadata_key)
+            except FileNotFoundError:
+                pass
 
     def _encrypt(self, data):
         if self.encryption_active is not None:
-            data, metadata = self.encryption_active.encrypt(data)
-            metadata[self._ENCRYPTION_HEADER] = self.encryption_active.NAME
+            data, materials = self.encryption_active.encrypt(data)
+            metadata = {
+                self._ENCRYPTION_KEY: {
+                    'name': self.encryption_active.NAME,
+                    'materials': materials
+                }
+            }
             return data, metadata
         else:
             return data, {}
 
     def _decrypt(self, data, metadata):
-        if self._ENCRYPTION_HEADER in metadata:
-            name = metadata[self._ENCRYPTION_HEADER]
+        if self._ENCRYPTION_KEY in metadata:
+            name = metadata[self._ENCRYPTION_KEY]['name']
             if name in self.encryption:
-                return self.encryption[name].decrypt(data, metadata)
+                return self.encryption[name].decrypt(data, metadata[self._ENCRYPTION_KEY]['materials'])
             else:
                 raise IOError('Unsupported encryption type {} in object metadata.'.format(name))
         else:
@@ -297,9 +381,14 @@ class DataBackend(metaclass=ABCMeta):
 
     def _compress(self, data):
         if self.compression_active is not None:
-            compressed_data, metadata = self.compression_active.compress(data)
+            compressed_data, materials = self.compression_active.compress(data)
             if len(compressed_data) < len(data):
-                metadata[self._COMPRESSION_HEADER] = self.compression_active.NAME
+                metadata = {
+                    self._COMPRESSION_KEY: {
+                        'name': self.compression_active.NAME,
+                        'materials': materials
+                    }
+                }
                 return compressed_data, metadata
             else:
                 return data, {}
@@ -307,10 +396,10 @@ class DataBackend(metaclass=ABCMeta):
             return data, {}
 
     def _uncompress(self, data, metadata):
-        if self._COMPRESSION_HEADER in metadata:
-            name = metadata[self._COMPRESSION_HEADER]
+        if self._COMPRESSION_KEY in metadata:
+            name = metadata[self._COMPRESSION_KEY]['name']
             if name in self.compression:
-                return self.compression[name].uncompress(data, metadata)
+                return self.compression[name].uncompress(data, metadata[self._COMPRESSION_KEY]['materials'])
             else:
                 raise IOError('Unsupported compression type {} in object metadata.'.format(name))
         else:
@@ -363,11 +452,11 @@ class DataBackend(metaclass=ABCMeta):
         return VersionUid.create_from_readables(key[vpl + 4:vpl + vl + 4])
 
     @abstractmethod
-    def _write_object(self, key, data, metadata):
+    def _write_object(self, key, data):
         raise NotImplementedError
 
     @abstractmethod
-    def _read_object(self, key, offset, length):
+    def _read_object(self, key):
         raise NotImplementedError
 
     @abstractmethod
@@ -413,23 +502,20 @@ class ReadCacheDataBackend(DataBackend):
         # Start reader and write threads after the disk cached is created, so that they see it.
         super().__init__(config)
 
-    def _read(self, block, offset, length):
-        if offset != 0 or length is not None:
-            raise InternalError('Remote object based storage called invalid offset or length '
-                                + '(offset {} != 0, length {} != None)')
-
+    def _read(self, block):
+        key = self._block_uid_to_key(block.uid)
         if self._read_cache is not None and self._use_read_cache:
-            data = self._read_cache.get(self._block_uid_to_key(block.uid))
+            data = self._read_cache.get(key)
             if data:
-                return block, offset, len(data), data
+                return block, data
 
-        block, offset, length, data = super()._read(block, offset, length)
+        block, data = super()._read(block)
 
         # We always put blocks into the cache even when self._use_read_cache is False
         if self._read_cache is not None:
-            self._read_cache.set(self._block_uid_to_key(block.uid), data)
+            self._read_cache.set(key, data)
 
-        return block, offset, length, data
+        return block, data
 
     def use_read_cache(self, enable):
         old_value =  self._use_read_cache

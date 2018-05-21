@@ -3,7 +3,7 @@ import unittest
 from . import DatabackendTestCase
 
 
-class test_s3(DatabackendTestCase, unittest.TestCase):
+class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
     CONFIG = """
         configurationVersion: '1.0.0'
         logFile: /dev/stderr
@@ -14,16 +14,30 @@ class test_s3(DatabackendTestCase, unittest.TestCase):
           s3:
             awsAccessKeyId: minio
             awsSecretAccessKey: minio123
-            host: 127.0.0.1
-            port: 9901
-            isSecure: False
+            endpointUrl: http://127.0.0.1:9901/
             bucketName: backy2
+            multiDelete: true
+            addressingStyle: path
+            disableEncodingType: true
+            
+            compression:
+              - name: zstd
+                materials:
+                  level: 1
+                active: true
+                  
+            encryption:
+              - name: aes_256_gcm
+                materials:
+                  masterKey: !!binary |
+                    e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+                active: true
+                
             consistencyCheckWrites: True
           simultaneousWrites: 5
           simultaneousReads: 5
           bandwidthRead: 0
-          bandwidthWrite: 0        
+          bandwidthWrite: 0           
         """
-
 if __name__ == '__main__':
     unittest.main()

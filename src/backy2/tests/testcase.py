@@ -64,9 +64,11 @@ class BackendTestCase(TestCase):
                 for version_uid in self.data_backend.list_versions():
                     self.data_backend.rm_version(version_uid)
 
-        meta_backend = MetaBackend(self.config)
-        meta_backend.initdb(_migratedb=False, _destroydb=True)
-        self.meta_backend = meta_backend.open(_migratedb=False)
+        name = self.config.get('metaBackend', None, types=dict)
+        if name is not None:
+            meta_backend = MetaBackend(self.config)
+            meta_backend.initdb(_migratedb=False, _destroydb=True)
+            self.meta_backend = meta_backend.open(_migratedb=False)
 
     def tearDown(self):
         if hasattr(self, 'data_backend'):

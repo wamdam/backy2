@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import socket
+import threading
+from itertools import islice
 
-import boto.exception
-import boto.s3.connection
+import boto3
+from botocore.client import Config
+from botocore.exceptions import ClientError
+from botocore.handlers import set_list_objects_encoding_type_url
 
 from backy2.data_backends import ReadCacheDataBackend
 from backy2.logging import logger
@@ -18,85 +21,138 @@ class DataBackend(ReadCacheDataBackend):
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
-    SUPPORTS_PARTIAL_READS = False
-    SUPPORTS_PARTIAL_WRITES = False
-    SUPPORTS_METADATA = False
-
     def __init__(self, config):
-
-        super().__init__(config)
 
         our_config = config.get('dataBackend.{}'.format(self.NAME), types=dict)
         aws_access_key_id = config.get_from_dict(our_config, 'awsAccessKeyId', types=str)
         aws_secret_access_key = config.get_from_dict(our_config, 'awsSecretAccessKey', types=str)
-        host = config.get_from_dict(our_config, 'host', types=str)
-        port = config.get_from_dict(our_config, 'port', types=int)
-        is_secure = config.get_from_dict(our_config, 'isSecure', types=bool)
-        bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
-        calling_format=boto.s3.connection.OrdinaryCallingFormat()
+        region_name = config.get_from_dict(our_config, 'regionName', None, types=str)
+        endpoint_url = config.get_from_dict(our_config, 'endpointUrl', None, types=str)
+        use_ssl = config.get_from_dict(our_config, 'useSsl', None, types=bool)
+        addressing_style = config.get_from_dict(our_config, 'addressingStyle', None, types=str)
+        signature_version = config.get_from_dict(our_config, 'signatureVersion', None, types=str)
 
-        self.conn = boto.connect_s3(
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                host=host,
-                port=port,
-                is_secure=is_secure,
-                calling_format=calling_format
-            )
+        self._bucket_name = config.get_from_dict(our_config, 'bucketName', types=str)
+        self._multi_delete = config.get_from_dict(our_config, 'multiDelete', types=bool)
+        self._disable_encoding_type = config.get_from_dict(our_config, 'disableEncodingType', types=bool)
+
+        self._resource_config = {
+            'aws_access_key_id': aws_access_key_id,
+            'aws_secret_access_key': aws_secret_access_key,
+        }
+
+        if region_name:
+            self._resource_config['region_name'] = region_name
+
+        if endpoint_url:
+            self._resource_config['endpoint_url'] = endpoint_url
+
+        if use_ssl:
+            self._resource_config['use_ssl'] = use_ssl
+
+        resource_config = {}
+        if addressing_style:
+            resource_config['s3'] = {'addressing_style': addressing_style}
+
+        if signature_version:
+            resource_config['signature_version'] = signature_version
+
+        self._resource_config['config'] = Config(**resource_config)
+
+        self._local = threading.local()
+        self._init_connection()
 
         # create our bucket
+        exists = True
         try:
-            self.conn.create_bucket(bucket_name)
-        except boto.exception.S3CreateError:
-            # exists...
-            pass
-
-        self.bucket = self.conn.get_bucket(bucket_name)
-
-    def _write_object(self, key, data, metadata):
-        key_obj = self.bucket.new_key(key)
-        r = key_obj.set_contents_from_string(data)
-        assert r == len(data)
-        # OSError happens when the S3 host is gone (i.e. network died,
-        # host down, ...). boto tries hard to recover, however after
-        # several attempts it will give up and raise.
-        # BotoServerError happens, when there is no server.
-        # S3ResponseError sometimes happens, when the cluster is about
-        # to shutdown. Hard to reproduce because the writer must write
-        # in exactly this moment.
-
-    def _read_object(self, key, offset=0, length=None):
-        key_obj = self.bucket.get_key(key)
-        if not key_obj:
-            raise FileNotFoundError('Key {} not found.'.format(key))
-        while True:
-            try:
-                data = key_obj.get_contents_as_string()
-            except socket.timeout:
-                logger.error('Timeout while fetching from s3, trying again.')
-                pass
+            self._local.resource.meta.client.head_bucket(Bucket=self._bucket_name)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchBucket' or e.response['Error']['Code'] == '404':
+                # Doesn't exists...
+                exists = False
             else:
-                break
-        return data, {}
+                raise
+
+        if not exists:
+            self._local.resource.create_bucket(Bucket=self._bucket_name)
+
+        self._local.bucket = self._local.resource.Bucket(self._bucket_name)
+
+        super().__init__(config)
+
+    def _init_connection(self):
+        if not hasattr(self._local, 'session'):
+            logger.debug('Initializing S3 session and resource for {}'.format(threading.current_thread().name))
+            self._local.session = boto3.session.Session()
+            if self._disable_encoding_type:
+                self._local.session.events.unregister('before-parameter-build.s3.ListObjects',
+                                                      set_list_objects_encoding_type_url)
+            self._local.resource = self._local.session.resource('s3', **self._resource_config)
+            self._local.bucket = self._local.resource.Bucket(self._bucket_name)
+
+    def _write_object(self, key, data):
+        self._init_connection()
+        object = self._local.bucket.Object(key)
+        object.put(Body=data)
+
+    def _read_object(self, key):
+        self._init_connection()
+        object = self._local.bucket.Object(key)
+        try:
+            object = object.get()
+            data = object['Body'].read()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
+                raise FileNotFoundError('Key {} not found.'.format(key)) from None
+            else:
+                raise
+
+        return data
 
     def _rm_object(self, key):
-        key = self.bucket.get_key(key)
-        if not key:
-            raise FileNotFoundError('Key {} not found.'.format(key))
-        self.bucket.delete_key(key)
+        self._init_connection()
+        # delete() always returns 204 even when key doesn't exist, so check for existence
+        object = self._local.bucket.Object(key)
+        try:
+            object.load()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
+                raise FileNotFoundError('Key {} not found.'.format(key)) from None
+            else:
+                raise
+        else:
+            object.delete()
 
     def _rm_many_objects(self, keys):
         """ Deletes many keys from the data backend and returns a list
         of keys that couldn't be deleted.
         """
-        errors = self.bucket.delete_keys(keys, quiet=True)
-        return errors.errors
+        self._init_connection()
+        errors = []
+        if self._multi_delete:
+            # Amazon (at least) only handles 1000 deletes at a time
+            # Split list into parts of at most 1000 elements
+            keys_parts = [islice(keys, i, i + 1000) for i in range(0, len(keys), 1000)]
+            for part in keys_parts:
+                response = self._local.resource.meta.client.delete_objects(
+                    Bucket=self._local.bucket.name,
+                    Delete={
+                        'Objects': [{'Key': key} for key in part],
+                        }
+                )
+                if 'Errors' in response:
+                    errors += list(map(lambda object: object['Key'], response['Errors']))
+        else:
+            for key in keys:
+                try:
+                    self._local.bucket.Object(key).delete()
+                except ClientError:
+                    errors.append(key)
+        return errors
 
     def _list_objects(self, prefix=None):
-        return [k.name for k in self.bucket.list(prefix)]
-
-    def close(self):
-        super().close()
-        self.conn.close()
-
-
+        self._init_connection()
+        if prefix is None:
+            return [object.key for object in self._local.bucket.objects]
+        else:
+            return [object.key for object in self._local.bucket.objects.filter(Prefix=prefix)]

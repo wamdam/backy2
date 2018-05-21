@@ -42,9 +42,8 @@ Topic :: System :: Archiving :: Backup
         ],
     extras_require={
         'PostgreSQL metadata backend': ['psycopg2-binary>=2.7.4'],
-        's3 data backend': ['boto>=2.38.0'],
         's3_boto3 data backend': ['boto3>=1.6.16'],
-        'encryption': ['pycryptodome>=3.6.1', 'aws_s3_cse>=0.2'],
+        'encryption': ['pycryptodome>=3.6.1', 'aes-keywrap>17.12.1'],
         'compression': ['zstd>=1.3.3'],
         'disk based read cache': ['diskcache>=3.0.6'],
         'PEX generation': ['pex==1.1.0'],
@@ -53,6 +52,5 @@ Topic :: System :: Archiving :: Backup
     entry_points="""
         [console_scripts]
             backy2 = backy2.scripts.backy:main
-            cse_derive_key = backy2.scripts.cse_derive_key:main
     """,
     )
