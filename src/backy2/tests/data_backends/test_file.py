@@ -13,7 +13,7 @@ class test_file(DatabackendTestCase, unittest.TestCase):
           type: file
           file:
             path: {testpath}/data
-            consistencyCheckWrites: True
+          consistencyCheckWrites: True
           simultaneousWrites: 1
           simultaneousReads: 1
           bandwidthRead: 0

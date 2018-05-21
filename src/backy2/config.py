@@ -62,6 +62,7 @@ class Config:
           b2:
             accountId: '<redacted>'
             applicationKey: '<redacted>'
+          encryption: '<redacted>'
         """
 
     # Source: https://stackoverflow.com/questions/823196/yaml-merge-in-python

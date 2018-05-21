@@ -16,21 +16,24 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
              applicationKey: *******************************
              bucketName: backy2
              accountInfoFile: {testpath}/b2_account_info
-             compression:
-               - name: zstd
-                 materials:
-                   level: 1
-                 active: true
-              
-             encryption:
-               - name: aes_256_gcm
-                 materials:
-                   masterKey: !!binary |
-                     e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
-                 active: true    
              writeObjectAttempts: 1
-             uploadAttempts: 5   
-             consistencyCheckWrites: True
+             uploadAttempts: 5
+                
+          compression:
+            - type: zstd
+              materials:
+                level: 1
+              active: true
+              
+          encryption:
+            - identifier: k1
+              type: aes_256_gcm
+              materials:
+                masterKey: !!binary |
+                  e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+              active: true  
+                
+          consistencyCheckWrites: True
           simultaneousWrites: 5
           simultaneousReads: 5
           bandwidthRead: 0

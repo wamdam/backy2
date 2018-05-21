@@ -20,20 +20,27 @@ class test_s3_boto3(DatabackendTestCase, unittest.TestCase):
             addressingStyle: path
             disableEncodingType: true
             
-            compression:
-              - name: zstd
-                materials:
-                  level: 1
-                active: true
+          compression:
+            - type: zstd
+              materials:
+                level: 1
+              active: true
                   
-            encryption:
-              - name: aes_256_gcm
-                materials:
-                  masterKey: !!binary |
-                    e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
-                active: true
+          encryption:
+            - identifier: k1
+              type: aes_256_gcm
+              materials:
+                masterKey: !!binary |
+                  e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+              active: true
+            - identifier: k2
+              type: aes_256_gcm
+              materials:
+                kdfSalt: !!binary CPJlYMjRjfbXWOcqsE309A==
+                kdfIterations: 20000
+                password: "this is a very secret password"
                 
-            consistencyCheckWrites: True
+          consistencyCheckWrites: True
           simultaneousWrites: 5
           simultaneousReads: 5
           bandwidthRead: 0

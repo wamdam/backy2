@@ -16,16 +16,11 @@ blockSize: 4194304
 # DO NOT CHANGE WHEN BACKUPS EXIST
 hashFunction: blake2b,digest_size=32
 
-# for some operations, full backy or single versions need to be locked for
-# simulatanous access. In the lock_dir we will create backy_*.lock files.
-lockDirectory: /run
-
-# To be able to find other backys running, we need a system-wide unique name
-# for all backy processes.
-# DO NOT CHANGE WHILE backy2 PROCESSES ARE RUNNING!
+# This name will be used to identify a specific configuration in the
+# process list and could be used to distinguish several parallel installations.
 processName: backy2
 
-# Allow rm of backup versions after n days (set to 0 to disable, i.e. to be
+# Allow removal of backup versions after n days (set to 0 to disable, i.e. to be
 # able to delete any version)
 disallowRemoveWhenYounger: 6
 
@@ -72,24 +67,55 @@ dataBackend:
   #   writeObjectAttempts: 1
   #   uploadAttempts: 5
 
+  # Encryption support
+  #
+  # The identifier is saved together with the object and the corresponding materials
+  # are then looked up during decryption. This means that you mustn't change the
+  # materials identified by a specific identifier after objects have been encrypted
+  # with it. If you want to change the encryption configurarion you must define
+  # a new encryption method with a new identifier. If you mark this encryption method
+  # as active it will be used to encrypt new objects. Reencrypting old objects is
+  # currently not implemented but it wouldn't be a problem to implement proper key
+  # rotation.
+  #
+  # Regarding kdfSalt and kdfIterations:
+  # It is highly recommended to generate your own random salt for example with:
+  #   dd if=/dev/urandom bs=16 count=1 status=none | base64
+  # Don't change the salt and iteration count after writing encrypted objects
+  # to the data backend, they cannot be decrypted anymore.
+  #
+  # Specify either a password, kdfSalt and kdfIteraions or use your
+  # own high-entropy-key directly with masterKey in which case the other options
+  # are ignored.
+  #
+  #
   # encryption:
-  #   - name: aws_s3_cse
+  #   - identifier: k1
+  #     type: aes_256_gcm
   #     materials:
   #       masterKey: !!binary |
   #         e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
+  #       OR
+  #       password: "your secret password"
+  #       kdfSalt: !!binary /YkKwy9InZVqC4p+eAdhlA==
+  #       kdfIterations: 16384
   #     active: true
 
+  # Currently only zstd compression is supported. You can specify the compression level:
+  # Higher values mean better compression ratios but increased CPU use. For details please
+  # see the zstd documentation.
+  #
   # compression:
   #   - name: zstd
   #     materials:
-  #       level: 1
+  #       level: 3
   #     active: true
 
-  # How many writes to perform in parallel. This is useful if your backup space
+  # How many writes to perform in parallel. This is useful if your data backend
   # can perform parallel writes faster than serial ones.
   simultaneousWrites: 5
 
-  # How many reads to perform in parallel. This is useful if your backup space
+  # How many reads to perform in parallel. This is useful if your data backend
   # can perform parallel reads faster than serial ones.
   simultaneousReads: 5
 

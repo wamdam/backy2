@@ -87,9 +87,8 @@ def future_results_as_completed(futures, semaphore=None, timeout=None):
         del future
         yield result
 
-def derive_key(password, key_length):
-    salt = bytes([77, 49, 148, 173, 79, 106, 209, 205, 89, 167, 100, 234, 201, 166, 196, 189])
-    return PBKDF2(password=password, salt=salt, dkLen=key_length, count=16384, hmac_hash_module=SHA512)
+def derive_key(*, password, salt, iterations, key_length):
+    return PBKDF2(password=password, salt=salt, dkLen=key_length, count=iterations, hmac_hash_module=SHA512)
 
 # Based on https://code.activestate.com/recipes/578113-human-readable-format-for-a-given-time-delta/
 def human_readable_duration(duration):

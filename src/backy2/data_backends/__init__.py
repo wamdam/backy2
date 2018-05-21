@@ -43,57 +43,58 @@ class DataBackend(metaclass=ABCMeta):
         self.encryption_active = None
         self.compression_active = None
 
-        encryption_modules = config.get('dataBackend.{}.encryption'.format(self.NAME), None, types=list)
+        encryption_modules = config.get('dataBackend.encryption'.format(self.NAME), None, types=list)
         if encryption_modules is not None:
             for encryption_module_dict in encryption_modules:
-                name = config.get_from_dict(encryption_module_dict, 'name', types=(str,))
+                type = config.get_from_dict(encryption_module_dict, 'type', types=str)
+                identifier = config.get_from_dict(encryption_module_dict, 'identifier', types=str)
                 materials = config.get_from_dict(encryption_module_dict, 'materials', types=dict)
                 try:
-                    encryption_module = importlib.import_module('{}.{}'.format(self._ENCRYPTION_PACKAGE_PREFIX, name))
+                    encryption_module = importlib.import_module('{}.{}'.format(self._ENCRYPTION_PACKAGE_PREFIX, type))
                 except ImportError:
                     raise ConfigurationError('Module file {}.{} not found or related import error.'
-                                             .format(self._ENCRYPTION_PACKAGE_PREFIX, name))
+                                             .format(self._ENCRYPTION_PACKAGE_PREFIX, type))
                 else:
-                    if name != encryption_module.Encryption.NAME:
-                        raise InternalError('Encryption module file name and name don\'t agree ({} != {}).'
-                                         .format(name, encryption_module.Encryption.NAME))
+                    if type != encryption_module.Encryption.NAME:
+                        raise InternalError('Encryption module type and name don\'t agree ({} != {}).'
+                                         .format(type, encryption_module.Encryption.NAME))
 
-                    self.encryption[name] = encryption_module.Encryption(materials)
+                    self.encryption[identifier] = encryption_module.Encryption(identifier, materials)
                     
-                if config.get_from_dict(encryption_module_dict, 'active', types=bool):
+                if config.get_from_dict(encryption_module_dict, 'active', None, types=bool):
                     if self.encryption_active is not None:
                         raise ConfigurationError('Only one encryption module can be active at the same time.')
                     logger.info('Encryption is enabled for the data backend.')
-                    self.encryption_active = self.encryption[name]
+                    self.encryption_active = self.encryption[identifier]
 
-        compression_modules = config.get('dataBackend.{}.compression'.format(self.NAME), None, types=list)
+        compression_modules = config.get('dataBackend.compression'.format(self.NAME), None, types=list)
         if compression_modules is not None:
             for compression_module_dict in compression_modules:
-                name = config.get_from_dict(compression_module_dict, 'name', types=str)
+                type = config.get_from_dict(compression_module_dict, 'type', types=str)
                 materials = config.get_from_dict(compression_module_dict, 'materials', None, types=dict)
                 try:
-                    compression_module = importlib.import_module('{}.{}'.format(self._COMPRESSION_PACKAGE_PREFIX, name))
+                    compression_module = importlib.import_module('{}.{}'.format(self._COMPRESSION_PACKAGE_PREFIX, type))
                 except ImportError:
                     raise ConfigurationError('Module file {}.{} not found or related import error.'
-                                             .format(self._COMPRESSION_PACKAGE_PREFIX, name))
+                                             .format(self._COMPRESSION_PACKAGE_PREFIX, type))
                 else:
-                    if name != compression_module.Compression.NAME:
-                        raise InternalError('Compression module file name and name don\'t agree ({} != {}).'
-                                           .format(name, compression_module.Compression.NAME))
+                    if type != compression_module.Compression.NAME:
+                        raise InternalError('Compression module type and name don\'t agree ({} != {}).'
+                                           .format(type, compression_module.Compression.NAME))
 
-                    self.compression[name] = compression_module.Compression(materials)
+                    self.compression[type] = compression_module.Compression(materials)
 
-                if config.get_from_dict(compression_module_dict, 'active', types=bool):
+                if config.get_from_dict(compression_module_dict, 'active', None, types=bool):
                     if self.compression_active is not None:
                         raise ConfigurationError('Only one compression module can be active at the same time.')
-                    self.compression_active = self.compression[name]
+                    self.compression_active = self.compression[type]
 
         simultaneous_writes = config.get('dataBackend.simultaneousWrites', types=int)
         simultaneous_reads = config.get('dataBackend.simultaneousReads', types=int)
         bandwidth_read = config.get('dataBackend.bandwidthRead', types=int)
         bandwidth_write = config.get('dataBackend.bandwidthWrite', types=int)
 
-        self._consistency_check_writes = config.get('dataBackend.{}.consistencyCheckWrites'.format(self.NAME), False, types=bool)
+        self._consistency_check_writes = config.get('dataBackend.consistencyCheckWrites'.format(self.NAME), False, types=bool)
 
         self.read_throttling = TokenBucket()
         self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
@@ -361,7 +362,8 @@ class DataBackend(metaclass=ABCMeta):
             data, materials = self.encryption_active.encrypt(data)
             metadata = {
                 self._ENCRYPTION_KEY: {
-                    'name': self.encryption_active.NAME,
+                    'identifier': self.encryption_active.identifier,
+                    'type': self.encryption_active.NAME,
                     'materials': materials
                 }
             }
@@ -371,11 +373,17 @@ class DataBackend(metaclass=ABCMeta):
 
     def _decrypt(self, data, metadata):
         if self._ENCRYPTION_KEY in metadata:
-            name = metadata[self._ENCRYPTION_KEY]['name']
-            if name in self.encryption:
-                return self.encryption[name].decrypt(data, metadata[self._ENCRYPTION_KEY]['materials'])
+            identifier = metadata[self._ENCRYPTION_KEY]['identifier']
+            type = metadata[self._ENCRYPTION_KEY]['type']
+            if identifier in self.encryption:
+                encryption = self.encryption[identifier]
+                if type != encryption.NAME:
+                    raise ConfigurationError('Mismatch between object encryption type and configured type for identifier '
+                                             + '{} ({} != {})'.format(identifier, type, encryption.NAME))
+
+                return encryption.decrypt(data, metadata[self._ENCRYPTION_KEY]['materials'])
             else:
-                raise IOError('Unsupported encryption type {} in object metadata.'.format(name))
+                raise IOError('Unknown encryption identifier {} in object metadata.'.format(identifier))
         else:
             return data
 
@@ -385,7 +393,7 @@ class DataBackend(metaclass=ABCMeta):
             if len(compressed_data) < len(data):
                 metadata = {
                     self._COMPRESSION_KEY: {
-                        'name': self.compression_active.NAME,
+                        'type': self.compression_active.NAME,
                         'materials': materials
                     }
                 }
@@ -397,11 +405,11 @@ class DataBackend(metaclass=ABCMeta):
 
     def _uncompress(self, data, metadata):
         if self._COMPRESSION_KEY in metadata:
-            name = metadata[self._COMPRESSION_KEY]['name']
-            if name in self.compression:
-                return self.compression[name].uncompress(data, metadata[self._COMPRESSION_KEY]['materials'])
+            type = metadata[self._COMPRESSION_KEY]['type']
+            if type in self.compression:
+                return self.compression[type].uncompress(data, metadata[self._COMPRESSION_KEY]['materials'])
             else:
-                raise IOError('Unsupported compression type {} in object metadata.'.format(name))
+                raise IOError('Unsupported compression type {} in object metadata.'.format(type))
         else:
             return data
 
