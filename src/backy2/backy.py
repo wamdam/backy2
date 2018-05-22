@@ -60,14 +60,12 @@ class Backy:
         from backy2.data_backends import DataBackend
         name = config.get('dataBackend.type', types=str)
         try:
-            DataBackendLib = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
+            self._data_backend_module = importlib.import_module('{}.{}'.format(DataBackend.PACKAGE_PREFIX, name))
         except ImportError:
             raise ConfigurationError('Data backend type {} not found.'.format(name))
-        else:
-            self._data_backend = DataBackendLib.DataBackend(config)
+        self._data_backend_object = None
 
         meta_backend = MetaBackend(config)
-
         if initdb:
             meta_backend.initdb(_destroydb=_destroydb, _migratedb=_migratedb)
 
@@ -78,6 +76,14 @@ class Backy:
 
         if self._locking.is_locked():
             raise AlreadyLocked('Another process is already running.')
+
+    # This implements a lazy creation of the data backend object so that any network connections
+    # are only opened and expensive encryption calculations are only done when the object is really used.
+    @property
+    def _data_backend(self):
+        if not self._data_backend_object:
+            self._data_backend_object = self._data_backend_module.DataBackend(self.config)
+        return self._data_backend_object
 
     def _prepare_version(self, name, snapshot_name, size=None, from_version_uid=None):
         """ Prepares the metadata for a new version.
@@ -705,9 +711,8 @@ class Backy:
         self._meta_backend.rm_tag(version_uid, name)
 
     def close(self):
-        if hasattr(self, '_meta_backend') and self._meta_backend:
-            self._meta_backend.close()
-        if hasattr(self, '_data_backend') and self._data_backend:
+        self._meta_backend.close()
+        if self._data_backend_object:
             self._data_backend.close()
 
     def export(self, version_uids, f):
