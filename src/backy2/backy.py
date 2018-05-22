@@ -29,11 +29,11 @@ def blocks_from_hints(hints, block_size):
                 read_blocks.add(i)
         else:
             if offset % block_size > 0:
-                # Start block is only partially sparse, make sure it es read
+                # Start block is only partially sparse, make sure it is read
                 read_blocks.add(start_block)
 
             if (offset + length) % block_size > 0:
-                # End block is only partially sparse, make sure it es read
+                # End block is only partially sparse, make sure it is read
                 read_blocks.add(end_block)
 
             for i in range(start_block, end_block + 1):
