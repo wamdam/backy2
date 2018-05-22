@@ -82,7 +82,7 @@ class DataBackend(metaclass=ABCMeta):
                         raise InternalError('Compression module type and name don\'t agree ({} != {}).'
                                            .format(type, compression_module.Compression.NAME))
 
-                    self.compression[type] = compression_module.Compression(materials)
+                    self.compression[type] = compression_module.Compression(materials=materials)
 
                 if config.get_from_dict(compression_module_dict, 'active', None, types=bool):
                     if self.compression_active is not None:
@@ -212,8 +212,9 @@ class DataBackend(metaclass=ABCMeta):
         t2 = time.time()
 
         metadata = json.loads(metadata.decode('utf-8'))
-        if self._OBJECT_SIZE_KEY not in metadata:
-            raise KeyError('Required metadata key {} is missing for object {}.', self._OBJECT_SIZE_KEY, key)
+        for required_key in [self._OBJECT_SIZE_KEY, self._SIZE_KEY]:
+            if required_key not in metadata:
+                raise KeyError('Required metadata key {} is missing for object {}.'.format(required_key, key))
 
         if len(data) != metadata[self._OBJECT_SIZE_KEY]:
             raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'
@@ -275,7 +276,7 @@ class DataBackend(metaclass=ABCMeta):
                 # Ignore any keys which don't match our pattern to account for stray objects/files
                 pass
         return block_uids
-    
+
     def list_versions(self):
         keys = self._list_objects(self._VERSIONS_PREFIX)
         version_uids = []
@@ -296,6 +297,10 @@ class DataBackend(metaclass=ABCMeta):
         metadata = self._read_object(metadata_key)
 
         metadata = json.loads(metadata.decode('utf-8'))
+        for required_key in [self._OBJECT_SIZE_KEY, self._SIZE_KEY]:
+            if required_key not in metadata:
+                raise KeyError('Required metadata key {} is missing for object {}.'.format(required_key, key))
+
         if len(data) != metadata[self._OBJECT_SIZE_KEY]:
             raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'
                                  .format(key, metadata[self.self._OBJECT_SIZE_KEY], len(data)))
@@ -389,7 +394,7 @@ class DataBackend(metaclass=ABCMeta):
 
     def _compress(self, data):
         if self.compression_active is not None:
-            compressed_data, materials = self.compression_active.compress(data)
+            compressed_data, materials = self.compression_active.compress(data=data)
             if len(compressed_data) < len(data):
                 metadata = {
                     self._COMPRESSION_KEY: {
@@ -407,7 +412,9 @@ class DataBackend(metaclass=ABCMeta):
         if self._COMPRESSION_KEY in metadata:
             type = metadata[self._COMPRESSION_KEY]['type']
             if type in self.compression:
-                return self.compression[type].uncompress(data, metadata[self._COMPRESSION_KEY]['materials'])
+                return self.compression[type].uncompress(data=data,
+                                                         materials=metadata[self._COMPRESSION_KEY]['materials'],
+                                                         original_size=metadata[self._SIZE_KEY])
             else:
                 raise IOError('Unsupported compression type {} in object metadata.'.format(type))
         else:
