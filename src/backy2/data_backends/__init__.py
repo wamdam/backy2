@@ -59,8 +59,9 @@ class DataBackend(metaclass=ABCMeta):
                         raise InternalError('Encryption module type and name don\'t agree ({} != {}).'
                                          .format(type, encryption_module.Encryption.NAME))
 
-                    self.encryption[identifier] = encryption_module.Encryption(identifier, materials)
-                    
+                    self.encryption[identifier] = encryption_module.Encryption(identifier=identifier,
+                                                                               materials=materials)
+
                 if config.get_from_dict(encryption_module_dict, 'active', None, types=bool):
                     if self.encryption_active is not None:
                         raise ConfigurationError('Only one encryption module can be active at the same time.')
@@ -364,7 +365,7 @@ class DataBackend(metaclass=ABCMeta):
 
     def _encrypt(self, data):
         if self.encryption_active is not None:
-            data, materials = self.encryption_active.encrypt(data)
+            data, materials = self.encryption_active.encrypt(data=data)
             metadata = {
                 self._ENCRYPTION_KEY: {
                     'identifier': self.encryption_active.identifier,
@@ -386,7 +387,7 @@ class DataBackend(metaclass=ABCMeta):
                     raise ConfigurationError('Mismatch between object encryption type and configured type for identifier '
                                              + '{} ({} != {})'.format(identifier, type, encryption.NAME))
 
-                return encryption.decrypt(data, metadata[self._ENCRYPTION_KEY]['materials'])
+                return encryption.decrypt(data=data, materials=metadata[self._ENCRYPTION_KEY]['materials'])
             else:
                 raise IOError('Unknown encryption identifier {} in object metadata.'.format(identifier))
         else:

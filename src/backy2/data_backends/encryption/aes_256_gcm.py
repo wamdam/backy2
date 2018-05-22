@@ -13,7 +13,7 @@ class Encryption:
 
     NAME = 'aes_256_gcm'
 
-    def __init__(self, identifier, materials):
+    def __init__(self, *, identifier, materials):
         master_key = Config.get_from_dict(materials, 'masterKey', None, types=bytes)
         if master_key is not None:
             if len(master_key) != 32:
@@ -38,7 +38,7 @@ class Encryption:
     def identifier(self):
         return self._identifier
 
-    def encrypt(self, data):
+    def encrypt(self, *, data):
         envelope_key = get_random_bytes(32)
         envelope_iv = get_random_bytes(16)
         encryptor = AES.new(envelope_key, AES.MODE_GCM, nonce=envelope_iv)
@@ -52,7 +52,7 @@ class Encryption:
 
         return encryptor.encrypt(data), materials
 
-    def decrypt(self, data, materials):
+    def decrypt(self, *, data, materials):
 
         for key in ['envelope_key', 'iv']:
             if key not in materials:
