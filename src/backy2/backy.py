@@ -409,7 +409,7 @@ class Backy:
                     self._data_backend.rm_version(version_uid)
                     logger.info('Removed version {} metdata from backend storage.'.format(version_uid.readable))
                 except FileNotFoundError:
-                    logger.warn('Unable to remove version {} metadata from backend storage, the object wasn\'t found.'
+                    logger.warning('Unable to remove version {} metadata from backend storage, the object wasn\'t found.'
                                 .format(version_uid.readable))
                     pass
 

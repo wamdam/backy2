@@ -60,7 +60,7 @@ class Commands:
                 try:
                     backy.protect(version_uid)
                 except backy2.exception.NoChange:
-                    logger.warn('Version {} already was protected.'.format(version_uid))
+                    logger.warning('Version {} already was protected.'.format(version_uid))
         finally:
             if backy:
                 backy.close()
@@ -74,7 +74,7 @@ class Commands:
                 try:
                     backy.unprotect(version_uid)
                 except backy2.exception.NoChange:
-                    logger.warn('Version {} already was unprotected.'.format(version_uid))
+                    logger.warning('Version {} already was unprotected.'.format(version_uid))
         finally:
             if backy:
                 backy.close()
@@ -351,7 +351,7 @@ class Commands:
                 try:
                     backy.add_tag(version_uid, name)
                 except backy2.exception.NoChange:
-                    logger.warn('Version {} already tagged with {}.'.format(version_uid, name))
+                    logger.warning('Version {} already tagged with {}.'.format(version_uid, name))
         finally:
             if backy:
                 backy.close()
@@ -365,7 +365,7 @@ class Commands:
                 try:
                     backy.rm_tag(version_uid, name)
                 except backy2.exception.NoChange:
-                    logger.warn('Version {} has no tag {}.'.format(version_uid, name))
+                    logger.warning('Version {} has no tag {}.'.format(version_uid, name))
         finally:
             if backy:
                 backy.close()

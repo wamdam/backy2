@@ -64,7 +64,7 @@ class IO:
         """
         if self._read_executor:
             if len(self._read_futures) > 0:
-                logger.warn('IO backend closed with {} outstanding read jobs, cancelling them.'.format(len(self._read_futures)))
+                logger.warning('IO backend closed with {} outstanding read jobs, cancelling them.'.format(len(self._read_futures)))
                 for future in self._read_futures:
                     future.cancel()
                 self._read_futures = []

@@ -65,7 +65,7 @@ class DataBackend(ReadCacheDataBackend):
                 self.bucket.upload_bytes(data, key)
             except B2Error:
                 if i + 1 < self._write_object_attempts:
-                    logger.warn('Upload of object with key {} to B2 failed repeatedly, will try again.'.format(key))
+                    logger.warning('Upload of object with key {} to B2 failed repeatedly, will try again.'.format(key))
                     continue
                 raise
             else:

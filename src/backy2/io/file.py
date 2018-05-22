@@ -13,7 +13,7 @@ from backy2.utils import data_hexdigest
 if hasattr(os, 'posix_fadvise'):
     posix_fadvise = os.posix_fadvise
 else:  # pragma: no cover
-    logger.warn('Running without `posix_fadvise`.')
+    logger.warning('Running without `posix_fadvise`.')
     os.POSIX_FADV_RANDOM = None
     os.POSIX_FADV_SEQUENTIAL = None
     os.POSIX_FADV_WILLNEED = None

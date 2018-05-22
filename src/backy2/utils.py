@@ -76,7 +76,7 @@ def notify(process_name, msg='', old_msg = ''):
 # Indeed it's so tricky that older Python versions had the same problem. See https://bugs.python.org/issue27144.
 def future_results_as_completed(futures, semaphore=None, timeout=None):
     if sys.version_info < (3,6,4):
-        logger.warn('Large backup jobs are likely to fail because of excessive memory usage. '
+        logger.warning('Large backup jobs are likely to fail because of excessive memory usage. '
                     + 'Upgrade your Python to at least 3.6.4.')
 
     for future in concurrent.futures.as_completed(futures, timeout=timeout):

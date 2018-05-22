@@ -432,13 +432,13 @@ class DataBackend(metaclass=ABCMeta):
 
     def close(self):
         if len(self._read_futures) > 0:
-            logger.warn('Data backend closed with {} outstanding read jobs, cancelling them.'
+            logger.warning('Data backend closed with {} outstanding read jobs, cancelling them.'
                         .format(len(self._read_futures)))
             for future in self._read_futures:
                 future.cancel()
             self._read_futures = []
         if len(self._write_futures) > 0:
-            logger.warn('Data backend closed with {} outstanding write jobs, cancelling them.'
+            logger.warning('Data backend closed with {} outstanding write jobs, cancelling them.'
                         .format(len(self._write_futures)))
             for future in self._write_futures:
                 future.cancel()
@@ -507,7 +507,7 @@ class ReadCacheDataBackend(DataBackend):
                                     statistics=1,
                                     )
             except Exception:
-                logger.warn('Unable to enable disk based read caching. Continuing without it.')
+                logger.warning('Unable to enable disk based read caching. Continuing without it.')
                 self._read_cache = None
             else:
                 logger.debug('Disk based read caching instantiated (cache size {}).'.format(read_cache_maximum_size))
