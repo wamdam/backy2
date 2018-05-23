@@ -5,6 +5,7 @@ import hashlib
 import importlib
 import json
 import os
+import textwrap
 import threading
 import time
 from abc import ABCMeta, abstractmethod
@@ -12,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import BoundedSemaphore
 
 from diskcache import Cache
+from prettytable import PrettyTable
 
 from backy2.exception import InternalError, ConfigurationError
 from backy2.logging import logger
@@ -96,6 +98,15 @@ class DataBackend(metaclass=ABCMeta):
         bandwidth_write = config.get('dataBackend.bandwidthWrite', types=int)
 
         self._consistency_check_writes = config.get('dataBackend.consistencyCheckWrites'.format(self.NAME), False, types=bool)
+
+        self._compression_statistics = {
+            'objects_considered': 0,
+            'objects_compressed': 0,
+            'data_in': 0,
+            'data_out': 0,
+            'data_in_compression': 0,
+            'data_out_compression': 0
+        }
 
         self.read_throttling = TokenBucket()
         self.read_throttling.set_rate(bandwidth_read)  # 0 disables throttling
@@ -394,9 +405,17 @@ class DataBackend(metaclass=ABCMeta):
             return data
 
     def _compress(self, data):
+        self._compression_statistics['objects_considered'] += 1
+        self._compression_statistics['data_in'] += len(data)
+
         if self.compression_active is not None:
             compressed_data, materials = self.compression_active.compress(data=data)
             if len(compressed_data) < len(data):
+                self._compression_statistics['objects_compressed'] += 1
+                self._compression_statistics['data_in_compression'] += len(data)
+                self._compression_statistics['data_out_compression'] += len(compressed_data)
+                self._compression_statistics['data_out'] += len(compressed_data)
+
                 metadata = {
                     self._COMPRESSION_KEY: {
                         'type': self.compression_active.NAME,
@@ -405,8 +424,10 @@ class DataBackend(metaclass=ABCMeta):
                 }
                 return compressed_data, metadata
             else:
+                self._compression_statistics['data_out'] += len(data)
                 return data, {}
         else:
+            self._compression_statistics['data_out'] += len(data)
             return data, {}
 
     def _uncompress(self, data, metadata):
@@ -430,7 +451,38 @@ class DataBackend(metaclass=ABCMeta):
     def use_read_cache(self, enable):
         return False
 
+    def _log_compression_statistics(self):
+        if self._compression_statistics['objects_considered'] == 0:
+            return
+
+        tbl = PrettyTable()
+        tbl.field_names = ['Objects considered', 'Objects compressed', 'Data in', 'Data out',
+                           'Overall compression ratio', 'Data input to compression', 'Data output from compression',
+                           'Compression ratio']
+        tbl.align['Objects considered'] = 'r'
+        tbl.align['Objects compressed'] = 'r'
+        tbl.align['Data in'] = 'r'
+        tbl.align['Data out'] = 'r'
+        tbl.align['Overall compression ratio'] = 'r'
+        tbl.align['Data input to compression'] = 'r'
+        tbl.align['Data output from compression'] = 'r'
+        tbl.align['Compression ratio'] = 'r'
+        tbl.add_row([
+            self._compression_statistics['objects_considered'],
+            self._compression_statistics['objects_compressed'],
+            self._compression_statistics['data_in'],
+            self._compression_statistics['data_out'],
+            '{:.2f}'.format(self._compression_statistics['data_in'] / self._compression_statistics['data_out']),
+            self._compression_statistics['data_in_compression'],
+            self._compression_statistics['data_out_compression'],
+            '{:.2f}'.format(self._compression_statistics['data_in_compression']
+                                / self._compression_statistics['data_out_compression'])
+        ])
+        logger.info('Compression statistics:  \n' + textwrap.indent(str(tbl), '          '))
+
     def close(self):
+        self._log_compression_statistics()
+
         if len(self._read_futures) > 0:
             logger.warning('Data backend closed with {} outstanding read jobs, cancelling them.'
                         .format(len(self._read_futures)))
