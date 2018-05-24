@@ -75,7 +75,7 @@ class DatabackendTestCase(BackendTestCase):
 
         self.data_backend.wait_reads_finished()
 
-        for block, data in self.data_backend.read_get_completed(timeout=1):
+        for block, data, metadata in self.data_backend.read_get_completed(timeout=1):
             self.assertEqual(data_by_uid[block.uid], data)
 
         self.assertEqual([], [future for future in self.data_backend.read_get_completed(timeout=1)])
