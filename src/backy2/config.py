@@ -39,6 +39,7 @@ class Config:
         disableEncodingType: false
       b2:
         writeObjectAttempts: 1
+        readObjectAttempts: 1
         uploadAttempts: 5
     nbd:
       cacheDirectory: /tmp

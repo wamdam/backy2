@@ -44,6 +44,10 @@ class DataBackend(ReadCacheDataBackend):
                                                            check_func=lambda  v: v >= 1,
                                                            check_message='Must be a positive integer')
 
+        self._read_object_attempts = config.get_from_dict(our_config, 'readObjectAttempts', types=int,
+                                                           check_func=lambda  v: v >= 1,
+                                                           check_message='Must be a positive integer')
+
         self.service = b2.api.B2Api(account_info)
         if account_info_file is not None:
             try:
@@ -72,17 +76,23 @@ class DataBackend(ReadCacheDataBackend):
                 break
 
     def _read_object(self, key):
-        data_io = DownloadDestBytes()
-        try:
-            self.bucket.download_file_by_name(key, data_io)
-        except B2Error as e:
-            # Currently FileNotPresent isn't always signaled correctly.
-            # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-            if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
-            #if isinstance(e, FileNotPresent):
-                raise FileNotFoundError('UID {} not found.'.format(key)) from None
+        for i in range(self._read_object_attempts):
+            data_io = DownloadDestBytes()
+            try:
+                self.bucket.download_file_by_name(key, data_io)
+            except B2Error as exception:
+                # Currently FileNotPresent isn't always signaled correctly.
+                # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
+                if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
+                #if isinstance(exception, FileNotPresent):
+                    raise FileNotFoundError('UID {} not found.'.format(key)) from None
+                else:
+                    if i + 1 < self._read_object_attempts:
+                        logger.warning('Download of object with key {} to B2 failed repeatedly, will try again.'.format(key))
+                        continue
+                    raise
             else:
-                raise
+                break
 
         return data_io.get_bytes_written()
 
@@ -98,11 +108,11 @@ class DataBackend(ReadCacheDataBackend):
     def _read_object_length(self, key):
         try:
             file_version_info = self._file_info(key)
-        except B2Error as e:
+        except B2Error as exception:
             # Currently FileNotPresent isn't always signaled correctly.
             # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-            if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
-            #if isinstance(e, FileNotPresent):
+            if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
+            #if isinstance(exception, FileNotPresent):
                 raise FileNotFoundError('UID {} not found.'.format(key)) from None
             else:
                 raise
@@ -113,11 +123,11 @@ class DataBackend(ReadCacheDataBackend):
         try:
             file_version_info = self._file_info(key)
             self.bucket.delete_file_version(file_version_info.id_, file_version_info.file_name)
-        except B2Error as e:
+        except B2Error as exception:
             # Currently FileNotPresent isn't always signaled correctly.
             # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-            if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
-            #if isinstance(e, FileNotPresent):
+            if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
+            #if isinstance(exception, FileNotPresent):
                 raise FileNotFoundError('Object {} not found.'.format(key)) from None
             else:
                 raise

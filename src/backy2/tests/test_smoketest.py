@@ -323,6 +323,7 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
                  bucketName: backy2
                  accountInfoFile: {testpath}/b2_account_info
                  writeObjectAttempts: 1
+                 readObjectAttempts: 1
                  uploadAttempts: 5
                  consistencyCheckWrites: True
               compression:
