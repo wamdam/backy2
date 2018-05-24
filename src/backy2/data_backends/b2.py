@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import logging
+import random
+import time
 
 import b2
 import b2.api
@@ -69,7 +71,10 @@ class DataBackend(ReadCacheDataBackend):
                 self.bucket.upload_bytes(data, key)
             except B2Error:
                 if i + 1 < self._write_object_attempts:
-                    logger.warning('Upload of object with key {} to B2 failed repeatedly, will try again.'.format(key))
+                    sleep_time = (2 ** (i + 1)) + (random.randint(0, 1000) / 1000)
+                    logger.warning('Upload of object with key {} to B2 failed repeatedly, will try again in {:.2f} seconds.'
+                                   .format(key, sleep_time))
+                    time.sleep(sleep_time)
                     continue
                 raise
             else:
@@ -88,7 +93,10 @@ class DataBackend(ReadCacheDataBackend):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
-                        logger.warning('Download of object with key {} to B2 failed, will try again.'.format(key))
+                        sleep_time = (2 ** (i + 1)) + (random.randint(0, 1000) / 1000)
+                        logger.warning('Download of object with key {} to B2 failed, will try again in {:.2f} seconds.'
+                                       .format(key, sleep_time))
+                        time.sleep(sleep_time)
                         continue
                     raise
             else:
@@ -117,7 +125,10 @@ class DataBackend(ReadCacheDataBackend):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
-                        logger.warning('Object length request for key {} to B2 failed, will try again.'.format(key))
+                        sleep_time = (2 ** (i + 1)) + (random.randint(0, 1000) / 1000)
+                        logger.warning('Object length request for key {} to B2 failed, will try again in {:.2f} seconds.'
+                                       .format(key, sleep_time))
+                        time.sleep(sleep_time)
                         continue
                     raise
             else:
