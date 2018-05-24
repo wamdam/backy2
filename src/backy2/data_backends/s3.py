@@ -99,8 +99,8 @@ class DataBackend(ReadCacheDataBackend):
         self._init_connection()
         object = self._local.bucket.Object(key)
         try:
-            object = object.get()
-            data = object['Body'].read()
+            data_dict = object.get()
+            data = data_dict['Body'].read()
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
                 raise FileNotFoundError('Key {} not found.'.format(key)) from None
@@ -108,6 +108,19 @@ class DataBackend(ReadCacheDataBackend):
                 raise
 
         return data
+
+    def _read_object_length(self, key):
+        self._init_connection()
+        object = self._local.bucket.Object(key)
+        try:
+            object.load()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
+                raise FileNotFoundError('Key {} not found.'.format(key)) from None
+            else:
+                raise
+
+        return object.content_length
 
     def _rm_object(self, key):
         self._init_connection()

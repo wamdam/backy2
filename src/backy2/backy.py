@@ -188,7 +188,76 @@ class Backy:
                 hash_function=self._hash_function,
                 )
 
-    def scrub(self, version_uid, source=None, percentile=100):
+    def scrub(self, version_uid, percentile=100):
+        """ Returns a boolean (state). If False, there were errors, if True
+        all was ok
+        """
+        if not self._locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
+            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+
+        version = self._meta_backend.get_version(version_uid)
+        blocks = self._meta_backend.get_blocks_by_version(version_uid)
+
+        state = True
+        try:
+            read_jobs = 0
+            for i, block in enumerate(blocks):
+                if block.uid:
+                    if percentile < 100 and random.randint(1, 100) > percentile:
+                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'
+                                     .format(block.id, block.uid, percentile))
+                    else:
+                        self._data_backend.read(block.deref(), metadata_only=True)  # async queue
+                        read_jobs += 1
+                else:
+                    logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(block.id, block.uid))
+                notify(self._process_name, 'Preparing scrub of version {} ({:.1f}%)'
+                       .format(version.uid.readable, (i + 1) / len(blocks) * 100))
+
+            done_read_jobs = 0
+            for i, entry in enumerate(self._data_backend.read_get_completed()):
+                done_read_jobs += 1
+                if isinstance(entry, Exception):
+                    logger.error('Data backend read failed: {}'.format(entry))
+                    if isinstance(entry, (KeyError, ValueError)):
+                        self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                        state = False
+                        continue
+                    else:
+                        raise entry
+                else:
+                    block, data, metadata = entry
+
+                try:
+                    self._data_backend.check_block_metadata(block=block, data_length=None, metadata=metadata)
+                except (KeyError, ValueError) as exception:
+                    logger.error('Metadata check failed, block is invalid: {}'.format(exception))
+                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    state = False
+                    continue
+                except:
+                    raise
+
+                logger.debug('Scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
+                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, (i + 1) / read_jobs * 100))
+        except:
+            raise
+
+        if read_jobs != done_read_jobs:
+            raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
+                                .format(read_jobs, done_read_jobs))
+
+        if state == True:
+            self._meta_backend.set_version_valid(version_uid)
+        else:
+            # version is set invalid by set_blocks_invalid.
+            logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
+
+        self._locking.unlock(lock_name=version_uid.readable)
+        notify(self._process_name)
+        return state
+
+    def deep_scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok
         """
@@ -209,51 +278,44 @@ class Backy:
             for i, block in enumerate(blocks):
                 if block.uid:
                     if percentile < 100 and random.randint(1, 100) > percentile:
-                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                            block.id,
-                            block.uid,
-                            percentile,
-                            ))
+                        logger.debug('Deep scrub of block {} (UID {}) skipped (percentile is {}).'
+                            .format(block.id, block.uid, percentile))
                     else:
                         self._data_backend.read(block.deref())  # async queue
                         read_jobs += 1
                 else:
-                    logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(
-                        block.id,
-                        block.uid,
-                        ))
-                notify(self._process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
+                    logger.debug('Deep scrub of block {} (UID {}) skipped (sparse).'.format(block.id, block.uid))
+                notify(self._process_name, 'Preparing deep scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
             for i, entry in enumerate(self._data_backend.read_get_completed()):
-                block, data = entry
                 done_read_jobs += 1
+                if isinstance(entry, Exception):
+                    logger.error('Data backend read failed: {}'.format(entry))
+                    # If it really is a data inconsistency mark blocks invalid
+                    if isinstance(entry, (KeyError, ValueError)):
+                        self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                        state = False
+                        continue
+                    else:
+                        raise entry
+                else:
+                    block, data, metadata = entry
 
-                if data is None:
-                    logger.error('Blob not found: {}.'.format(str(block)))
+                try:
+                    self._data_backend.check_block_metadata(block=block, data_length=len(data), metadata=metadata)
+                except (KeyError, ValueError) as exception:
+                    logger.error('Metadata check failed, block is invalid: {}'.format(exception))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
                     state = False
                     continue
-
-                if len(data) != block.size:
-                    logger.error('Blob {} has wrong size {}, it should be {}.'.format(
-                        block.uid,
-                        len(data),
-                        block.size,
-                        ))
-                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
-                    continue
+                except:
+                    raise
 
                 data_checksum = data_hexdigest(self._hash_function, data)
                 if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during scrub for block '
-                        '{} (UID {}) (is: {} should-be: {}).'.format(
-                            block.id,
-                            block.uid,
-                            data_checksum,
-                            block.checksum,
-                            ))
+                    logger.error('Checksum mismatch during deep scrub for block {} (UID {}) (is: {} should-be: {}).'
+                                 .format(block.id, block.uid, data_checksum, block.checksum))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
                     state = False
                     continue
@@ -261,25 +323,20 @@ class Backy:
                 if source:
                     source_data = io.read(block, sync=True)
                     if source_data != data:
-                        logger.error('Source data has changed for block {} '
-                            '(UID {}) (is: {} should-be: {}). NOT setting '
-                            'this block invalid, because the source looks '
-                            'wrong.'.format(
-                                block.id,
-                                block.uid,
-                                data_hexdigest(self._hash_function, source_data),
-                                data_checksum,
-                                ))
+                        logger.error('Source data has changed for block {} (UID {}) (is: {} should-be: {}). Won\'t set '
+                                     'this block to invalid, because the source looks wrong.'
+                                     .format(block,
+                                             block.uid,
+                                             data_hexdigest(self._hash_function, source_data),
+                                             data_checksum))
                         state = False
                         # We are not setting the block invalid here because
                         # when the block is there AND the checksum is good,
                         # then the source is invalid.
 
-                logger.debug('Scrub of block {} (UID {}) ok.'.format(
-                    block.id,
-                    block.uid,
-                    ))
-                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, (i + 1) / read_jobs * 100))
+                logger.debug('Deep scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
+                notify(self._process_name, 'Deep scrubbing version {} ({:.1f}%)'
+                       .format(version_uid.readable, (i + 1) / read_jobs * 100))
         except:
             raise
         finally:
@@ -297,10 +354,10 @@ class Backy:
             self._meta_backend.set_version_valid(version_uid)
         else:
             # version is set invalid by set_blocks_invalid.
+            # FIXME: This message might be misleading in the case where a source mismatch occurs where
+            # FIXME: we set state to False but don't mark any blocks as invalid.
             logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
 
-        if source:
-            io.close()  # wait for all io
         self._locking.unlock(lock_name=version_uid.readable)
         notify(self._process_name)
         return state
@@ -320,47 +377,56 @@ class Backy:
             read_jobs = 0
             for i, block in enumerate(blocks):
                 if block.uid:
-                    self._data_backend.read(block.deref())  # adds a read job
+                    self._data_backend.read(block.deref())
                     read_jobs += 1
                 elif not sparse:
                     io.write(block, b'\0'*block.size)
-                    logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
-                        block.id,
-                        block.size,
-                        ))
+                    logger.debug('Restored sparse block {} successfully ({} bytes).'.format(block.id, block.size))
                 else:
-                    logger.debug('Ignored sparse block {}.'.format(
-                        block.id,
-                        ))
+                    logger.debug('Ignored sparse block {}.'.format(block.id))
                 if sparse:
-                    notify(self._process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
+                    notify(self._process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'
+                           .format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
                 else:
-                    notify(self._process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
+                    notify(self._process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'
+                           .format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
             for i, entry in enumerate(self._data_backend.read_get_completed()):
-                block, data = entry
-                assert len(data) == block.size
-                data_checksum = data_hexdigest(self._hash_function, data)
+                done_read_jobs += 1
+                if isinstance(entry, Exception):
+                    logger.error('Data backend read failed: {}'.format(entry))
+                    # If it really is a data inconsistency mark blocks invalid
+                    if isinstance(entry, (KeyError, ValueError)):
+                        self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                        continue
+                    else:
+                        raise entry
+                else:
+                    block, data, metadata = entry
+
+                # Write what we have
                 io.write(block, data)
+
+                try:
+                    self._data_backend.check_block_metadata(block=block, data_length=len(data), metadata=metadata)
+                except (KeyError, ValueError) as exception:
+                    logger.error('Metadata check failed, block is invalid: {}'.format(exception))
+                    self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    continue
+                except:
+                    raise
+
+                data_checksum = data_hexdigest(self._hash_function, data)
                 if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during restore for block '
-                        '{} (is: {} should-be: {}, block-valid: {}). Block '
-                        'restored is invalid. Continuing.'.format(
-                            block.id,
-                            data_checksum,
-                            block.checksum,
-                            block.valid,
-                            ))
+                    logger.error('Checksum mismatch during restore for block {} (UID {}) (is: {} should-be: {}, '
+                                 'block.valid: {}). Block restored is invalid.'
+                                 .format(block.id, block.uid, data_checksum, block.checksum, block.valid))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 else:
-                    logger.debug('Restored block {} successfully ({} bytes).'.format(
-                        block.id,
-                        block.size,
-                        ))
+                    logger.debug('Restored block {} successfully ({} bytes).'.format(block.id, block.size))
 
-                done_read_jobs += 1
                 notify(self._process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / read_jobs * 100))
                 if i % log_every_jobs == 0 or i + 1 == read_jobs:
                     logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
@@ -407,7 +473,7 @@ class Backy:
             if not keep_backend_metadata:
                 try:
                     self._data_backend.rm_version(version_uid)
-                    logger.info('Removed version {} metdata from backend storage.'.format(version_uid.readable))
+                    logger.info('Removed version {} metadata from backend storage.'.format(version_uid.readable))
                 except FileNotFoundError:
                     logger.warning('Unable to remove version {} metadata from backend storage, the object wasn\'t found.'
                                 .format(version_uid.readable))
@@ -522,7 +588,12 @@ class Backy:
                 if block.id in check_block_ids and block.uid and block.valid:  # no uid = sparse block in backup. Can't check.
                     io.read(block.deref())
                     num_reading += 1
-            for source_block, source_data, source_data_checksum in io.read_get_completed():
+            for entry in io.read_get_completed():
+                if isinstance(entry, Exception):
+                    raise entry
+                else:
+                    source_block, source_data, source_data_checksum = entry
+
                 # check metadata checksum with the newly read one
                 if source_block.checksum != source_data_checksum:
                     logger.error("Source and backup don't match in regions outside of the ones indicated by the hints.")
@@ -562,7 +633,12 @@ class Backy:
             write_jobs = 0
             done_write_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
-            for block, data, data_checksum in io.read_get_completed():
+            for entry in io.read_get_completed():
+                if isinstance(entry, Exception):
+                    raise entry
+                else:
+                    block, data, data_checksum = entry
+
                 stats['blocks_read'] += 1
                 stats['bytes_read'] += len(data)
 
@@ -597,6 +673,9 @@ class Backy:
 
                 try:
                     for saved_block in self._data_backend.save_get_completed(timeout=0):
+                        if isinstance(saved_block, Exception):
+                            raise saved_block
+
                         self._meta_backend.set_block(saved_block.id, saved_block.version_uid, saved_block.uid,
                                                      saved_block.checksum, saved_block.size, valid=True)
                         done_write_jobs += 1
@@ -611,6 +690,9 @@ class Backy:
 
             try:
                 for saved_block in self._data_backend.save_get_completed():
+                    if isinstance(saved_block, Exception):
+                        raise saved_block
+
                     self._meta_backend.set_block(saved_block.id, saved_block.version_uid, saved_block.uid,
                                                  saved_block.checksum, saved_block.size, valid=True)
                     done_write_jobs += 1

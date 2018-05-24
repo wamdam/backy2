@@ -148,6 +148,9 @@ class DereferencedBlockUid:
     def right(self):
         return self._right
 
+    def __composite_values__(self):
+        return self.left, self.right
+
     def __repr__(self):
         return "{:x}-{:x}".format(
             self.left if self.left is not None else 0,
@@ -645,11 +648,10 @@ class MetaBackend:
             self._session.query(Block).filter_by(uid=block_uid, checksum=checksum).update({'valid': False}, synchronize_session='fetch')
             self._session.commit()
 
-            logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
-                block_uid,
-                checksum,
-                ', '.join([version_uid.readable for version_uid in affected_version_uids])
-                ))
+            logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'
+                                .format(block_uid,
+                                        checksum[:16],
+                                        ', '.join([version_uid.readable for version_uid in affected_version_uids])))
 
             for version_uid in affected_version_uids:
                 self.set_version_invalid(version_uid)

@@ -214,41 +214,50 @@ class DataBackend(metaclass=ABCMeta):
         """
         return future_results_as_completed(self._write_futures, timeout=timeout)
 
-    def _read(self, block):
+    def _read(self, block, metadata_only):
         key = self._block_uid_to_key(block.uid)
         metadata_key = key + self._META_SUFFIX
         t1 = time.time()
-        data = self._read_object(key)
+        if not metadata_only:
+            data = self._read_object(key)
+            data_length = len(data)
+        else:
+            data = None
+            data_length = self._read_object_length(key)
         metadata = self._read_object(metadata_key)
-        time.sleep(self.read_throttling.consume(len(data) + len(metadata_key)))
+        time.sleep(self.read_throttling.consume(len(data) if data else 0 + len(metadata)))
         t2 = time.time()
 
         metadata = json.loads(metadata.decode('utf-8'))
-        for required_key in [self._OBJECT_SIZE_KEY, self._SIZE_KEY]:
-            if required_key not in metadata:
-                raise KeyError('Required metadata key {} is missing for object {}.'.format(required_key, key))
+        if self._OBJECT_SIZE_KEY not in metadata:
+            raise KeyError('Required metadata key {} is missing for block {} (UID {}).'
+                           .format(self._OBJECT_SIZE_KEY, block.id, block.uid))
 
-        if len(data) != metadata[self._OBJECT_SIZE_KEY]:
-            raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'
-                                .format(key, metadata[self.self._OBJECT_SIZE_KEY], len(data)))
+        if data_length != metadata[self._OBJECT_SIZE_KEY]:
+            raise ValueError('Mismatch between recorded object size and actual object size for block {} (UID {}). '
+                             'Expected: {}, got: {}.'.format(block.id,
+                                                             block.uid,
+                                                             metadata[self._OBJECT_SIZE_KEY],
+                                                             data_length))
 
-        data = self._decrypt(data, metadata)
-        data = self._uncompress(data, metadata)
+        if not metadata_only:
+            data = self._decrypt(data, metadata)
+            data = self._uncompress(data, metadata)
 
-        if len(data) != metadata[self._SIZE_KEY]:
-            raise ValueError('Length mismatch of original data for object {}. Expected: {}, got: {}.'
-                             .format(key, metadata[self.self._SIZE_KEY], len(data)))
+        logger.debug('{} read data of uid {} in {:.2f}s{}'
+                     .format(threading.current_thread().name,
+                             block.uid, t2-t1,
+                             ' (metadata only)' if metadata_only else ''))
 
-        logger.debug('{} read data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
-        return block, data
+        return block, data, metadata
 
-    def read(self, block, sync=False):
+    def read(self, block, sync=False, metadata_only=False):
         if sync:
-            return self._read(block)[1]
+            return self._read(block, metadata_only)[1]
         else:
             def read_with_acquire():
                 self._read_semaphore.acquire()
-                return self._read(block)
+                return self._read(block, metadata_only)
 
             self._read_futures.append(self._read_executor.submit(read_with_acquire))
 
@@ -256,6 +265,33 @@ class DataBackend(metaclass=ABCMeta):
         """ Returns a generator for all completed read jobs
         """
         return future_results_as_completed(self._read_futures, semaphore=self._read_semaphore, timeout=timeout)
+
+    def check_block_metadata(self, *, block, data_length, metadata):
+        for required_key in [self._SIZE_KEY, self._CHECKSUM_KEY]:
+            if required_key not in metadata:
+                raise KeyError('Required metadata key {} is missing for block {} (UID {}).'
+                               .format(required_key, block.id, block.uid))
+
+        if metadata[self._SIZE_KEY] != block.size:
+            raise ValueError('Mismatch between recorded block size and data length in metadata for block {} (UID {}). '
+                             'Expected: {}, got: {}.'.format(block.id,
+                                                             block.uid,
+                                                             block.size,
+                                                             metadata[self._SIZE_KEY]))
+
+        if data_length and data_length != block.size:
+            raise ValueError('Mismatch between recorded block size and actual data length for block {} (UID {}). '
+                             'Expected: {}, got: {}.'.format(block.id,
+                                                             block.uid,
+                                                             block.size,
+                                                             data_length))
+
+        if block.checksum != metadata[self._CHECKSUM_KEY]:
+            raise ValueError('Mismatch between recorded block checksum and checksum in metadata for block {} (UID {}). '
+                             'Expected: {}, got: {}.'.format(block.id,
+                                                             block.uid,
+                                                             block.checksum[:16],
+                                                             metadata[self._CHECKSUM_KEY][:16]))
 
     def rm(self, uid):
         key = self._block_uid_to_key(uid)
@@ -528,6 +564,10 @@ class DataBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
+    def _read_object_length(self, key):
+        raise NotImplementedError
+
+    @abstractmethod
     def _rm_object(self):
         raise NotImplementedError
 
@@ -570,20 +610,27 @@ class ReadCacheDataBackend(DataBackend):
         # Start reader and write threads after the disk cached is created, so that they see it.
         super().__init__(config)
 
-    def _read(self, block):
+    def _read(self, block, metadata_only):
         key = self._block_uid_to_key(block.uid)
+        metadata_key = key + self._META_SUFFIX
         if self._read_cache is not None and self._use_read_cache:
-            data = self._read_cache.get(key)
-            if data:
-                return block, data
+            metadata = self._read_cache.get(metadata_key)
+            if metadata and metadata_only:
+                return block, None, metadata
+            elif metadata:
+                data = self._read_cache.get(key)
+                if data:
+                    return block, data, metadata
 
-        block, data = super()._read(block)
+        block, data, metadata = super()._read(block, metadata_only)
 
         # We always put blocks into the cache even when self._use_read_cache is False
         if self._read_cache is not None:
-            self._read_cache.set(key, data)
+            self._read_cache.set(metadata_key, metadata)
+            if not metadata_only:
+                self._read_cache.set(key, data)
 
-        return block, data
+        return block, data, metadata
 
     def use_read_cache(self, enable):
         old_value =  self._use_read_cache

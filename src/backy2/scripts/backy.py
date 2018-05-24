@@ -93,14 +93,26 @@ class Commands:
             if backy:
                 backy.close()
 
-    def scrub(self, version_uid, source, percentile):
+    def scrub(self, version_uid, percentile):
         version_uid = VersionUid.create_from_readables(version_uid)
         if percentile:
             percentile = int(percentile)
         backy = None
         try:
             backy = Backy(self.config)
-            backy.scrub(version_uid, source, percentile)
+            backy.scrub(version_uid, percentile)
+        finally:
+            if backy:
+                backy.close()
+
+    def deep_scrub(self, version_uid, source, percentile):
+        version_uid = VersionUid.create_from_readables(version_uid)
+        if percentile:
+            percentile = int(percentile)
+        backy = None
+        try:
+            backy = Backy(self.config)
+            backy.deep_scrub(version_uid, source, percentile)
         finally:
             if backy:
                 backy.close()
@@ -453,12 +465,21 @@ def main():
     p = subparsers.add_parser(
         'scrub',
         help="Scrub a given backup and check for consistency.")
-    p.add_argument('-s', '--source', default=None,
-        help='Source, optional. If given, check if source matches backup in addition to checksum tests. URL-like format as in backup.')
     p.add_argument('-p', '--percentile', default=100,
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='scrub')
+
+    # DEEP-SCRUB
+    p = subparsers.add_parser(
+        'deep-scrub',
+        help="Deep scrub a given backup and check for consistency.")
+    p.add_argument('-s', '--source', default=None,
+                   help='Source, optional. If given, check if source matches backup in addition to checksum tests. URL-like format as in backup.')
+    p.add_argument('-p', '--percentile', default=100,
+                   help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
+    p.add_argument('version_uid', help='Version UID')
+    p.set_defaults(func='deep_scrub')
 
     # Export
     p = subparsers.add_parser(

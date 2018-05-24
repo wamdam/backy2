@@ -52,6 +52,14 @@ class DataBackend(_DataBackend):
 
         return data
 
+    def _read_object_length(self, key):
+        filename = os.path.join(self.path, key)
+
+        if not os.path.exists(filename):
+            raise FileNotFoundError('File {} not found.'.format(filename))
+
+        return os.path.getsize(filename)
+
     def _rm_object(self, key):
         filename = os.path.join(self.path, key)
 

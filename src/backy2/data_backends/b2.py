@@ -95,6 +95,20 @@ class DataBackend(ReadCacheDataBackend):
 
         raise FileNotFoundError('Object {} not found.'.format(key))
 
+    def _read_object_length(self, key):
+        try:
+            file_version_info = self._file_info(key)
+        except B2Error as e:
+            # Currently FileNotPresent isn't always signaled correctly.
+            # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
+            if isinstance(e, FileNotPresent) or isinstance(e, UnknownError) and "404 not_found" in str(e):
+            #if isinstance(e, FileNotPresent):
+                raise FileNotFoundError('UID {} not found.'.format(key)) from None
+            else:
+                raise
+
+        return file_version_info.size
+
     def _rm_object(self, key):
         try:
             file_version_info = self._file_info(key)

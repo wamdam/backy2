@@ -83,7 +83,10 @@ def future_results_as_completed(futures, semaphore=None, timeout=None):
         futures.remove(future)
         if semaphore:
             semaphore.release()
-        result = future.result()
+        try:
+            result = future.result()
+        except Exception as exception:
+            result = exception
         del future
         yield result
 
