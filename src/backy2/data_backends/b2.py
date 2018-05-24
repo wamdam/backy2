@@ -88,7 +88,7 @@ class DataBackend(ReadCacheDataBackend):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
-                        logger.warning('Download of object with key {} to B2 failed repeatedly, will try again.'.format(key))
+                        logger.warning('Download of object with key {} to B2 failed, will try again.'.format(key))
                         continue
                     raise
             else:
@@ -106,16 +106,22 @@ class DataBackend(ReadCacheDataBackend):
         raise FileNotFoundError('Object {} not found.'.format(key))
 
     def _read_object_length(self, key):
-        try:
-            file_version_info = self._file_info(key)
-        except B2Error as exception:
-            # Currently FileNotPresent isn't always signaled correctly.
-            # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-            if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-            #if isinstance(exception, FileNotPresent):
-                raise FileNotFoundError('UID {} not found.'.format(key)) from None
+        for i in range(self._read_object_attempts):
+            try:
+                file_version_info = self._file_info(key)
+            except B2Error as exception:
+                # Currently FileNotPresent isn't always signaled correctly.
+                # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
+                if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
+                #if isinstance(exception, FileNotPresent):
+                    raise FileNotFoundError('UID {} not found.'.format(key)) from None
+                else:
+                    if i + 1 < self._read_object_attempts:
+                        logger.warning('Object length request for key {} to B2 failed, will try again.'.format(key))
+                        continue
+                    raise
             else:
-                raise
+                break
 
         return file_version_info.size
 
