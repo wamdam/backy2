@@ -491,6 +491,14 @@ class DataBackend(metaclass=ABCMeta):
         if self._compression_statistics['objects_considered'] == 0:
             return
 
+        overall_ratio, ratio = 0.0, 0.0
+        if self._compression_statistics['data_out'] > 0:
+            overall_ratio = self._compression_statistics['data_in'] / self._compression_statistics['data_out']
+
+        if self._compression_statistics['data_out_compression'] > 0:
+            ratio = self._compression_statistics['data_in_compression'] \
+                    / self._compression_statistics['data_out_compression']
+
         tbl = PrettyTable()
         tbl.field_names = ['Objects considered', 'Objects compressed', 'Data in', 'Data out',
                            'Overall compression ratio', 'Data input to compression', 'Data output from compression',
@@ -508,11 +516,10 @@ class DataBackend(metaclass=ABCMeta):
             self._compression_statistics['objects_compressed'],
             self._compression_statistics['data_in'],
             self._compression_statistics['data_out'],
-            '{:.2f}'.format(self._compression_statistics['data_in'] / self._compression_statistics['data_out']),
+            '{:.2f}'.format(overall_ratio),
             self._compression_statistics['data_in_compression'],
             self._compression_statistics['data_out_compression'],
-            '{:.2f}'.format(self._compression_statistics['data_in_compression']
-                                / self._compression_statistics['data_out_compression'])
+            '{:.2f}'.format(ratio)
         ])
         logger.info('Compression statistics:  \n' + textwrap.indent(str(tbl), '          '))
 
