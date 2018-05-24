@@ -81,7 +81,7 @@ def future_results_as_completed(futures, semaphore=None, timeout=None):
 
     for future in concurrent.futures.as_completed(futures, timeout=timeout):
         futures.remove(future)
-        if semaphore:
+        if semaphore and not future.cancelled():
             semaphore.release()
         try:
             result = future.result()

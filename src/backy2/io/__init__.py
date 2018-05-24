@@ -67,5 +67,9 @@ class IO:
                 logger.warning('IO backend closed with {} outstanding read jobs, cancelling them.'.format(len(self._read_futures)))
                 for future in self._read_futures:
                     future.cancel()
-                self._read_futures = []
+                logger.debug('IO backend cancelled all outstanding read jobs.')
+                # Get all jobs so that the semaphore gets released and still waiting jobs can complete
+                for future in self.read_get_completed():
+                    pass
+                logger.debug('IO backend read results from all outstanding read jobs.')
             self._read_executor.shutdown()

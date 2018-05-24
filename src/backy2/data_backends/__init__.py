@@ -524,12 +524,18 @@ class DataBackend(metaclass=ABCMeta):
                         .format(len(self._read_futures)))
             for future in self._read_futures:
                 future.cancel()
-            self._read_futures = []
+            logger.debug('Data backend cancelled all outstanding read jobs.')
+            # Get all jobs so that the semaphore gets released and still waiting jobs can complete
+            for future in self.read_get_completed():
+                pass
+            logger.debug('Data backend read results from all outstanding read jobs.')
         if len(self._write_futures) > 0:
             logger.warning('Data backend closed with {} outstanding write jobs, cancelling them.'
                         .format(len(self._write_futures)))
             for future in self._write_futures:
                 future.cancel()
+            logger.debug('Data backend cancelled all outstanding write jobs.')
+            # Write jobs release their semaphore at completion so we don't need to collect the results
             self._write_futures = []
         self._write_executor.shutdown()
         self._read_executor.shutdown()

@@ -793,9 +793,11 @@ class Backy:
         self._meta_backend.rm_tag(version_uid, name)
 
     def close(self):
-        self._meta_backend.close()
         if self._data_backend_object:
             self._data_backend.close()
+        # Close meta backend after data backend so that any open locks are held until all data backend jobs have
+        # finished
+        self._meta_backend.close()
 
     def export(self, version_uids, f):
         try:
