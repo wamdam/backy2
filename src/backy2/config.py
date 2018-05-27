@@ -151,7 +151,10 @@ class Config:
             if len(args) == 1:
                 return args[0]
             else:
-                raise KeyError('Config option {} is missing.'.format(full_name)) from None
+                if types and isinstance({}, types):
+                    raise KeyError('Config section {} is missing.'.format(full_name)) from None
+                else:
+                    raise KeyError('Config option {} is missing.'.format(full_name)) from None
 
     def get(self, name, *args, **kwargs):
         return Config._get(self.config, name, *args, **kwargs)
