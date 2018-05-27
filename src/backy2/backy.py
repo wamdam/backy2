@@ -215,7 +215,8 @@ class Backy:
                        .format(version.uid.readable, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
-            for i, entry in enumerate(self._data_backend.read_get_completed()):
+            log_every_jobs = read_jobs // 200 + 1  # about every half percent
+            for entry in self._data_backend.read_get_completed():
                 done_read_jobs += 1
                 if isinstance(entry, Exception):
                     logger.error('Data backend read failed: {}'.format(entry))
@@ -239,7 +240,10 @@ class Backy:
                     raise
 
                 logger.debug('Scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
-                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, (i + 1) / read_jobs * 100))
+                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, done_read_jobs / read_jobs * 100))
+                if i % log_every_jobs == 0 or done_read_jobs == read_jobs:
+                    logger.info('Scrubbed {}/{} blocks ({:.1f}%)'
+                                .format(done_read_jobs, read_jobs, done_read_jobs / read_jobs * 100))
         except:
             raise
 
@@ -288,7 +292,8 @@ class Backy:
                 notify(self._process_name, 'Preparing deep scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
-            for i, entry in enumerate(self._data_backend.read_get_completed()):
+            log_every_jobs = read_jobs // 200 + 1  # about every half percent
+            for entry in self._data_backend.read_get_completed():
                 done_read_jobs += 1
                 if isinstance(entry, Exception):
                     logger.error('Data backend read failed: {}'.format(entry))
@@ -337,6 +342,8 @@ class Backy:
                 logger.debug('Deep scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
                 notify(self._process_name, 'Deep scrubbing version {} ({:.1f}%)'
                        .format(version_uid.readable, (i + 1) / read_jobs * 100))
+                if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
+                    logger.info('Deep scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,  done_read_jobs / read_jobs * 100))
         except:
             raise
         finally:
@@ -393,7 +400,7 @@ class Backy:
 
             done_read_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
-            for i, entry in enumerate(self._data_backend.read_get_completed()):
+            for entry in self._data_backend.read_get_completed():
                 done_read_jobs += 1
                 if isinstance(entry, Exception):
                     logger.error('Data backend read failed: {}'.format(entry))
@@ -427,9 +434,11 @@ class Backy:
                 else:
                     logger.debug('Restored block {} successfully ({} bytes).'.format(block.id, block.size))
 
-                notify(self._process_name, 'Restoring version {} to {} ({:.1f}%)'.format(version_uid.readable, target, (i + 1) / read_jobs * 100))
-                if i % log_every_jobs == 0 or i + 1 == read_jobs:
-                    logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+                notify(self._process_name, 'Restoring version {} to {} ({:.1f}%)'
+                                .format(version_uid.readable, target, done_read_jobs / read_jobs * 100))
+                if i % log_every_jobs == 0 or done_read_jobs == read_jobs:
+                    logger.info('Restored {}/{} blocks ({:.1f}%)'
+                                .format(done_read_jobs, read_jobs, done_read_jobs / read_jobs * 100))
         except:
             raise
         finally:
