@@ -20,7 +20,7 @@ class IO(_IO):
     NAME = 'rbd'
 
     def __init__(self, config, block_size, hash_function):
-        super()._init__(config, block_size, hash_function)
+        super().__init__(config, block_size, hash_function)
 
         our_config = config.get('io.{}'.format(self.NAME), types=dict)
         ceph_conffile = config.get_from_dict(our_config, 'cephConfigFile', types=str)
