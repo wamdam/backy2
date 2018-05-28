@@ -32,7 +32,7 @@ class Config:
       simultaneousReads: 1
       bandwidthRead: 0
       bandwidthWrite: 0
-      s3_boto3:
+      s3:
         multiDelete: true
         useSsl: true
         addressingStyle: path
