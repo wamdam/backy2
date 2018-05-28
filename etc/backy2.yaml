@@ -106,7 +106,7 @@ dataBackend:
   # see the zstd documentation.
   #
   # compression:
-  #   - name: zstd
+  #   - type: zstd
   #     materials:
   #       level: 3
   #     active: true
