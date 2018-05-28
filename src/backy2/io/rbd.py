@@ -6,10 +6,11 @@ import time
 from functools import reduce
 from operator import or_
 
+import rados
+import rbd
+
 from backy2.exception import UsageError
 from backy2.io import IO as _IO
-from backy2.io.lib import rados  # XXX use default rados lib?
-from backy2.io.lib import rbd  # XXX use default rbd lib?
 from backy2.logging import logger
 from backy2.utils import data_hexdigest
 
