@@ -670,7 +670,7 @@ class Backy:
                     self._meta_backend.set_block(block.id, version.uid, existing_block.uid, existing_block.checksum, existing_block.size, valid=True)
                     stats['blocks_found_dedup'] += 1
                     stats['bytes_found_dedup'] += len(data)
-                    logger.debug('Found existing block for id {} with uid {})'.format(block.id, existing_block.uid))
+                    logger.debug('Found existing block for id {} with UID {}'.format(block.id, existing_block.uid))
                 else:
                     block.uid = BlockUid(version.uid.int, block.id + 1)
                     block.checksum = data_checksum
