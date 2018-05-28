@@ -3,13 +3,11 @@
 import re
 import threading
 import time
-from functools import reduce
-from operator import or_
 
 import rados
 import rbd
 
-from backy2.exception import UsageError
+from backy2.exception import UsageError, ConfigurationError
 from backy2.io import IO as _IO
 from backy2.logging import logger
 from backy2.utils import data_hexdigest
@@ -24,10 +22,16 @@ class IO(_IO):
 
         our_config = config.get('io.{}'.format(self.NAME), types=dict)
         ceph_conffile = config.get_from_dict(our_config, 'cephConfigFile', types=str)
-        self.cluster = rados.Rados(conffile=ceph_conffile)
-        self.cluster.connect()
+        self._cluster = rados.Rados(conffile=ceph_conffile)
+        self._cluster.connect()
         # create a bitwise or'd list of the configured features
-        self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.get_from_dict(our_config, 'newImageFeatures', types=list)])
+        self._new_image_features = 0
+        for feature in config.get_from_dict(our_config, 'newImageFeatures', types=list):
+            try:
+                self._new_image_features = self._new_image_features | getattr(rbd, feature)
+            except AttributeError:
+                raise ConfigurationError('io.{}.newImageFeatures: Unknown image feature {}.'
+                                         .format(self.NAME, feature))
 
         self._writer = None
 
@@ -42,7 +46,7 @@ class IO(_IO):
         self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
         # try opening it and quit if that's not possible.
         try:
-            ioctx = self.cluster.open_ioctx(self.pool_name)
+            ioctx = self._cluster.open_ioctx(self.pool_name)
         except rados.ObjectNotFound:
             raise FileNotFoundError('Pool not found: {}'.format(self.pool_name)) from None
 
@@ -60,14 +64,14 @@ class IO(_IO):
         self.pool_name, self.image_name = img_name.groups()
         # try opening it and quit if that's not possible.
         try:
-            ioctx = self.cluster.open_ioctx(self.pool_name)
+            ioctx = self._cluster.open_ioctx(self.pool_name)
         except rados.ObjectNotFound:
             raise FileNotFoundError('Pool not found: {}'.format(self.pool_name)) from None
 
         try:
             rbd.Image(ioctx, self.image_name)
         except rbd.ImageNotFound:
-            rbd.RBD().create(ioctx, self.image_name, size, old_format=False, features=self.new_image_features)
+            rbd.RBD().create(ioctx, self.image_name, size, old_format=False, features=self._new_image_features)
         else:
             if not force:
                 raise FileExistsError('Restore target {} already exists. Force the restore if you want to overwrite it.'
@@ -78,13 +82,13 @@ class IO(_IO):
                                   .format(self.io_name, self.size(), size))
 
     def size(self):
-        ioctx = self.cluster.open_ioctx(self.pool_name)
+        ioctx = self._cluster.open_ioctx(self.pool_name)
         with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
             size = image.size()
         return size
 
     def _read(self, block):
-        ioctx = self.cluster.open_ioctx(self.pool_name)
+        ioctx = self._cluster.open_ioctx(self.pool_name)
         with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
             offset = block.id * self._block_size
             t1 = time.time()
@@ -106,7 +110,7 @@ class IO(_IO):
 
     def write(self, block, data):
         if not self._writer:
-            ioctx = self.cluster.open_ioctx(self.pool_name)
+            ioctx = self._cluster.open_ioctx(self.pool_name)
             self._writer = rbd.Image(ioctx, self.image_name)
 
         offset = block.id * self._block_size
