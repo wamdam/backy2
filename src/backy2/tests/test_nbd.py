@@ -151,7 +151,8 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
             processName: backy2
             logFile: /dev/stderr
             hashFunction: blake2b,digest_size=32
-            blockSize: 4194304
+            blockSize: 4096
+            exportMetadata: false
             io:
               file:
                 simultaneousReads: 5
@@ -164,15 +165,13 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              type: sql
-              sql:
-                engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/backy.sqlite
             nbd:
               cacheDirectory: {testpath}/nbd-cache
             """
 
 
-class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
+class NbdTestCasePostgreSQL_S3(NbdTestCase, BackyTestCase, TestCase):
 
     SERVER_PORT = 1315
 
@@ -184,12 +183,13 @@ class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
             logFile: /dev/stderr
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
-            blockSize: 4194304
+            blockSize: 4096
+            exportMetadata: false
             io:
               file:
                 simultaneousReads: 5
             dataBackend:
-              type: s3_boto3
+              type: s3
               s3_boto3:
                 awsAccessKeyId: minio
                 awsSecretAccessKey: minio123
@@ -197,7 +197,7 @@ class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
                 bucketName: backy2
                 multiDelete: true
                 addressingStyle: path
-                disableEncodingType: true
+                disableEncodingType: false
                 
                 compression:
                   - name: zstd
@@ -217,9 +217,7 @@ class NbdTestCasePostgreSQL_S3_Boto3(NbdTestCase, BackyTestCase, TestCase):
               bandwidthRead: 0
               bandwidthWrite: 0   
             metaBackend: 
-              type: sql
-              sql:
-                engine: postgresql://backy2:verysecret@localhost:15432/backy2
+              engine: postgresql://backy2:verysecret@localhost:15432/backy2
             nbd:
               cacheDirectory: {testpath}/nbd-cache
             """
