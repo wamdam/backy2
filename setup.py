@@ -41,7 +41,6 @@ Topic :: System :: Archiving :: Backup
         'psycopg2-binary>=2.7.4',
         ],
     extras_require={
-        'PostgreSQL metadata backend': [],
         's3_boto3 data backend': ['boto3>=1.7.28'],
         'encryption': ['pycryptodome>=3.6.1', 'aes-keywrap>17.12.1'],
         'compression': ['zstandard>=0.9.0'],
