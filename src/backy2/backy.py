@@ -509,8 +509,8 @@ class Backy:
         - give the tag 'b_weekly' if the last b_weekly tagged version for this name is > 6 days ago
         - give the tag 'b_monthly' if the last b_monthly tagged version for this name is > 1 month ago
         """
-        all_versions = self._meta_backend.get_versions()
-        versions = [{'date': v.date.date(), 'tags': [t.name for t in v.tags]} for v in all_versions if v.name == version_name]
+        versions = self._meta_backend.get_versions(version_name=version_name)
+        versions = [{'date': v.date.date(), 'tags': [t.name for t in v.tags]} for v in versions]
 
         for version in versions:
             b_daily = [v for v in versions if 'b_daily' in v['tags']]
