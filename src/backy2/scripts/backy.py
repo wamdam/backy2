@@ -27,7 +27,7 @@ class Commands:
         self.machine_output = machine_output
         self.config = config
 
-    def backup(self, name, snapshot_name, source, rbd, from_version_uid, block_size=None, tag=None):
+    def backup(self, name, snapshot_name, source, rbd, from_version_uid, block_size=None, tags=None):
         from_version_uid = VersionUid.create_from_readables(from_version_uid)
         backy = None
         try:
@@ -36,7 +36,7 @@ class Commands:
             if rbd:
                 data = ''.join([line for line in fileinput.input(rbd).readline()])
                 hints = hints_from_rbd_diff(data)
-            backy.backup(name, snapshot_name, source, hints, from_version_uid, tag)
+            backy.backup(name, snapshot_name, source, hints, from_version_uid, tags)
         finally:
             if backy:
                 backy.close()
@@ -421,7 +421,7 @@ def main():
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the RBD snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as RBD JSON format')
     p.add_argument('-f', '--from-version', dest='from_version_uid', default=None, help='Use this version as base')
-    p.add_argument('-t', '--tag', action='append',  dest='tag', default=None,
+    p.add_argument('-t', '--tag', nargs='*',  dest='tags', metavar='tag', default=None,
                    help='Tag this verion with the specified tag(s)')
     p.add_argument('-b', '--block-size', type=int, help='Block size to use for this backup in bytes')
     p.set_defaults(func='backup')

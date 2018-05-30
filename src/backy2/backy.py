@@ -9,8 +9,6 @@ from concurrent.futures import CancelledError, TimeoutError
 from io import StringIO
 from urllib import parse
 
-from dateutil.relativedelta import relativedelta
-
 from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
 from backy2.logging import logger
 from backy2.meta_backend import BlockUid, MetaBackend
@@ -501,40 +499,7 @@ class Backy:
         finally:
             self._locking.unlock(lock_name=version_uid.readable)
 
-    def _generate_auto_tags(self, version_name):
-        """ Generates automatic tag suggestions by looking up versions with
-        the same name and comparing their dates.
-        This algorithm will
-        - give the tag 'b_daily' if the last b_daily tagged version for this name is > 0 days ago
-        - give the tag 'b_weekly' if the last b_weekly tagged version for this name is > 6 days ago
-        - give the tag 'b_monthly' if the last b_monthly tagged version for this name is > 1 month ago
-        """
-        versions = self._meta_backend.get_versions(version_name=version_name)
-        versions = [{'date': v.date.date(), 'tags': [t.name for t in v.tags]} for v in versions]
-
-        for version in versions:
-            b_daily = [v for v in versions if 'b_daily' in v['tags']]
-            b_weekly = [v for v in versions if 'b_weekly' in v['tags']]
-            b_monthly = [v for v in versions if 'b_monthly' in v['tags']]
-        b_daily_last = max([v['date'] for v in b_daily]) if b_daily else None
-        b_weekly_last = max([v['date'] for v in b_weekly]) if b_weekly else None
-        b_monthly_last = max([v['date'] for v in b_monthly]) if b_monthly else None
-
-        tags = []
-        today = datetime.date.today()
-        if not b_daily_last or \
-                (today - b_daily_last).days > 0:
-            tags.append('b_daily')
-        if not b_weekly_last or \
-                (today - b_weekly_last).days // 7 > 0:
-            tags.append('b_weekly')
-        if not b_monthly_last or \
-                relativedelta(today, b_monthly_last).months + 12 * relativedelta(today, b_monthly_last).years > 0:
-            tags.append('b_monthly')
-
-        return tags
-
-    def backup(self, name, snapshot_name, source, hints, from_version_uid, tag=None):
+    def backup(self, name, snapshot_name, source, hints, from_version_uid, tags=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -729,15 +694,9 @@ class Backy:
         if self._export_metadata:
             self.export_to_backend([version.uid], overwrite=True, locking=False)
 
-        if tag is not None:
-            if isinstance(tag, list):
-                tags = tag
-            else:
-                tags = [tag]
-        else:
-            tags = self._generate_auto_tags(name)
-        for tag in tags:
-            self._meta_backend.add_tag(version.uid, tag)
+        if tags:
+            for tag in tags:
+                self._meta_backend.add_tag(version.uid, tag)
 
         logger.debug('Stats: {}'.format(stats))
         self._meta_backend.set_stats(
@@ -757,7 +716,7 @@ class Backy:
             duration_seconds=int(time.time() - stats['start_time']),
             )
 
-        logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags)))
+        logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags if tags else [])))
         self._locking.unlock(lock_name=version.uid.readable)
         return version.uid
 
