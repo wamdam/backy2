@@ -41,14 +41,17 @@ class VersionUid:
             if isinstance(readable, int):
                 pass
             elif isinstance(readable, str):
-                if len(readable) < 2:
-                    raise ValueError('Version UID {} is too short.'.format(readable))
-                if readable[0].lower() != 'v':
-                    raise ValueError('Version UID {} doesn\'t start with the letter V.'.format(readable))
                 try:
-                    readable = int(readable[1:])
+                    readable = int(readable)
                 except ValueError:
-                    raise ValueError('Version UID {} is invalid.'.format(readable)) from None
+                    if len(readable) < 2:
+                        raise ValueError('Version UID {} is too short.'.format(readable))
+                    if readable[0].lower() != 'v':
+                        raise ValueError('Version UID {} doesn\'t start with the letter V.'.format(readable))
+                    try:
+                        readable = int(readable[1:])
+                    except ValueError:
+                        raise ValueError('Version UID {} is invalid.'.format(readable)) from None
             else:
                 raise ValueError('Version UID {} has unsupported type {}.'.format(str(readable), type(readable)))
             version_uids.append(VersionUid(readable))
