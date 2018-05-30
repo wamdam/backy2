@@ -121,7 +121,7 @@ class Commands:
     def _ls_versions_tbl_output(versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'block_size', 'uid',
+        tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
                            'valid', 'protected', 'tags']
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
@@ -131,11 +131,11 @@ class Commands:
         for version in versions:
             tbl.add_row([
                 version.date.isoformat(timespec='seconds'),
+                version.uid.readable,
                 version.name,
                 version.snapshot_name,
                 version.size,
                 version.block_size,
-                version.uid.readable,
                 version.valid,
                 version.protected,
                 ",".join(sorted([t.name for t in version.tags])),
