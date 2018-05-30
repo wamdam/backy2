@@ -706,9 +706,8 @@ class MetaBackend:
                         size=affected_block.size,
                     )
                     self._session.add(deleted_block)
-            affected_blocks.delete()
-            # The following delete statement will cascade this delete to the blocks table,
-            # but we've already moved the blocks to the deleted blocks table for later inspection.
+            # The following delete statement will cascade this delete to the blocks table
+            # and delete all blocks
             self._session.query(Version).filter_by(uid=version_uid).delete()
             self._session.commit()
         except:
