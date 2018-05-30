@@ -574,11 +574,15 @@ class MetaBackend:
             self._session.rollback()
             raise
 
-    def get_versions(self, version_name=None):
+    def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None):
         try:
             query = self._session.query(Version)
+            if version_uid:
+                query = query.filter_by(uid=version_uid)
             if version_name:
                 query = query.filter_by(name=version_name)
+            if version_snapshot_name:
+                query = query.filter_by(snapshot_name=version_snapshot_name)
             versions = query.order_by(Version.name, Version.date).all()
         except:
             self._session.rollback()

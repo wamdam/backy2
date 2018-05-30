@@ -153,8 +153,9 @@ class Backy:
     def clone_version(self, name, snapshot_name, from_version_uid):
         return self._prepare_version(name, snapshot_name, None, from_version_uid)
 
-    def ls(self):
-        return self._meta_backend.get_versions()
+    def ls(self, version_uid=None, version_name=None, version_snapshot_name=None):
+        return self._meta_backend.get_versions(version_uid=version_uid, version_name=version_name,
+                                               version_snapshot_name=version_snapshot_name)
 
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.

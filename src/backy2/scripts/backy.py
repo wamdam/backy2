@@ -181,16 +181,12 @@ class Commands:
                 ])
         print(tbl)
 
-    def ls(self, name, snapshot_name, tag, include_blocks):
+    def ls(self, name, snapshot_name=None, tag=None, include_blocks=False):
         backy = None
         try:
             backy = Backy(self.config)
-            versions = backy.ls()
+            versions = backy.ls(version_name=name, version_snapshot_name=snapshot_name)
 
-            if name:
-                versions = [v for v in versions if v.name == name]
-            if snapshot_name:
-                versions = [v for v in versions if v.snapshot_name == snapshot_name]
             if tag:
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
