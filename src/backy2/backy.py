@@ -500,7 +500,7 @@ class Backy:
         finally:
             self._locking.unlock(lock_name=version_uid.readable)
 
-    def backup(self, name, snapshot_name, source, hints, from_version_uid, tags=None):
+    def backup(self, name, snapshot_name, source, hints=None, from_version_uid=None, tags=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -525,13 +525,18 @@ class Backy:
 
         num_blocks = int(math.ceil(source_size / self._block_size))
 
-        if hints is not None and len(hints) > 0:
-            # Sanity check: check hints for validity, i.e. too high offsets, ...
-            max_offset = max([h[0]+h[1] for h in hints])
-            if max_offset > source_size:
-                raise InputDataError('Hints have higher offsets than source file.')
+        if hints is not None:
+            if len(hints) > 0:
+                # Sanity check: check hints for validity, i.e. too high offsets, ...
+                max_offset = max([h[0]+h[1] for h in hints])
+                if max_offset > source_size:
+                    raise InputDataError('Hints have higher offsets than source file.')
 
-            sparse_blocks, read_blocks = blocks_from_hints(hints, self._block_size)
+                sparse_blocks, read_blocks = blocks_from_hints(hints, self._block_size)
+            else:
+                # Two snapshots can be completely identical between one backup and next
+                sparse_blocks = set()
+                read_blocks = set()
         else:
             sparse_blocks = set()
             read_blocks = set(range(num_blocks))
@@ -543,7 +548,7 @@ class Backy:
 
         blocks = self._meta_backend.get_blocks_by_version(version.uid)
 
-        if from_version_uid and hints:
+        if from_version_uid and hints is not None:
             # SANITY CHECK:
             # Check some blocks outside of hints if they are the same in the
             # from_version backup and in the current backup. If they
