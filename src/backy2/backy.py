@@ -535,6 +535,7 @@ class Backy:
                 sparse_blocks, read_blocks = blocks_from_hints(hints, self._block_size)
             else:
                 # Two snapshots can be completely identical between one backup and next
+                logger.warning('Hints are empty, assuming nothing has changed.')
                 sparse_blocks = set()
                 read_blocks = set()
         else:
