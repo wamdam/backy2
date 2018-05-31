@@ -46,6 +46,9 @@ Topic :: System :: Archiving :: Backup
         'compression': ['zstandard>=0.9.0'],
         'disk based read cache': ['diskcache>=3.0.6'],
         'PEX generation': ['pex==1.1.0'],
+        # For RBD support the packages supplied by the Linux distribution or the Ceph team should be used,
+        # possible packages names include: python-rados, python-rbd or python3-rados, python3-rbd
+        #'RBD support': ['rados', 'rbd'],
     },
     python_requires='~=3.6',
     entry_points="""
