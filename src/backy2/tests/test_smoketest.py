@@ -159,7 +159,9 @@ class SmokeTestCase:
             # delete old versions
             if len(version_uids) > 10:
                 backy = self.backyOpen(initdb=initdb)
-                backy.rm(version_uids.pop(0), force=True)
+                dismissed_version_uids = backy.enforce_retention_policy('data-backup', 'latest10,hours24,days30')
+                for dismissed_version_uid in dismissed_version_uids:
+                    version_uids.remove(dismissed_version_uid)
                 backy.close()
 
             if (i%7) == 0:

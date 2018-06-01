@@ -381,6 +381,16 @@ class Commands:
     def initdb(self):
         Backy(self.config, initdb=True)
 
+    def enforce_retention_policy(self, rules_spec, version_names, dry_run, keep_backend_metadata):
+        backy = None
+        try:
+            backy = Backy(self.config)
+            for version_name in version_names:
+                backy.enforce_retention_policy(version_name=version_name, rules_spec=rules_spec, dry_run=dry_run,
+                                               keep_backend_metadata=keep_backend_metadata)
+        finally:
+            if backy:
+                backy.close()
 
 def main():
     parser = argparse.ArgumentParser(
@@ -456,6 +466,16 @@ def main():
     p.add_argument('-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
     p.add_argument('version_uids', metavar='version_uid', nargs='+')
     p.set_defaults(func='rm')
+
+    # ENFORCE
+    p = subparsers.add_parser(
+        'enforce',
+        help="Enforce the given retenion policy on each listed version.")
+    p.add_argument('--dry-run', action='store_true', help='Dry run: Only show which versions would be removed.')
+    p.add_argument('-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
+    p.add_argument('rules_spec', help='Retention rules specification')
+    p.add_argument('version_names', metavar='version_name', nargs='+')
+    p.set_defaults(func='enforce_retention_policy')
 
     # SCRUB
     p = subparsers.add_parser(

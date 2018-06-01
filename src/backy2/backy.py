@@ -12,6 +12,7 @@ from urllib import parse
 from backy2.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
 from backy2.logging import logger
 from backy2.meta_backend import BlockUid, MetaBackend
+from backy2.retentionfilter import RetentionFilter
 from backy2.utils import data_hexdigest, notify, parametrized_hash_function
 
 
@@ -725,6 +726,7 @@ class Backy:
 
         logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags if tags else [])))
         self._locking.unlock(lock_name=version.uid.readable)
+        # It might be tempting to return a Version object here but this will only lead to SQLAlchemy errors
         return version.uid
 
 
@@ -828,3 +830,25 @@ class Backy:
         finally:
             for version_uid in locked_version_uids:
                 self._locking.unlock(lock_name=version_uid.readable)
+
+    def enforce_retention_policy(self, version_name, rules_spec, dry_run=False, keep_backend_metadata=False):
+        versions = self._meta_backend.get_versions(version_name=version_name)
+
+        dismissed_versions = RetentionFilter(rules_spec).filter(versions)
+
+        if dismissed_versions:
+            logger.info('Removing versions: {}.'.format(', '.join(map(lambda version: version.uid.readable, dismissed_versions))))
+        else:
+            logger.info('All versions are conforming to the retention policy.')
+
+        if dry_run:
+            logger.info('Dry run, won\'t remove anything.')
+            return
+
+        for version in dismissed_versions:
+            try:
+                self.rm(version.uid, force=True, keep_backend_metadata=keep_backend_metadata)
+            except AlreadyLocked:
+                logger.warning('Version {} couldn\'t be deleted, it\'s currently locked.')
+
+        return map(lambda version: version.uid, dismissed_versions)
