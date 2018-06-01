@@ -36,7 +36,13 @@ class Commands:
             if rbd:
                 data = ''.join([line for line in fileinput.input(rbd).readline()])
                 hints = hints_from_rbd_diff(data)
-            backy.backup(name, snapshot_name, source, hints, from_version_uid, tags)
+            backup_version_uid = backy.backup(name, snapshot_name, source, hints, from_version_uid, tags)
+            if self.machine_output:
+                backy._meta_backend.export_any('versions',
+                                               [backy._meta_backend.get_versions(version_uid=backup_version_uid)],
+                                               sys.stdout,
+                                               ignore_relationships=[((Version,), ('blocks',))]
+                                               )
         finally:
             if backy:
                 backy.close()
@@ -385,12 +391,22 @@ class Commands:
         backy = None
         try:
             backy = Backy(self.config)
+            dismissed_version_uids = []
             for version_name in version_names:
-                backy.enforce_retention_policy(version_name=version_name, rules_spec=rules_spec, dry_run=dry_run,
-                                               keep_backend_metadata=keep_backend_metadata)
+                dismissed_version_uids.extend(backy.enforce_retention_policy(version_name=version_name,
+                                                                        rules_spec=rules_spec,
+                                                                        dry_run=dry_run,
+                                                                        keep_backend_metadata=keep_backend_metadata))
+            if self.machine_output:
+                backy._meta_backend.export_any('versions',
+                                               [backy._meta_backend.get_versions(version_uid=version_uid)[0]
+                                                                        for version_uid in dismissed_version_uids],
+                                               sys.stdout,
+                                               ignore_relationships=[((Version,), ('blocks',))]
+                                               )
         finally:
-            if backy:
-                backy.close()
+                if backy:
+                    backy.close()
 
 def main():
     parser = argparse.ArgumentParser(

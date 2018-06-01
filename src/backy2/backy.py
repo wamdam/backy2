@@ -843,7 +843,7 @@ class Backy:
 
         if dry_run:
             logger.info('Dry run, won\'t remove anything.')
-            return
+            return []
 
         for version in dismissed_versions:
             try:
