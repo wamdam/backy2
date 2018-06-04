@@ -16,6 +16,7 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
              bucketName: backy2
              accountInfoFile: {testpath}/b2_account_info
              writeObjectAttempts: 1
+             readObjectAttempts: 1
              uploadAttempts: 5
                 
           compression:
