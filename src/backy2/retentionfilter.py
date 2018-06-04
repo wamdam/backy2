@@ -29,7 +29,7 @@ import time
 from collections import OrderedDict
 from collections import defaultdict
 
-from backy2.exception import UsageError, InternalError
+from backy2.exception import UsageError
 from backy2.logging import logger
 
 
@@ -90,7 +90,13 @@ class RetentionFilter():
 
         dismissed_versions = []
         for version in versions:
-            td = _Timedelta(version.date.timestamp(), self.reference_time)
+            try:
+                td = _Timedelta(version.date.timestamp(), self.reference_time)
+            except _TimedeltaError as exception:
+                # Err on the safe side, ignore this versions (i.e. it won't be dismissed)
+                logger.warning('Version {}: {}'.format(version.uid.readable, exception))
+                continue
+
             logger.debug('Time and time delta for version {} are {} and {}.'
                          .format(version.uid.readable, version.date, td))
 
@@ -114,6 +120,8 @@ class RetentionFilter():
 
         return dismissed_versions
 
+class _TimedeltaError(RuntimeError):
+    pass
 
 class _Timedelta:
     """
@@ -129,7 +137,7 @@ class _Timedelta:
         # Expect two numeric values. Might raise TypeError for other types.
         seconds_earlier = reference_time - t
         if seconds_earlier < 0:
-            raise InternalError('Time {} isn\'t earlier than reference time {}.'.format(t, reference_time))
+            raise _TimedeltaError('{} isn\'t earlier than the reference time {}.'.format(t, reference_time))
         self.hours = int(seconds_earlier // 3600)      # 60 * 60
         self.days = int(seconds_earlier // 86400)      # 60 * 60 * 24
         self.weeks = int(seconds_earlier // 604800)    # 60 * 60 * 24 * 7
