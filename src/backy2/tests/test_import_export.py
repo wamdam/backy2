@@ -1266,7 +1266,6 @@ class ImportExportCaseSQLLite_File(ImportExportTestCase, BackyTestCase, TestCase
             logFile: /dev/stderr
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
-            exportMetadata: True
             io:
               file:
                 simultaneousReads: 5

@@ -26,7 +26,6 @@ class Config:
     hashFunction: blake2b,digest_size=32
     process_name: backy2
     disallowRemoveWhenYounger: 6
-    exportMetadata: True
     dataBackend:
       simultaneousWrites: 1
       simultaneousReads: 1

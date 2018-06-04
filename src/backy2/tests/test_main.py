@@ -15,7 +15,6 @@ class MiscTestCase(BackendTestCase, TestCase):
         configurationVersion: '1.0.0'
         logFile: /dev/stderr
         hashFunction: blake2b,digest_size=32
-        exportMetadata: True
         dataBackend:
           type: file
           file:

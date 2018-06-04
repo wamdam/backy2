@@ -177,7 +177,6 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BackyTestCase, TestCase):
             logFile: /dev/stderr
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
-            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -237,7 +236,6 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BackyTestCase, TestCase):
             logFile: /dev/stderr
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
-            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2
@@ -313,7 +311,6 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BackyTestCase, TestCase):
             logFile: /dev/stderr
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
-            exportMetadata: True
             io:
               file:
                 simultaneousReads: 2

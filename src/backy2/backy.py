@@ -54,7 +54,6 @@ class Backy:
 
         self._hash_function = parametrized_hash_function(config.get('hashFunction', types=str))
         self._process_name = config.get('processName', types=str)
-        self._export_metadata = config.get('exportMetadata', types=bool)
 
         from backy2.data_backends import DataBackend
         name = config.get('dataBackend.type', types=str)
@@ -699,8 +698,7 @@ class Backy:
 
         self._meta_backend.set_version_valid(version.uid)
 
-        if self._export_metadata:
-            self.export_to_backend([version.uid], overwrite=True, locking=False)
+        self.export_to_backend([version.uid], overwrite=True, locking=False)
 
         if tags:
             for tag in tags:

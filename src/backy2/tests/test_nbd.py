@@ -152,7 +152,6 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BackyTestCase, TestCase):
             logFile: /dev/stderr
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
-            exportMetadata: false
             io:
               file:
                 simultaneousReads: 5
