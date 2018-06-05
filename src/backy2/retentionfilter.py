@@ -90,6 +90,10 @@ class RetentionFilter():
 
         dismissed_versions = []
         for version in versions:
+            if version.protected:
+                logger.info('Not considering version {}, it is protected.'.format(version.uid.readable))
+                continue
+
             try:
                 td = _Timedelta(version.date.timestamp(), self.reference_time)
             except _TimedeltaError as exception:
