@@ -1,0 +1,47 @@
+timeZone: Europe/Berlin
+
+benji:
+  image:
+    registry: docker.io
+    repository: elementalnet/benji-rook
+    tag: latest
+    pullPolicy: Always
+
+  resources: {}
+
+  backupSchedule: '0 3 1/6 * * *'
+  backupRetention: 'latest3,hours24,days30,months3'
+  # Set to empty string to backup all PVCs
+  backupSelector: ''
+
+  # Configuration for Benji
+  # This needs to be provided by the user.
+  #configuration: |
+  #  configurationVersion: '1.0.0'
+  #  processName: benji
+  #  logFile: /tmp/benji.log
+  #  hashFunction: blake2b,digest_size=32
+  #  blockSize: 4194304
+  #  metaBackend:
+  #    engine: postgresql://benji:secret@db-host:5432/benji
+  #  dataBackend:
+  #    type: s3
+  #    s3:
+  #      awsAccessKeyId: ********
+  #      awsSecretAccessKey: ********
+  #      endpointUrl: https://storage.googleapis.com/
+  #      bucketName: benji
+  #      multiDelete: false
+  #      addressingStyle: path
+  #      disableEncodingType: true
+
+pushgateway:
+  image:
+    registry: docker.io
+    repository: prom/pushgateway
+    tag: v0.5.1
+    pullPolicy: IfNotPresent
+
+  port: 9091
+
+  resources: {}

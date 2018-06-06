@@ -1,0 +1,18 @@
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: {{ template "benji.fullname" . }}
+  labels:
+    app: {{ template "benji.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ template "benji.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ template "benji.fullname" . }}
+    namespace: {{ .Release.Namespace }}
