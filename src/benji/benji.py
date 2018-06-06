@@ -188,16 +188,19 @@ class Benji:
                 )
 
     def scrub(self, version_uid, percentile=100):
-        """ Returns a boolean (state). If False, there were errors, if True
-        all was ok
-        """
         if not self._locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
 
-        version = self._meta_backend.get_version(version_uid)
-        blocks = self._meta_backend.get_blocks_by_version(version_uid)
+        try:
+            version = self._meta_backend.get_version(version_uid)
+            if not version.valid:
+                raise IOError('Version {} is already marked as invalid.'.format(version_uid.readable))
+            blocks = self._meta_backend.get_blocks_by_version(version_uid)
+        except:
+            self._locking.unlock(lock_name=version_uid.readable)
+            raise
 
-        state = True
+        valid = True
         try:
             read_jobs = 0
             for i, block in enumerate(blocks):
@@ -221,7 +224,7 @@ class Benji:
                     logger.error('Data backend read failed: {}'.format(entry))
                     if isinstance(entry, (KeyError, ValueError)):
                         self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                        state = False
+                        valid = False
                         continue
                     else:
                         raise entry
@@ -233,7 +236,7 @@ class Benji:
                 except (KeyError, ValueError) as exception:
                     logger.error('Metadata check failed, block is invalid: {}'.format(exception))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
+                    valid = False
                     continue
                 except:
                     raise
@@ -245,36 +248,39 @@ class Benji:
                                 .format(done_read_jobs, read_jobs, done_read_jobs / read_jobs * 100))
         except:
             raise
+        finally:
+            self._locking.unlock(lock_name=version_uid.readable)
+            notify(self._process_name)
 
         if read_jobs != done_read_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
                                 .format(read_jobs, done_read_jobs))
 
-        if state == True:
-            self._meta_backend.set_version_valid(version_uid)
-        else:
+        # A scrub (in contrast to a deep-scrub) can only ever mark a version as invalid. To mark it as valid
+        # there is not enough information.
+        if not valid:
             # version is set invalid by set_blocks_invalid.
             logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
 
-        self._locking.unlock(lock_name=version_uid.readable)
-        notify(self._process_name)
-        return state
+        if not valid:
+            raise IOError('Scrub of version {} failed.'.format(version_uid.readable))
 
     def deep_scrub(self, version_uid, source=None, percentile=100):
-        """ Returns a boolean (state). If False, there were errors, if True
-        all was ok
-        """
         if not self._locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
 
-        version = self._meta_backend.get_version(version_uid)
-        blocks = self._meta_backend.get_blocks_by_version(version_uid)
+        try:
+            version = self._meta_backend.get_version(version_uid)
+            blocks = self._meta_backend.get_blocks_by_version(version_uid)
 
-        if source:
-            io = self.get_io_by_source(source, version.block_size)
-            io.open_r(source)
+            if source:
+                io = self.get_io_by_source(source, version.block_size)
+                io.open_r(source)
+        except:
+            self._locking.unlock(lock_name=version_uid.readable)
+            raise
 
-        state = True
+        valid = True
         try:
             old_use_read_cache = self._data_backend.use_read_cache(False)
             read_jobs = 0
@@ -299,7 +305,7 @@ class Benji:
                     # If it really is a data inconsistency mark blocks invalid
                     if isinstance(entry, (KeyError, ValueError)):
                         self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                        state = False
+                        valid = False
                         continue
                     else:
                         raise entry
@@ -311,29 +317,29 @@ class Benji:
                 except (KeyError, ValueError) as exception:
                     logger.error('Metadata check failed, block is invalid: {}'.format(exception))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
+                    valid = False
                     continue
                 except:
                     raise
 
                 data_checksum = data_hexdigest(self._hash_function, data)
                 if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during deep scrub for block {} (UID {}) (is: {} should-be: {}).'
-                                 .format(block.id, block.uid, data_checksum, block.checksum))
+                    logger.error('Checksum mismatch during deep scrub of block {} (UID {}) (is: {}... should-be: {}...).'
+                                 .format(block.id, block.uid, data_checksum[:16], block.checksum[:16]))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
-                    state = False
+                    valid = False
                     continue
 
                 if source:
                     source_data = io.read(block, sync=True)
                     if source_data != data:
-                        logger.error('Source data has changed for block {} (UID {}) (is: {} should-be: {}). Won\'t set '
-                                     'this block to invalid, because the source looks wrong.'
+                        logger.error('Source data has changed for block {} (UID {}) (is: {}... should-be: {}...). '
+                                     'Won\'t set this block to invalid, because the source looks wrong.'
                                      .format(block,
                                              block.uid,
-                                             data_hexdigest(self._hash_function, source_data),
-                                             data_checksum))
-                        state = False
+                                             data_hexdigest(self._hash_function, source_data)[:16],
+                                             data_checksum[:16]))
+                        valid = False
                         # We are not setting the block invalid here because
                         # when the block is there AND the checksum is good,
                         # then the source is invalid.
@@ -344,20 +350,25 @@ class Benji:
                 if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
                     logger.info('Deep scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,  done_read_jobs / read_jobs * 100))
         except:
+            self._locking.unlock(lock_name=version_uid.readable)
             raise
         finally:
             if source:
                 io.close()
+            # Restore old read cache setting
+            self._data_backend.use_read_cache(old_use_read_cache)
+            notify(self._process_name)
 
         if read_jobs != done_read_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
                                 .format(read_jobs, done_read_jobs))
 
-        # Restore old read cache setting
-        self._data_backend.use_read_cache(old_use_read_cache)
-
-        if state == True:
-            self._meta_backend.set_version_valid(version_uid)
+        if valid:
+            try:
+                self._meta_backend.set_version_valid(version_uid)
+            except:
+                self._locking.unlock(lock_name=version_uid.readable)
+                raise
         else:
             # version is set invalid by set_blocks_invalid.
             # FIXME: This message might be misleading in the case where a source mismatch occurs where
@@ -365,19 +376,24 @@ class Benji:
             logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
 
         self._locking.unlock(lock_name=version_uid.readable)
-        notify(self._process_name)
-        return state
+
+        if not valid:
+            raise IOError('Deep scrub of version {} failed.'.format(version_uid.readable))
 
     def restore(self, version_uid, target, sparse=False, force=False):
         if not self._locking.lock(lock_name=version_uid.readable, reason='Restoring version'):
             raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
 
-        version = self._meta_backend.get_version(version_uid)  # raise if version not exists
-        notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
-        blocks = self._meta_backend.get_blocks_by_version(version_uid)
+        try:
+            version = self._meta_backend.get_version(version_uid)  # raise if version not exists
+            notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
+            blocks = self._meta_backend.get_blocks_by_version(version_uid)
 
-        io = self.get_io_by_source(target, version.block_size)
-        io.open_w(target, version.size, force)
+            io = self.get_io_by_source(target, version.block_size)
+            io.open_w(target, version.size, force)
+        except:
+            self._locking.unlock(lock_name=version_uid.readable)
+            raise
 
         try:
             read_jobs = 0
@@ -426,9 +442,9 @@ class Benji:
 
                 data_checksum = data_hexdigest(self._hash_function, data)
                 if data_checksum != block.checksum:
-                    logger.error('Checksum mismatch during restore for block {} (UID {}) (is: {} should-be: {}, '
+                    logger.error('Checksum mismatch during restore for block {} (UID {}) (is: {}... should-be: {}..., '
                                  'block.valid: {}). Block restored is invalid.'
-                                 .format(block.id, block.uid, data_checksum, block.checksum, block.valid))
+                                 .format(block.id, block.uid, data_checksum[:16], block.checksum[:16], block.valid))
                     self._meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 else:
                     logger.debug('Restored block {} successfully ({} bytes).'.format(block.id, block.size))
@@ -442,12 +458,12 @@ class Benji:
             raise
         finally:
             io.close()
+            self._locking.unlock(lock_name=version_uid.readable)
+            notify(self._process_name)
 
         if read_jobs != done_read_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
                                 .format(read_jobs, done_read_jobs))
-
-        self._locking.unlock(lock_name=version_uid.readable)
 
     def protect(self, version_uid):
         version = self._meta_backend.get_version(version_uid)

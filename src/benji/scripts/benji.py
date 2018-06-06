@@ -671,19 +671,20 @@ def main():
         {'exception': OSError, 'msg': 'Not found', 'exit_code': os.EX_OSERR},
         {'exception': ConnectionError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
         {'exception': LookupError, 'msg': 'Not found', 'exit_code': os.EX_NOINPUT},
-        {'exception': Exception, 'msg': 'Other exception', 'exit_code': os.EX_SOFTWARE},
+        {'exception': BaseException, 'msg': 'Other exception', 'exit_code': os.EX_SOFTWARE},
     ]
 
     try:
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
         func(**func_args)
-        logger.info('Benji complete.\n')
         exit(0)
+    except SystemExit:
+        raise
     except BaseException as exception:
         for case in exit_code_list:
             if isinstance(exception, case['exception']):
-                logger.exception(case['msg'])
-                logger.info('Benji failed.\n')
+                logger.debug(case['msg'], exc_info=True)
+                logger.error(str(exception))
                 exit(case['exit_code'])
 
 if __name__ == '__main__':
