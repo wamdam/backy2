@@ -75,7 +75,7 @@ Benji and its dependencies::
     pip install git+https://github.com/kurtbrose/aes_keywrap
 
 If you want to use certain features of Benji in the future you might
-additional dependencies:
+want to install additional dependencies:
 
 - ``boto3``: AWS S3 backup storage target support
 - ``b2``: Backblaze's B2 Cloud storage support
@@ -83,7 +83,6 @@ additional dependencies:
 - ``discache``: Disk caching support
 - ``zstandard``: Compression support
 - ``psycopg2-binary`` or ``psycopg2``: PostgreSQL support
-
 
 Customise your configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,7 +93,7 @@ This represents a minimal configuration mit SQLite3 backend and file-based block
             processName: benji
             logFile: /var/log/benji.log
             hashFunction: blake2b,digest_size=32
-            blockSize: 4294967296
+            blockSize: 4194304
             io:
               file:
                 simultaneousReads: 2
@@ -118,100 +117,154 @@ backup
 
 1. Initialize the database::
 
-        $ benji initdb
-            INFO: $ /usr/bin/benji initdb
-            INFO: Benji complete.
+    $ benji initdb
+        INFO: $ benji initdb
 
    .. NOTE:: Initializing a database multiple times does **not** destroy any
-       data, instead will fail because it finds already-existing tables.
+       data, instead it will fail because it finds already existing tables.
 
 2. Create demo data:
 
    For demonstration purpose, create a 40MB test file::
 
-        $ dd if=/dev/urandom of=TESTFILE bs=1M count=40
-        40+0 records in
-        40+0 records out
-        41943040 bytes (42 MB, 40 MiB) copied, 0.175196 s, 239 MB/s
-
+    $ dd if=/dev/urandom of=TESTFILE bs=1M count=40
+    40+0 records in
+    40+0 records out
+    41943040 bytes (42 MB, 40 MiB) copied, 0.231886 s, 181 MB/s
 
 3. Backup the image (works similar with a device)::
 
-        $ benji backup file://TESTFILE myfirsttestbackup
-            INFO: $ /usr/bin/benji backup file://TESTFILE myfirsttestbackup
-            INFO: Backed up 1/10 blocks (10.0%)
-            INFO: Backed up 2/10 blocks (20.0%)
-            INFO: Backed up 3/10 blocks (30.0%)
-            INFO: Backed up 4/10 blocks (40.0%)
-            INFO: Backed up 5/10 blocks (50.0%)
-            INFO: Backed up 6/10 blocks (60.0%)
-            INFO: Backed up 7/10 blocks (70.0%)
-            INFO: Backed up 8/10 blocks (80.0%)
-            INFO: Backed up 9/10 blocks (90.0%)
-            INFO: Backed up 10/10 blocks (100.0%)
-            INFO: New version: 8fd42f1a-2364-11e7-8594-00163e8c0370 (Tags: [b_daily,b_weekly,b_monthly])
-            INFO: Benji complete.
-
+    $ benji backup file://TESTFILE myfirsttestbackup
+        INFO: $ benji backup file://TESTFILE myfirsttestbackup
+        INFO: Backed up 1/10 blocks (10.0%)
+        INFO: Backed up 2/10 blocks (20.0%)
+        INFO: Backed up 3/10 blocks (30.0%)
+        INFO: Backed up 4/10 blocks (40.0%)
+        INFO: Backed up 5/10 blocks (50.0%)
+        INFO: Backed up 6/10 blocks (60.0%)
+        INFO: Backed up 7/10 blocks (70.0%)
+        INFO: Backed up 8/10 blocks (80.0%)
+        INFO: Backed up 9/10 blocks (90.0%)
+        INFO: Backed up 10/10 blocks (100.0%)
+        INFO: Exported version V0000000001 metadata to backend storage.
+        INFO: New version: V0000000001 (Tags: [])
 
 4. List backups::
 
-        $ benji ls
-            INFO: $ /usr/bin/benji ls
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly |
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-            INFO: Benji complete.
+    $ benji ls
+        INFO: $ benji ls
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    |         date        |     uid     | name              | snapshot_name |     size | block_size | valid | protected | tags |
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 |  True |   False   |      |
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
 
+Some commands (like ``ls``, ``stats``, ``backup`` and ``enforce``) can also produce
+machine readable JSON output for usage in scripts::
 
-scrub
------
+    $ benji -m ls
+    {
+      "metadataVersion": "1.0.0",
+      "versions": [
+        {
+          "uid": 1,
+          "date": "2018-06-06T21:41:41",
+          "name": "myfirsttestbackup",
+          "snapshot_name": "",
+          "size": 41943040,
+          "block_size": 4194304,
+          "valid": true,
+          "protected": false,
+          "tags": []
+        }
+      ]
+    }
 
-Scrubbing reads all the blocks from the backup target (or some of them if you
+Specifying ``-m`` automatically turns down the verbosity level to only output
+errors.
+
+deep-scrub
+----------
+
+Deep scrubbing reads all the blocks from the backup target (or some of them if you
 use the ``-p`` option) and compares them with the metadata or, if you pass a
 source option (``-s``), also with the original data. ::
 
-    $ benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: $ /usr/bin/benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: Benji complete.
+    $ benji deep-scrub v1
+        INFO: $ benji deep-scrub v1
+        INFO: Deep scrubbed 1/10 blocks (10.0%)
+        INFO: Deep scrubbed 2/10 blocks (20.0%)
+        INFO: Deep scrubbed 3/10 blocks (30.0%)
+        INFO: Deep scrubbed 4/10 blocks (40.0%)
+        INFO: Deep scrubbed 5/10 blocks (50.0%)
+        INFO: Deep scrubbed 6/10 blocks (60.0%)
+        INFO: Deep scrubbed 7/10 blocks (70.0%)
+        INFO: Deep scrubbed 8/10 blocks (80.0%)
+        INFO: Deep scrubbed 9/10 blocks (90.0%)
+        INFO: Deep scrubbed 10/10 blocks (100.0%)
 
 If an error occurs (for example, if backup target blocks couldn't be read or data
-has changed), this looks like that::
+has changed), the output from ``deep-scrub`` looks like this::
 
-    $ benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-         INFO: $ /usr/bin/benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        ERROR: Blob not found: Block(uid='2c0910bef8qnAm54mnyBsonRsPBfTzP', version_uid='8fd42f1a-2364-11e7-8594-00163e8c0370', id=8, date=datetime.datetime(2017, 4, 17, 11, 54, 7, 639022), checksum='41c9aa8df42913b3544270a10f1b219cd1b5e1ad9d51700e97acdaeaed3cea843ffaad99590e07de260918ce3847a8b612c9f51f2c945a2d14238956a49ca572', size=4194304, valid=1)
-         INFO: Marked block invalid (UID 2c0910bef8qnAm54mnyBsonRsPBfTzP, Checksum 41c9aa8df42913b3544270a10f1b219cd1b5e1ad9d51700e97acdaeaed3cea843ffaad99590e07de260918ce3847a8b612c9f51f2c945a2d14238956a49ca572. Affected versions: 8fd42f1a-2364-11e7-8594-00163e8c0370
-         INFO: Marked version invalid (UID 8fd42f1a-2364-11e7-8594-00163e8c0370)
-        ERROR: Marked version invalid because it has errors: 8fd42f1a-2364-11e7-8594-00163e8c0370
+    $ benji deep-scrub v1
+        INFO: $ benji deep-scrub v1
+        INFO: Deep scrubbed 1/10 blocks (10.0%)
+        INFO: Deep scrubbed 2/10 blocks (20.0%)
+        INFO: Deep scrubbed 3/10 blocks (30.0%)
+        INFO: Deep scrubbed 4/10 blocks (40.0%)
+        INFO: Deep scrubbed 5/10 blocks (50.0%)
+        INFO: Deep scrubbed 6/10 blocks (60.0%)
+       ERROR: Checksum mismatch during deep scrub for block 6 (UID 1-7) (is: 729a77dc964e5f543e6f10697386429d5978a1681a86fce1101aa2abcb41c5cc should-be: b70aeb070b95df31f68fd19c99e33f2826bd2c50049ca48c27b58743ab8a8d64).
+        INFO: Marked block invalid (UID 1-7, Checksum b70aeb070b95df31. Affected versions: V0000000001
+        INFO: Marked version invalid (UID V0000000001)
+        INFO: Deep scrubbed 8/10 blocks (80.0%)
+        INFO: Deep scrubbed 9/10 blocks (90.0%)
+        INFO: Deep scrubbed 10/10 blocks (100.0%)
+       ERROR: Marked version V0000000001 invalid because it has errors.
+       ERROR: Deep scrub of version V0000000001 failed.
 
-The exit code is then != 0. Which one exactly depends on the kind of error::
+In case of a scrubbing error the exit code is non-zero. A failed scrub is
+signaled by EX_IOERR which is 74 on Linux.
 
-    $ echo $?
-    20
-
-Also, the version is marked invalid as you can see in::
+Also, the version is marked invalid as you can see here::
 
     $ benji ls
-        INFO: $ /usr/bin/benji ls
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-    |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-    | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   0   |     0     | b_daily,b_monthly,b_weekly |
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        INFO: Benji complete
+        INFO: $ benji ls
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    |         date        |     uid     | name              | snapshot_name |     size | block_size | valid | protected | tags |
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 | False |   False   |      |
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
 
-Just in case you are able to fix the error, just scrub again and benji will mark the version valid again.
+Just in case you are able to fix the error, just scrub again and Benji will mark the version valid again.
 
+There is also a little brother to ``deep-scrub`` which only check for metadata consistency and block existence::
+
+    $ benji scrub v1
+        INFO: $ benji scrub v1
+        INFO: Scrubbed 1/10 blocks (10.0%)
+        INFO: Scrubbed 2/10 blocks (20.0%)
+        INFO: Scrubbed 3/10 blocks (30.0%)
+        INFO: Scrubbed 4/10 blocks (40.0%)
+        INFO: Scrubbed 5/10 blocks (50.0%)
+        INFO: Scrubbed 6/10 blocks (60.0%)
+        INFO: Scrubbed 7/10 blocks (70.0%)
+        INFO: Scrubbed 8/10 blocks (80.0%)
+        INFO: Scrubbed 9/10 blocks (90.0%)
+        INFO: Scrubbed 10/10 blocks (100.0%)
+
+``scrub`` will only mark versions as invalid never as valid. This is because there
+isn't enough information to determine if the version is really okay when only
+checking metadata consistency and block existence. A ``scrub`` of an invalid version
+will fail immediately.
 
 restore
 -------
 
 Restore into a file or device::
 
-    $ benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-        INFO: $ /usr/bin/benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
+    $ benji restore v1 file://RESTOREFILE
+        INFO: $ benji restore v1 file://RESTOREFILE
         INFO: Restored 1/10 blocks (10.0%)
         INFO: Restored 2/10 blocks (20.0%)
         INFO: Restored 3/10 blocks (30.0%)
@@ -222,15 +275,13 @@ Restore into a file or device::
         INFO: Restored 8/10 blocks (80.0%)
         INFO: Restored 9/10 blocks (90.0%)
         INFO: Restored 10/10 blocks (100.0%)
-        INFO: Benji complete.
 
-benji prevents you from restoring into an existing file (or device). So if you
+Benji prevents you from restoring into an existing file (or device). So if you
 try again, it will fail::
 
-    $ benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-        INFO: $ /usr/bin/benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-       ERROR: Target already exists: file://RESTOREFILE
-    Error opening restore target. You must force the restore.
+    $ benji restore v1 file://RESTOREFILE
+        INFO: $ benji restore v1 file://RESTOREFILE
+       ERROR: Restore target RESTOREFILE already exists. Force the restore if you want to overwrite it.
 
 If you want to overwrite data, you must ``--force``.
 
@@ -250,41 +301,43 @@ You can remove any given backup version by::
        […]
         INFO: Benji failed.
 
-What prevents this version to be deleted is the ``backy.cfg`` option ::
+What prevents this version from being deleted is the ``benji.yaml`` option::
 
-    disallow_rm_when_younger_than_days: 6
+    disallowRemoveWhenYounger: 6
 
-However, instead of changing this option, you can simply use the ``--force``::
+However, instead of changing this option, you can simply use ``--force``::
 
-    $ benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
-        INFO: $ /usr/bin/benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
-        INFO: Removed backup version 8fd42f1a-2364-11e7-8594-00163e8c0370 with 10 blocks.
-        INFO: Benji complete.
+    $ benji rm -f v1
+        INFO: $ benji rm -f v1
+        INFO: Removed version V0000000001 metadata from backend storage.
+        INFO: Removed backup version V0000000001 with 10 blocks.
 
-Benji stores each block in the backup target (i.e. filesystem, s3, ...) once.
+Benji stores each block in the backup target (i.e. filesystem, S3, etc.) once.
 If it encounters another block on the backup source with the same checksum [1]_,
-it will only write metadata which refers to the same backup target block.
-
-So if a backup is deleted, Benji needs to check if all references to each block
-are gone. So Benji can't just simply wipe all blocks from a removed backup
-version.
-
-As this is a resource-intensive task, it's separated into a special command::
+it will only write metadata which refers to the same backup target block. So if
+a version is deleted, Benji needs to check if there aren't any other references
+to any of the blocks referenced by this version. This may be resource intensive
+but may also introduce race conditions due to other backup sessions running
+in parallel. This is why there is a separate command to cleanup unreferenced
+blocks::
 
     $ benji cleanup
-        INFO: $ /usr/bin/benji cleanup
+        INFO: $ benji cleanup
         INFO: Cleanup-fast: Cleanup finished. 0 false positives, 0 data deletions.
-        INFO: Benji complete.
 
-As you can see, nothing has been deleted. The reason for this is that Benji
-is prepared to be used in parallel (backups during restores during scrubs).
-There are edge cases where blocks might just be in the process of being
-referenced, so the cleanup command only considers blocks for deletion when
-they have been on the candidate list for a certain time.
+As you can see, nothing has been deleted. The reason for this is that only
+blocks  which have been on the candidate list for a certain time (1h) are considered
+for deletion to prevent race conditions. If we would have waited on hour after
+removing the version, we'd get a slightly different output which indicated that
+ten blocks have been permanently deleted::
 
-For cleanup this time is 1 hour. So you can now wait for 1 hour and repeat,
-or you can use the alternative cleanup option (``-f``) which will ignore this
-timeout. However be warned (also shown when doing a ``benji cleanup --help``):
+    $ benji cleanup
+        INFO: $ benji cleanup
+        INFO: Cleanup-fast: Cleanup finished. 0 false positives, 10 data deletions.
+
+There is also the option (``-f`` or ``--full``) to do a full cleanup which iterates
+through all the blocks in the backend storage. This should only be used when an
+inconsistency is suspected as it can take a very long time to complete.
 
     .. NOTE:: A full cleanup must not be run parallel to ANY other Benji jobs.
         Benji will prevent you from doing this by creating a global lock.
