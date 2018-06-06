@@ -79,5 +79,5 @@ release: env build/benji.pex deb
 	cd docs && $(MAKE) html
 	cd website && ./sync.sh
 
-.PHONY : bbb
-bbb:
+scripts/prometheus.sh:
+	curl -sSL -o scripts/prometheus.sh https://raw.githubusercontent.com/aecolley/client_bash/master/prometheus.bash

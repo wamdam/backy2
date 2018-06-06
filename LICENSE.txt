@@ -8,6 +8,10 @@ Copyright:
     2013-2015 Juan J. Martinez
 License: Expat http://directory.fsf.org/wiki/License:Expat
 
+Files: scripts/prometheus.sh
+Copyrigt: 2015 Adrian Colley <aecolley@gmail.com>
+License: Apache 2.0
+
 Packages: prettytable setproctitle
 License: BSD
 
@@ -18,7 +22,7 @@ Packages: sqlalchemy boto alembic
 License: MIT License
 
 Packages: pex
-License: Apache2
+License: Apache 2.0
 
 Packages: psycopg2
 License: LGPLv3
