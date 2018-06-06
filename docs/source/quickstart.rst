@@ -35,48 +35,81 @@ Version
 Installation
 ------------
 
+Currently there are no pre-built packages but you can easily install Benji
+via ``pip``.
+
 Ubuntu 16.04
 ~~~~~~~~~~~~
 
-Installation::
+This version of Ubuntu doesn't have a current Python installation. But Python 3
+via private repository::
 
-    wget https://github.com/wamdam/benji/releases/download/2.9.9/benji_2.9.11_all.deb
-    sudo dpkg -i benji_2.9.11_all.deb  # Install the debian archive
-    sudo apt-get -f install            # Install the dependencies
+    apt-get update
+    apt-get install --no-install-recommends software-properties-common python-software-properties
+    add-apt-repository ppa:deadsnakes/ppa
+    apt-get update
+    apt-get --no-install-recommends python3.6 python3.6-venv python3.6-dev git gcc
 
-.. TODO: Show how to install drivers for postgreSQL, MySQL, others
+CentOS 7
+~~~~~~~~
 
-Edit backy.cfg::
+As with Ubuntu you need to install a recent Python version from a third-party repository::
 
-    vim /etc/backy.cfg
+    yum install -y https://centos7.iuscommunity.org/ius-release.rpm
+    yum install -y python36u-devel python36u-pip python36u-libs python36u-setuptools
 
-Especially look if these paths are good.
+Common to all distributions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. Metadata storage path ::
+After installing a recent Python version above, it is now time to install
+Benji and its dependencies::
 
-       engine: sqlite:////var/lib/benji/backy.sqlite
+    # Create new virtual environment
+    python3.6 -m venv /usr/local/beni
+    # Activate it (your shell prompt will change)
+    . /usr/local/benji/bin/activate
+    # Let's upgrade pip first
+    pip install --upgrade pip
+    # And now install Benji and its dependencies
+    pip install git+https://github.com/elemental-lf/benji
+    pip install git+https://github.com/kurtbrose/aes_keywrap
 
-2. Data storage path ::
+If you want to use certain features of Benji in the future you might
+additional dependencies:
 
-       path: /var/lib/benji/data  # This should be the mountpoint of NFS
+- ``boto3``: AWS S3 backup storage target support
+- ``b2``: Backblaze's B2 Cloud storage support
+- ``pycryptodome``: Encryption support
+- ``discache``: Disk caching support
+- ``zstandard``: Compression support
+- ``psycopg2-binary`` or ``psycopg2``: PostgreSQL support
 
-Other values of interest are ``simultaneous_writes`` and ``simultaneous_reads``.
-Depending on your backup source and target you may want to go lower (i.e.
-disk with very slow seeks) or higher (raid source or target, S3 target, ...).
 
-.. TIP::
-    For reference, we use about the half the number of disks as value for
-    simultaneous access. So if you have 40 OSDs in ceph/rbd on the backup
-    source and a 20 disk raid 10 backup target (which makes only 10 parallel
-    disks on writes), you'd use ::
+Customise your configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        simultaneous_reads: 20
-        simultaneous_writes: 5
+This represents a minimal configuration mit SQLite3 backend and file-based block storage::
 
-    Of course your mileage may vary.
+            configurationVersion: '1.0.0'
+            processName: benji
+            logFile: /var/log/benji.log
+            hashFunction: blake2b,digest_size=32
+            blockSize: 4294967296
+            io:
+              file:
+                simultaneousReads: 2
+            dataBackend:
+              type: file
+              file:
+                path: /var/lib/benji
+            metaBackend:
+              engine: sqlite:///var/lib/benji/benji.sqlite
 
-These settings have great impact on the backup and restore performance. Higher
-values need a bit more RAM.
+You might need to change the above paths. Benji will run as a normal user, but it
+might need root privileges to access some backup sources.
+
+Please see ``etc/benji.yaml`` which is included in the distribution for a full list
+of possible configuration options.
 
 .. _backup:
 
@@ -254,9 +287,7 @@ or you can use the alternative cleanup option (``-f``) which will ignore this
 timeout. However be warned (also shown when doing a ``benji cleanup --help``):
 
     .. NOTE:: A full cleanup must not be run parallel to ANY other Benji jobs.
-        Benji will prevent you from doing this by creating a global lock on the
-        backup server.
-
+        Benji will prevent you from doing this by creating a global lock.
 
 .. CAUTION:: Parallelism has been tested successfully with PostgreSQL. It might
     not work reliably with other DBMS.
