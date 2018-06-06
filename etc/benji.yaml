@@ -1,9 +1,9 @@
 configurationVersion: '1.0.0'
 
-# Where should the backy logfile be placed?
+# Where should the logfile be placed?
 # Benji will by default log INFO, WARNING and ERROR to this log.
-# If you also need DEBUG information, please start backy with '-v'.
-logFile: /var/log/backy.log
+# If you also need DEBUG information, please start Benji with '-v'.
+logFile: /var/log/benji.log
 
 # Default block size. 4MB are recommended for backup of Ceph RBD images.
 # The block size can be changed on the command line on a version by version basis, but be aware that this will affect
@@ -33,7 +33,7 @@ metaBackend:
   #   sqlite:////path/to/sqlitefile
   #   postgresql:///database
   #   postgresql://user:password@host:port/database
-  engine: sqlite:////var/lib/benji/backy.sqlite
+  engine: sqlite:////var/lib/benji/benji.sqlite
 
 dataBackend:
   # Which data backend to use?
