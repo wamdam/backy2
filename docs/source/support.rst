@@ -6,28 +6,23 @@ Support
 Issue Tracker
 -------------
 
-https://github.com/wamdam/backy2/issues
+https://github.com/elemental-lf/benji/issues
 
 
 Documentation
 -------------
 
-http://backy2.com/docs/
-
-
-IRC
----
-
-Channel #backy2 on freenode.net.
-
-http://webchat.freenode.net/?channels=#backy2
+http://benji-backup.me/docs/
 
 
 Security
 --------
 
-In case you discover a security issue, please use this contact for reporting it
-privately:
+In case you discover a security issue, please use this contact for
+reporting it privately:
 
-Daniel Kraft <daniel.kraft@d9t.de>
+Lars Fenneberg <lf@elemental.net>
+
+My PGP key is available on the usual set of key servers. The key id is
+0xCAF0E5281F46FD85.
 

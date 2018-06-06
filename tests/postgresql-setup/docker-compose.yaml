@@ -6,7 +6,7 @@ services:
     image: postgres
     restart: always
     environment:
-      POSTGRES_USER: backy2
+      POSTGRES_USER: benji
       POSTGRES_PASSWORD: verysecret
     ports:
       - 15432:5432

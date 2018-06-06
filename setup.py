@@ -1,9 +1,9 @@
 # -*- encoding: utf-8 -*-
 from setuptools import setup, find_packages
 
-version = '2.9.17'
+version = '0.1.0'
 
-setup(name='backy2',
+setup(name='benji',
     version=version,
     description="A block / disk based backup and restore solution",
     long_description=open('README.rst', 'r', encoding='utf-8').read(),
@@ -19,7 +19,7 @@ Topic :: System :: Archiving :: Backup
     keywords='backup',
     author='Daniel Kraft <daniel.kraft@d9t.de>, Lars Fenneberg <lf@elemental.net>',
     author_email='daniel.kraft@d9t.de, lf@elemental.net',
-    url='https://github.com/elemental-lf/backy2',
+    url='https://github.com/elemental-lf/benji',
     license='LGPL-3',
     packages=find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
     package_dir={
@@ -33,7 +33,6 @@ Topic :: System :: Archiving :: Backup
     install_requires=[
         'PrettyTable>=0.7.2',
         'sqlalchemy>=1.2.6',
-        'psutil>=2.2.1',
         'setproctitle>=1.1.8',
         'python-dateutil>=2.6.0',
         'alembic>=0.9.9',
@@ -53,6 +52,6 @@ Topic :: System :: Archiving :: Backup
     python_requires='~=3.6',
     entry_points="""
         [console_scripts]
-            backy2 = backy2.scripts.backy:main
+            benji = benji.scripts.benji:main
     """,
     )

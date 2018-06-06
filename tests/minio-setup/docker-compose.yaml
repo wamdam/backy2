@@ -10,7 +10,7 @@ services:
    MINIO_SECRET_KEY: minio123
   command: gateway nas /data
   networks:
-    - backy2-tests
+    - benji-tests
 
 networks:
-  backy2-tests:
+  benji-tests:

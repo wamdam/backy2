@@ -13,21 +13,21 @@ What you need to know:
 ----------------------
 
 Backup source
-    A block device or image file (e.g. containing a VM) to be backed up.
-    backy2 can not backup folders or multiple files. The source must not be
-    modified during backup, so either stop all writers or create a snapshot.
+    A block device or image file to be backed up. Benji can not backup folders
+    or multiple files. The source must not be modified during backup, so either
+    stop all writers or create a snapshot.
 
 Backup target
-    A storage (currently supported: filesystem or S3 compatible) to which the
-    backed up data will be saved in 4MB blocks.
+    A storage (currently supported: filesystem, S3 and B2) to which the
+    backed up data will be saved.
 
 Backup Metadata
-    A Database containing information on how to reassemble the stored blocks
-    to get the original data back. Currently an SQL database.
+    A SQL database containing information on how to reassemble the stored blocks
+    to get the original data back.
 
 Version
-    A version of a backup. A version is a backup on a specific time for a
-    specific backup source. A version is identified by its UUID.
+    A version is a backup of specific backup source at a specific point in time.
+    A version is identified by its version UID.
 
 
 .. _installation:
@@ -40,8 +40,8 @@ Ubuntu 16.04
 
 Installation::
 
-    wget https://github.com/wamdam/backy2/releases/download/2.9.9/backy2_2.9.11_all.deb
-    sudo dpkg -i backy2_2.9.11_all.deb  # Install the debian archive
+    wget https://github.com/wamdam/benji/releases/download/2.9.9/benji_2.9.11_all.deb
+    sudo dpkg -i benji_2.9.11_all.deb  # Install the debian archive
     sudo apt-get -f install            # Install the dependencies
 
 .. TODO: Show how to install drivers for postgreSQL, MySQL, others
@@ -54,11 +54,11 @@ Especially look if these paths are good.
 
 1. Metadata storage path ::
 
-       engine: sqlite:////var/lib/backy2/backy.sqlite
+       engine: sqlite:////var/lib/benji/backy.sqlite
 
 2. Data storage path ::
 
-       path: /var/lib/backy2/data  # This should be the mountpoint of NFS
+       path: /var/lib/benji/data  # This should be the mountpoint of NFS
 
 Other values of interest are ``simultaneous_writes`` and ``simultaneous_reads``.
 Depending on your backup source and target you may want to go lower (i.e.
@@ -85,9 +85,9 @@ backup
 
 1. Initialize the database::
 
-        $ backy2 initdb
-            INFO: $ /usr/bin/backy2 initdb
-            INFO: Backy complete.
+        $ benji initdb
+            INFO: $ /usr/bin/benji initdb
+            INFO: Benji complete.
 
    .. NOTE:: Initializing a database multiple times does **not** destroy any
        data, instead will fail because it finds already-existing tables.
@@ -104,8 +104,8 @@ backup
 
 3. Backup the image (works similar with a device)::
 
-        $ backy2 backup file://TESTFILE myfirsttestbackup
-            INFO: $ /usr/bin/backy2 backup file://TESTFILE myfirsttestbackup
+        $ benji backup file://TESTFILE myfirsttestbackup
+            INFO: $ /usr/bin/benji backup file://TESTFILE myfirsttestbackup
             INFO: Backed up 1/10 blocks (10.0%)
             INFO: Backed up 2/10 blocks (20.0%)
             INFO: Backed up 3/10 blocks (30.0%)
@@ -117,19 +117,19 @@ backup
             INFO: Backed up 9/10 blocks (90.0%)
             INFO: Backed up 10/10 blocks (100.0%)
             INFO: New version: 8fd42f1a-2364-11e7-8594-00163e8c0370 (Tags: [b_daily,b_weekly,b_monthly])
-            INFO: Backy complete.
+            INFO: Benji complete.
 
 
 4. List backups::
 
-        $ backy2 ls
-            INFO: $ /usr/bin/backy2 ls
+        $ benji ls
+            INFO: $ /usr/bin/benji ls
         +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
         |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
         +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
         | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly |
         +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-            INFO: Backy complete.
+            INFO: Benji complete.
 
 
 scrub
@@ -139,15 +139,15 @@ Scrubbing reads all the blocks from the backup target (or some of them if you
 use the ``-p`` option) and compares them with the metadata or, if you pass a
 source option (``-s``), also with the original data. ::
 
-    $ backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: $ /usr/bin/backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: Backy complete.
+    $ benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
+        INFO: $ /usr/bin/benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
+        INFO: Benji complete.
 
 If an error occurs (for example, if backup target blocks couldn't be read or data
 has changed), this looks like that::
 
-    $ backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-         INFO: $ /usr/bin/backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
+    $ benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
+         INFO: $ /usr/bin/benji scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
         ERROR: Blob not found: Block(uid='2c0910bef8qnAm54mnyBsonRsPBfTzP', version_uid='8fd42f1a-2364-11e7-8594-00163e8c0370', id=8, date=datetime.datetime(2017, 4, 17, 11, 54, 7, 639022), checksum='41c9aa8df42913b3544270a10f1b219cd1b5e1ad9d51700e97acdaeaed3cea843ffaad99590e07de260918ce3847a8b612c9f51f2c945a2d14238956a49ca572', size=4194304, valid=1)
          INFO: Marked block invalid (UID 2c0910bef8qnAm54mnyBsonRsPBfTzP, Checksum 41c9aa8df42913b3544270a10f1b219cd1b5e1ad9d51700e97acdaeaed3cea843ffaad99590e07de260918ce3847a8b612c9f51f2c945a2d14238956a49ca572. Affected versions: 8fd42f1a-2364-11e7-8594-00163e8c0370
          INFO: Marked version invalid (UID 8fd42f1a-2364-11e7-8594-00163e8c0370)
@@ -160,16 +160,16 @@ The exit code is then != 0. Which one exactly depends on the kind of error::
 
 Also, the version is marked invalid as you can see in::
 
-    $ backy2 ls
-        INFO: $ /usr/bin/backy2 ls
+    $ benji ls
+        INFO: $ /usr/bin/benji ls
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
     |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
     | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   0   |     0     | b_daily,b_monthly,b_weekly |
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        INFO: Backy complete
+        INFO: Benji complete
 
-Just in case you are able to fix the error, just scrub again and backy2 will mark the version valid again.
+Just in case you are able to fix the error, just scrub again and benji will mark the version valid again.
 
 
 restore
@@ -177,8 +177,8 @@ restore
 
 Restore into a file or device::
 
-    $ backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-        INFO: $ /usr/bin/backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
+    $ benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
+        INFO: $ /usr/bin/benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
         INFO: Restored 1/10 blocks (10.0%)
         INFO: Restored 2/10 blocks (20.0%)
         INFO: Restored 3/10 blocks (30.0%)
@@ -189,13 +189,13 @@ Restore into a file or device::
         INFO: Restored 8/10 blocks (80.0%)
         INFO: Restored 9/10 blocks (90.0%)
         INFO: Restored 10/10 blocks (100.0%)
-        INFO: Backy complete.
+        INFO: Benji complete.
 
-backy2 prevents you from restoring into an existing file (or device). So if you
+benji prevents you from restoring into an existing file (or device). So if you
 try again, it will fail::
 
-    $ backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-        INFO: $ /usr/bin/backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
+    $ benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
+        INFO: $ /usr/bin/benji restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
        ERROR: Target already exists: file://RESTOREFILE
     Error opening restore target. You must force the restore.
 
@@ -210,12 +210,12 @@ version rm and cleanup
 
 You can remove any given backup version by::
 
-    $ backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: $ /usr/bin/backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370
+    $ benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370
+        INFO: $ /usr/bin/benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370
        ERROR: Unexpected exception
        ERROR: 'Version 8fd42f1a-2364-11e7-8594-00163e8c0370 is too young. Will not delete.'
        […]
-        INFO: Backy failed.
+        INFO: Benji failed.
 
 What prevents this version to be deleted is the ``backy.cfg`` option ::
 
@@ -223,37 +223,38 @@ What prevents this version to be deleted is the ``backy.cfg`` option ::
 
 However, instead of changing this option, you can simply use the ``--force``::
 
-    $ backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
-        INFO: $ /usr/bin/backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
+    $ benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
+        INFO: $ /usr/bin/benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
         INFO: Removed backup version 8fd42f1a-2364-11e7-8594-00163e8c0370 with 10 blocks.
-        INFO: Backy complete.
+        INFO: Benji complete.
 
-backy2 stores each block in the backup target (i.e. filesystem, s3, ...) once.
+Benji stores each block in the backup target (i.e. filesystem, s3, ...) once.
 If it encounters another block on the backup source with the same checksum [1]_,
 it will only write metadata which refers to the same backup target block.
 
-So if a backup is deleted, backy2 needs to check if all references to each block
-are gone. So backy2 can't just simply wipe all blocks from a removed backup
+So if a backup is deleted, Benji needs to check if all references to each block
+are gone. So Benji can't just simply wipe all blocks from a removed backup
 version.
 
 As this is a resource-intensive task, it's separated into a special command::
 
-    $ backy2 cleanup
-        INFO: $ /usr/bin/backy2 cleanup
+    $ benji cleanup
+        INFO: $ /usr/bin/benji cleanup
         INFO: Cleanup-fast: Cleanup finished. 0 false positives, 0 data deletions.
-        INFO: Backy complete.
+        INFO: Benji complete.
 
-As you can see, nothing has been deleted. The reason for this is that backy2
+As you can see, nothing has been deleted. The reason for this is that Benji
 is prepared to be used in parallel (backups during restores during scrubs).
-On some edges (and this is one), it has timeouts to let data which might be
-in the flow or in caches settle.
+There are edge cases where blocks might just be in the process of being
+referenced, so the cleanup command only considers blocks for deletion when
+they have been on the candidate list for a certain time.
 
-For cleanup this timeout is 1 hour. So you can now wait for 1 hour and repeat,
+For cleanup this time is 1 hour. So you can now wait for 1 hour and repeat,
 or you can use the alternative cleanup option (``-f``) which will ignore this
-timeout. However be warned (also shown when doing a ``backy2 cleanup --help``):
+timeout. However be warned (also shown when doing a ``benji cleanup --help``):
 
-    .. NOTE:: A full cleanup must not be run parallel to ANY other backy jobs.
-        backy2 will prevent you from doing this by creating a global lock on the
+    .. NOTE:: A full cleanup must not be run parallel to ANY other Benji jobs.
+        Benji will prevent you from doing this by creating a global lock on the
         backup server.
 
 
@@ -261,7 +262,10 @@ timeout. However be warned (also shown when doing a ``backy2 cleanup --help``):
     not work reliably with other DBMS.
 
 
-.. [1] backy2 uses sha512 which can be configured in ``backy.cfg``. sha512
-    is the only recommended checksum, however it's possible to use any other
-    algorithm from python3's hashlib (i.e. ``md5``, ``sha1``, ``sha224``,
-    ``sha256``, ``sha384``).
+.. [1] Benji uses blake2b with a 32 byte digest size but this can be configured
+    in ``benji.yaml``. blake2b is the recommended hash function as it is very
+    fast on modern computers. However it's possible to use any other algorithm
+    from Python's hashlib (i.e. ``md5``, ``sha1``, ``sha224``, ``sha256``,
+    ``sha384`` or ``sha512``). The maximum supported digest length is 64.
+    Smaller digest lengths have a higher chance of hash collisions which must
+    be avoided. Digest lengths below 32 bytes are not recommened.

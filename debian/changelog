@@ -89,63 +89,63 @@ backy2 (2.9.6) unstable; urgency=low
  -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 11 Apr 2017 18:40:05 +0200
 
 
-backy2 (2.9.5) unstable; urgency=low
+benji (2.9.5) unstable; urgency=low
 
   * Don't backup if hints list is empty
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 23 Mar 2017 15:40:05 +0100
 
 
-backy2 (2.9.4) unstable; urgency=low
+benji (2.9.4) unstable; urgency=low
 
   * Be robust against s3 socket timeouts
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 15:44:05 +0100
 
 
-backy2 (2.9.3) unstable; urgency=low
+benji (2.9.3) unstable; urgency=low
 
   * More ps notification on restore
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 12:40:05 +0100
 
 
-backy2 (2.9.2) unstable; urgency=low
+benji (2.9.2) unstable; urgency=low
 
   * Put current job information to the ps/top list
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 11:53:05 +0100
 
 
-backy2 (2.9.1) unstable; urgency=low
+benji (2.9.1) unstable; urgency=low
 
   * Make restore reading multithreaded from backup storage
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 10:53:05 +0100
 
 
-backy2 (2.9.0) unstable; urgency=low
+benji (2.9.0) unstable; urgency=low
 
   * Adding protection for versions, i.e. make them not removable
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 22 Mar 2017 09:57:05 +0100
 
 
-backy2 (2.8.5) unstable; urgency=low
+benji (2.8.5) unstable; urgency=low
 
   * Fix read for s3
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 21 Mar 2017 16:01:05 +0100
 
 
-backy2 (2.8.4) unstable; urgency=low
+benji (2.8.4) unstable; urgency=low
 
   * Fix nbd server for s3
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 05 Dec 2016 10:01:05 +0100
 
 
-backy2 (2.8.3) unstable; urgency=low
+benji (2.8.3) unstable; urgency=low
 
   * Bandwidth control for data backends (see new config params bandwidth_read
     and bandwidth_write
@@ -153,40 +153,40 @@ backy2 (2.8.3) unstable; urgency=low
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 02 Nov 2016 15:01:05 +0100
 
 
-backy2 (2.8.2) unstable; urgency=low
+benji (2.8.2) unstable; urgency=low
 
   * Performance improvements for scrub: Make it threaded with multiple readers
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 12 Aug 2016 13:54:05 +0200
 
 
-backy2 (2.8.1) unstable; urgency=low
+benji (2.8.1) unstable; urgency=low
 
   * Performance improvements for backup from other version and cleanup
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 12 Aug 2016 13:54:05 +0200
 
 
-backy2 (2.8.0) unstable; urgency=low
+benji (2.8.0) unstable; urgency=low
 
   * Config changes, please look at backy.cfg.dist
     New: new_image_features for the io_rbd section
   * backy restore now also takes the schema (file:// or rbd://)
-  * Backy creates new rbd images now when restoring to rbd
-  * Backy now requires the --force switch when restoring into existing
+  * Benji creates new rbd images now when restoring to rbd
+  * Benji now requires the --force switch when restoring into existing
     images, revices or files
-  * Backy now checks if the size of the target is >= the restore size
+  * Benji now checks if the size of the target is >= the restore size
     and breaks before even beginning if it's not.
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 29 Jul 2016 13:35:05 +0200
 
 
-backy2 (2.7.5) unstable; urgency=low
+benji (2.7.5) unstable; urgency=low
 
-  * Incompatible change: backy2 now takes url-like sources, e.g.
+  * Incompatible change: benji now takes url-like sources, e.g.
     file:///dev/sda or rbd://pool/imagename@snapshot
     Old format (only filename or rbd name) is not supported anymore.
-    => Backy can now backup from different source-types with the same config.
+    => Benji can now backup from different source-types with the same config.
   * Incompatible change: The Reader is not configured anymore statically
     so new config options are there for pluggable i/o libs. See
     backy.cfg.dist
@@ -194,14 +194,14 @@ backy2 (2.7.5) unstable; urgency=low
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 29 Jul 2016 10:30:05 +0200
 
 
-backy2 (2.7.4) unstable; urgency=low
+benji (2.7.4) unstable; urgency=low
 
   * Added safetyguard so that no too young backups can be deleted.
 
  -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 13 Jun 2016 11:20:05 +0200
 
 
-backy2 (2.7.3-1) unstable; urgency=low
+benji (2.7.3-1) unstable; urgency=low
 
   * Merged enterprise features
 

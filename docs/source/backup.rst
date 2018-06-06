@@ -5,7 +5,7 @@ Backup
 
 In this chapter you will learn all possibilities and options for backup.
 
-.. command-output:: backy2 backup --help
+.. command-output:: benji backup --help
 
 
 Simple backup
@@ -13,7 +13,7 @@ Simple backup
 
 This is how you can create a normal backup::
 
-    $ backy2 backup source name
+    $ benji backup source name
 
 where source is a URI and name is the name for the backup, which may contain any
 quotable character.
@@ -26,8 +26,8 @@ quotable character.
 The supported schemes for source are **file** and **rbd**. So these are
 realistic examples::
 
-    $ backy2 backup file:///var/lib/vms/database.img database
-    $ backy2 backup rbd://poolname/database@snapshot1 database
+    $ benji backup file:///var/lib/vms/database.img database
+    $ benji backup rbd://poolname/database@snapshot1 database
 
 
 Stored version data
@@ -36,8 +36,8 @@ Stored version data
 An instance of a backup is called a *version*. A version contains these metadata
 fields:
 
-* **uid**: A UUID1 identifier for this version. This is created by backy2.
-* **date**: The date and time of the backup. This is created by backy2.
+* **uid**: A UUID1 identifier for this version. This is created by benji.
+* **date**: The date and time of the backup. This is created by benji.
 * **name**: The name from the command line.
 * **snapshot_name**: The snapshot name [-s] from the command line.
 * **size**: The number of blocks (default: 4MB each) of the backed up image.
@@ -51,19 +51,19 @@ fields:
 
 You can output this data with::
 
-    $ backy2 ls
-        INFO: $ /usr/bin/backy2 ls
+    $ benji ls
+        INFO: $ /usr/bin/benji ls
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
     |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
     | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly |
     +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        INFO: Backy complete.
+        INFO: Benji complete.
 
 .. HINT::
     You can filter the output with various parameters:
 
-    .. command-output:: backy2 ls --help
+    .. command-output:: benji ls --help
 
 
 
@@ -72,7 +72,7 @@ You can output this data with::
 Differential backup
 -------------------
 
-backy2 is (only) able to backup changed blocks. It can do this in two different
+benji is (only) able to backup changed blocks. It can do this in two different
 ways:
 
 1. **It can read the whole image**, checksum each block and look the checksum up
@@ -89,21 +89,21 @@ ways:
    all \\0), only a reference to the existing block will be stored. Otherwise
    the block is written to the data backend.
 
-.. NOTE:: backy2 does **forward-incremental backups**. So in contrast to
+.. NOTE:: benji does **forward-incremental backups**. So in contrast to
     backward-incremental backups, there will never be any need to create another
     full backup after a first full backup
-    If you don't trust backy2 (which you always should with any software), you
-    are encouraged to use ``backy2 scrub``, possibly with the ``[-s]``
+    If you don't trust benji (which you always should with any software), you
+    are encouraged to use ``benji scrub``, possibly with the ``[-s]``
     parameter to see if the backup matches the source.
 
 .. HINT:: Even the first backup will be differential. Either because like in
-    case 1, backy2 deduplicates blocks (in which case you may use tools like
+    case 1, benji deduplicates blocks (in which case you may use tools like
     ``fstrim`` or ``dd`` to put a lot of \\0 to your empty space), or like in
     case 2 you can create a ``rbd diff`` without ``--from-snap`` which will
     create a list of used (=non-sparse) blocks (i.e. all non-used blocks will
     be skipped).
 
-In any case, the backup source may differ in size. backy2 will then assume that
+In any case, the backup source may differ in size. benji will then assume that
 the size change has happened at the end of the volume, which is the case if you
 resize partitions, logical volumes or rbd images.
 
@@ -117,13 +117,13 @@ LVM (or any other diff unaware storage)
 Day 1 (initial backup)::
 
     $ lvcreate --size 1G --snapshot --name snap /dev/vg00/lvol1
-    $ backy2 backup file:///dev/vg00/snap lvol1
+    $ benji backup file:///dev/vg00/snap lvol1
     $ lvremove -y /dev/vg00/snap
 
 Day 2..n (differential backups)::
 
     $ lvcreate --size 1G --snapshot --name snap /dev/vg00/lvol1
-    $ backy2 backup file:///dev/vg00/snap lvol1
+    $ benji backup file:///dev/vg00/snap lvol1
     $ lvremove -y /dev/vg00/snap
 
 .. IMPORTANT:: With LVM snapshots, the snapshot increases in size as the origin
@@ -154,7 +154,7 @@ pool ``pool``.
 
     $ rbd snap create pool/vm1@backup1
     $ rbd diff --whole-object pool/vm1@backup1 --format=json > /tmp/vm1.diff
-    $ backy2 backup -s backup1 -r /tmp/vm1.diff rbd://pool/vm1@backup1 vm1
+    $ benji backup -s backup1 -r /tmp/vm1.diff rbd://pool/vm1@backup1 vm1
 
 2. Create a differential backup::
 
@@ -166,10 +166,10 @@ pool ``pool``.
 
     # get the uid of the version corrosponding to the old rbd snapshot. This
     # looks like "90fcbeb6-1fce-11c7-9c25-a44c314f9270". Copy it.
-    $ backy2 ls vm1 -s backup1
+    $ benji ls vm1 -s backup1
 
     # and backup
-    $ backy2 backup -s backup2 -r /tmp/vm1.diff -f 90fcbeb6-1fce-11c7-9c25-a44c314f9270 rbd://pool/vm1@backup2 vm1
+    $ benji backup -s backup2 -r /tmp/vm1.diff -f 90fcbeb6-1fce-11c7-9c25-a44c314f9270 rbd://pool/vm1@backup2 vm1
 
 Automation
 ^^^^^^^^^^
@@ -189,13 +189,13 @@ initial backups where necessary::
 
         rbd snap create "$POOL"/"$VM"@"$SNAPNAME"
         rbd diff --whole-object "$POOL"/"$VM"@"$SNAPNAME" --format=json > "$TEMPFILE"
-        backy2 backup -s "$SNAPNAME" -r "$TEMPFILE" rbd://"$POOL"/"$VM"@"$SNAPNAME" $VM
+        benji backup -s "$SNAPNAME" -r "$TEMPFILE" rbd://"$POOL"/"$VM"@"$SNAPNAME" $VM
 
         rm $TEMPFILE
     }
 
     function differential_backup {
-        # call: differential_backup rbd vm1 old_rbd_snap old_backy2_version
+        # call: differential_backup rbd vm1 old_rbd_snap old_benji_version
         POOL="$1"
         VM="$2"
         LAST_RBD_SNAP="$3"
@@ -204,14 +204,14 @@ initial backups where necessary::
         SNAPNAME=$(date "+%Y-%m-%dT%H:%M:%S")  # 2017-04-20T11:33:23
         TEMPFILE=$(tempfile)
 
-        echo "Performing differential backup of $POOL/$VM from rbd snapshot $LAST_RBD_SNAP and backy2 version $BACKY_SNAP_VERSION_UID."
+        echo "Performing differential backup of $POOL/$VM from rbd snapshot $LAST_RBD_SNAP and benji version $BACKY_SNAP_VERSION_UID."
 
         rbd snap create "$POOL"/"$VM"@"$SNAPNAME"
         rbd diff --whole-object "$POOL"/"$VM"@"$SNAPNAME" --from-snap "$LAST_RBD_SNAP" --format=json > "$TEMPFILE"
         # delete old snapshot
         rbd snap rm "$POOL"/"$VM"@"$LAST_RBD_SNAP"
         # and backup
-        backy2 backup -s "$SNAPNAME" -r "$TEMPFILE" -f "$BACKY_SNAP_VERSION_UID" rbd://"$POOL"/"$VM"@"$SNAPNAME" "$VM"
+        benji backup -s "$SNAPNAME" -r "$TEMPFILE" -f "$BACKY_SNAP_VERSION_UID" rbd://"$POOL"/"$VM"@"$SNAPNAME" "$VM"
     }
 
     function backup {
@@ -225,10 +225,10 @@ initial backups where necessary::
             echo "No previous snapshot found, reverting to initial backup."
             initial_backup "$POOL" "$VM"
         else
-            # check if this snapshot exists in backy2
-            BACKY_SNAP_VERSION_UID=$(backy2 -m ls -s "$LAST_RBD_SNAP" "$VM"|grep -e '^version'|awk -F '|' '{ print $7 }')
+            # check if this snapshot exists in benji
+            BACKY_SNAP_VERSION_UID=$(benji -m ls -s "$LAST_RBD_SNAP" "$VM"|grep -e '^version'|awk -F '|' '{ print $7 }')
             if [ -z $BACKY_SNAP_VERSION_UID ]; then
-                echo "Existing rbd snapshot not found in backy2, reverting to initial backup."
+                echo "Existing rbd snapshot not found in benji, reverting to initial backup."
                 initial_backup "$POOL" "$VM"
             else
                 differential_backup "$POOL" "$VM" "$LAST_RBD_SNAP" "$BACKY_SNAP_VERSION_UID"
@@ -256,11 +256,11 @@ This is what it does:
   snapshot. As rbd snapshots have no date assigned, it's the last one from
   ``rbd snap ls … | sort``.
 * If none is found, an initial backup is performed.
-* If there is a rbd snapshot, backy2 is asked if it has a *version* of this
+* If there is a rbd snapshot, benji is asked if it has a *version* of this
   snapshot. If not, an initial_backup is performed.
-* If backy2 has a *version* of this snapshot, a *diff* file is created via
+* If benji has a *version* of this snapshot, a *diff* file is created via
   ``rbd diff --whole-object <new snapshot> --from-snap <old snapshot> --format=json``.
-* backy2 then backs up according to changes found in this diff file.
+* benji then backs up according to changes found in this diff file.
 
 So this script can be called each day (or even multiple times a day) and will
 automatically keep only one snapshot and create forward-differential backups.
@@ -272,63 +272,63 @@ automatically keep only one snapshot and create forward-differential backups.
 
 Tag backups
 -----------
-backy2 provides predefined backup tags: b_daily, b_weekly, b_monthly
+benji provides predefined backup tags: b_daily, b_weekly, b_monthly
 These tags are created automatically by compating the dates of version with the
 same name.
 
 If a specific tag should be used for a target backup revision, the backup
 command provides the command line switch '-t' or '--tag':
 
-    $ backy2 backup -t mytag rbd://cephstorage/test_vm test_vm
+    $ benji backup -t mytag rbd://cephstorage/test_vm test_vm
 
 You can also use multiple tags for one revision:
 
-    $ backy2 backup -t mytag -t anothertag rbd://cephstorage/test_vm test_vm
+    $ benji backup -t mytag -t anothertag rbd://cephstorage/test_vm test_vm
 
 Later on you can modify tags with the commands 'add-tag' and 'remove-tag':
 
-    $ backy2 add-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 mytag
-    $ backy2 remove-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 anothertag
+    $ benji add-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 mytag
+    $ benji remove-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 anothertag
 
 
 Export metadata
 ---------------
 
-backy2 has now backed up all image data to a (hopefully) safe place. However,
-the 4MB sized blocks are of no use without the corrosponding metadata. backy2
+benji has now backed up all image data to a (hopefully) safe place. However,
+the 4MB sized blocks are of no use without the corrosponding metadata. benji
 will need this information to get the blocks back in the correct order.
 
 This information is stored in *metadata*. You must export the metadata and store
-it to the backup storage. backy2 will not do this for you.
+it to the backup storage. benji will not do this for you.
 
-Otherwise, you'll lose all backups if you lose backy2's metadata storage which
+Otherwise, you'll lose all backups if you lose benji's metadata storage which
 resists on the backup server usually.
 
 Just create an export file:
 
-.. command-output:: backy2 export --help
+.. command-output:: benji export --help
 
 Like this::
 
-    $ backy2 export 52da2130-2929-11e7-bde0-003048d74f6c vm1.backy-metadata
-    INFO: $ /usr/local/bin/backy2 export 52da2130-2929-11e7-bde0-003048d74f6c T
-    INFO: Backy complete.
+    $ benji export 52da2130-2929-11e7-bde0-003048d74f6c vm1.backy-metadata
+    INFO: $ /usr/local/bin/benji export 52da2130-2929-11e7-bde0-003048d74f6c T
+    INFO: Benji complete.
 
-The created file is a simple CSV and can be re-imported to backy2::
+The created file is a simple CSV and can be re-imported to benji::
 
-    backy2 Version 2.2 metadata dump
+    benji Version 2.2 metadata dump
     52da2130-2929-11e7-bde0-003048d74f6c,2017-04-24 22:05:04,zimbra.trusted@backup_20170424214643,,214000,897581056000,1,0
     38fdb171ccdm34m59W8wMCDiArpTRTsF,52da2130-2929-11e7-bde0-003048d74f6c,0,2017-04-24 22:11:14,d85694f3969a59aece4ab3758f25f3bf8f2e4223b7b69b701843f0292b9c857eb4f5d157d365f194c093a7014dec419dc54c868b6ed7fde8f572583b4b75520b,4194304,1
     3cf9e33358aQdAqmX7LtWNFVAjsZTw5S,52da2130-2929-11e7-bde0-003048d74f6c,1,2017-04-24 22:11:14,a1e9bc0b8aa9579360b9c71685de3e54eb70b8be2a915676b9dd100d5bbd40a91c71b1920a971c291d8643b334e88077592a12d41843bab138257c6cb2b01bfd,4194304,1
     …
 
-However, backy2 will ignore your request if the version uid is already in the database. ::
+However, benji will ignore your request if the version uid is already in the database. ::
 
-    $ backy2 import vm1.backy-metadata
-    INFO: $ /usr/local/bin/backy2 import vm1.backy-metadata
+    $ benji import vm1.backy-metadata
+    INFO: $ /usr/local/bin/benji import vm1.backy-metadata
     ERROR: 'Version 52da2130-2929-11e7-bde0-003048d74f6c already exists and cannot be imported.'
 
-Otherwise the version will show up after importing it when looking at ``backy2 ls``.
+Otherwise the version will show up after importing it when looking at ``benji ls``.
 
 
 Features
@@ -337,12 +337,12 @@ Features
 Machine output
 ~~~~~~~~~~~~~~
 
-All commands in backy2 are available with machine compatible output too.
+All commands in benji are available with machine compatible output too.
 Columns will be pipe (``|``) separated.
 
 Example::
 
-    $ backy2 -m ls
+    $ benji -m ls
     type|date|name|snapshot_name|size|size_bytes|uid|valid|protected|tags
     version|2017-04-18 18:05:04.174907|vm1|2017-04-19T11:12:13|25600|107374182400|c94299f2-2450-11e7-bde0-003048d74f6c|1|0|b_daily,b_monthly,b_weekly
 
@@ -358,11 +358,11 @@ Progress in process tree
 When automating backup, scrub and restore jobs, it's hard to keep track of what's
 going on when looking only at log files.
 
-For this, backy2 updates its progress in the process tree. So in order to watch
-backy2's progress, just look at ::
+For this, benji updates its progress in the process tree. So in order to watch
+benji's progress, just look at ::
 
     $ ps axfu|grep "[b]acky2"
-    …  \_ backy2 [Scrubbing Version 52da2130-2929-11e7-bde0-003048d74f6c (0.1%)]
+    …  \_ benji [Scrubbing Version 52da2130-2929-11e7-bde0-003048d74f6c (0.1%)]
 
 .. _hints_file:
 
@@ -381,6 +381,6 @@ Example of a hints-file::
     {"offset":952107008,"length":4194304,"exists":"true"}
 
 .. NOTE:: The length may vary, however it's nicely aligned to 4MB when using
-    ``rbd diff --whole-object``. As backy2 per default also uses 4MB blocks,
+    ``rbd diff --whole-object``. As benji per default also uses 4MB blocks,
     backy will not have to recalculate which 4MB blocks are affected by more
     and smaller offset+length tuples (not that that'd take very long).

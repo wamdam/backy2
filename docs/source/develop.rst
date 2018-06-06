@@ -3,14 +3,14 @@
 Develop
 =======
 
-In order to develop backy2, follow these steps. This is all tested in ubuntu
-16.10 and 16.04 *as user*. If anything in backy2 requires root, it will be
+In order to develop benji, follow these steps. This is all tested in ubuntu
+16.10 and 16.04 *as user*. If anything in benji requires root, it will be
 explicitly mentioned (hint: it's not much!).
 
 Checkout the repository::
 
-    $ git clone https://github.com/wamdam/backy2
-    $ cd backy2
+    $ git clone https://github.com/wamdam/benji
+    $ cd benji
 
 Create a virtualenv::
 
@@ -63,13 +63,13 @@ implementation test for backup, scrub and restore. **This must not fail**::
 
     make smoketest
 
-Running backy2
+Running benji
 --------------
 
-In order to run backy2, source the virtualenv::
+In order to run benji, source the virtualenv::
 
     $ . env/bin/activate
-    $ backy2 --help
+    $ benji --help
 
 After that, you may follow the :ref:`backup` section in the quickstart tutorial.
 
@@ -86,7 +86,7 @@ Follow these steps to create a new .deb release:
 
 3. ``make deb``
 
-The new .deb file will be stored in ``../backy2_<version>_all.deb``.
+The new .deb file will be stored in ``../benji_<version>_all.deb``.
 
 Creating a .pex package
 -----------------------
@@ -98,17 +98,17 @@ Python directly supports zip files, so it's able to directly run a .pex file.
 You need to have a very similar build environment for your .pex file as it is
 on your server in order to make this work.
 
-But if you have this, the ``build/backy2.pex`` file will be a single file
+But if you have this, the ``build/benji.pex`` file will be a single file
 deployment for your servers.
 
 This is how you create it::
 
-    make build/backy2.pex
+    make build/benji.pex
 
 In order to run this, simply call ::
 
     deactivate  # deactivate the virtualenv
-    ./build/backy2.pex --help
+    ./build/benji.pex --help
 
 Building the docs
 -----------------
@@ -120,8 +120,8 @@ To build the docs, run::
     make html
 
 
-The active virtualenv is needed because backy2 docs make heavy use of the
-``.. command-output::`` plugin which is used to render backy2's output into the
+The active virtualenv is needed because benji docs make heavy use of the
+``.. command-output::`` plugin which is used to render benji's output into the
 docs.
 
 The built html docs are then in ``build/html/index.html``.
@@ -129,23 +129,23 @@ The built html docs are then in ``build/html/index.html``.
 Hints
 -----
 
-- Data backends are in ``src/backy2/data_backends``. Their abstract implemetation
-  is in ``src/backy2/data_backends/__init__.py``.
+- Data backends are in ``src/benji/data_backends``. Their abstract implemetation
+  is in ``src/benji/data_backends/__init__.py``.
 
   Which data backend is in use is directly defined in ``backy.cfg`` in the
   section ``[DataBackend]`` under the key ``type``. Example:
-  ``type: backy2.data_backends.file``.
-- Meta backends are in ``src/backy2/meta_backends``. Their abstract implemetation
-  is in ``src/backy2/meta_backends/__init__.py``.
+  ``type: benji.data_backends.file``.
+- Meta backends are in ``src/benji/meta_backends``. Their abstract implemetation
+  is in ``src/benji/meta_backends/__init__.py``.
 
   Which meta backend is in unse is directly defined in ``backy.cfg`` in the
   section ``[MetaBackend]`` under the key ``type``. Example:
-  ``type: backy2.meta_backends.sql``.
-- The SQL migrations are in ``src/backy2/meta_backends/sql_migrations``.
+  ``type: benji.meta_backends.sql``.
+- The SQL migrations are in ``src/benji/meta_backends/sql_migrations``.
   They are automatically generated with the script ``alembic``.
   This script only shortcuts the ``-c`` option. The call is then
   ``./alembic revision --autogenerate -m "Added snapshot_name to versions"``.
-- The NBD server is in the directory ``src/backy2/enterprise``.
+- The NBD server is in the directory ``src/benji/enterprise``.
 
 I don't need to tell you about pull requests, do I?
 

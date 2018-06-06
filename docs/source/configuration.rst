@@ -1,48 +1,49 @@
 .. include:: global.rst.inc
 
-backy2 configuration
-====================
+Benji Backup Configuration
+==========================
 
-backy2 only needs to be configured once in order to define the *meta backend*
-and *data backend*. Most other config options default to reasonable values.
-
+Benji only needs to be configured once.
 
 .. _config_file:
 
-backy.cfg
----------
+benji.yaml
+----------
 
-This is the default backy.cfg:
+This is the an example configuration which includes all possible
+configuration options:
 
-.. literalinclude:: ../../etc/backy.cfg
+.. literalinclude:: ../../etc/benji.yaml
 
-Custom config file
-------------------
+Custom Configuration File
+-------------------------
 
-backy2 will per default search the following locations for configuration files:
+Benji will per default search the following locations for configuration files:
 
-* /etc/backy.cfg
-* /etc/backy/backy.cfg
-* /etc/backy/conf.d/*
-* ~/.backy.cfg
+* /etc/benji.yaml
+* /etc/benji/benji.yaml
+* ~/.benji.yaml
+* ~/benji.yaml
 
-In case multiple of these configurations exist, they are read in this order (later options
-overwrite earier ones).
+In case multiple of these configurations exist, only the first match is read.
 
-In order to explicitly pass a config file, use the ``-c`` (or ``--configfile``) parameter::
+In order to explicitly pass a configuration file, use the ``-c`` (or
+``--configfile``) parameter::
 
-  backy2 -c ./my_test_vm.cfg ls
+  benji -c ./my_test_vm.cfg ls
 
-If you are using multiple config files, it's important for concurrency reasons
-to have at least these parameters set differently in each configuration:
+Multiple Instance Installations
+-------------------------------
 
-* ``process_name`` in section ``DEFAULTS``
-* ``lock_dir`` in section ``DEFAULTS``
-* ``logfile`` in section ``DEFAULTS``
-* ``engine`` in section ``MetaBackend``
-* ``path in`` section ``DataBackend``
-* ``cachedir`` in section ``NBD``
+You can run Benji multiple times on different machines or in different
+containers simultaneously with matching configurations (i.e.  accessing the
+same database and data backend).  The configurations will have to match and
+this is the responsibility of the user as this isn't checked by Benji.  Be
+careful to shutdown all instances before making configuration changes that
+could affect other instances (like adding a encryption key).
 
-If one of these are the same, no concurrency guarantees are given from backy2 and
-in addition, cleanup jobs might then delete current backup data. You have been warned.
+Multiple instances open up the possibility to scale-out Benji for
+performance reasons, to put instances where the backup source data is or to
+have a dedicated instance for restores for example.
 
+Locking between different instances is done via the central database.

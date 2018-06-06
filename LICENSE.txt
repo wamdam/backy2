@@ -1,14 +1,14 @@
-Files: nbdserver.py
+Files: src/benji/retentionfilter.py
+Copyright:
+    2014 Jan-Philip Gehrcke (http://gehrcke.de)
+License: MIT License
+
+Files: src/benji/nbd/nbdserver.py
 Copyright:
     2013-2015 Juan J. Martinez
 License: Expat http://directory.fsf.org/wiki/License:Expat
 
-Files: rados.py rbd.py
-Copyright:
-    2011: Hannu Valtonen
-License: LGPL 2.1
-
-Packages: prettytable psutil shortuuid setproctitle
+Packages: prettytable setproctitle
 License: BSD
 
 Packages: python-dateutil
@@ -26,6 +26,7 @@ License: LGPLv3
 Files: *
 Copyright:
     2015-2017: Daniel Kraft
+    2018: Lars Fenneberg
 License: LGPLv3
 
 

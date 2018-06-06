@@ -1,9 +1,9 @@
 .. include:: global.rst.inc
 
-backy2 data layout
+benji data layout
 ==================
 
-backy2 uses two separate data storages: The *data backend* and the *meta
+benji uses two separate data storages: The *data backend* and the *meta
 backend*.
 
 The *data backend* stores the binary blocks whereas the *meta
@@ -19,12 +19,12 @@ meta backend
 The *meta backend* is responsible to manage all meta data for all backups.
 
 .. ATTENTION:: As
-    this is usually on a dedicated backup server which runs the backy2 process,
+    this is usually on a dedicated backup server which runs the benji process,
     it's recommended to somehow back this metadata up too. Without metadata
     no restore is possible.
 
     Please refer to the section :ref:`administration-guide-meta-storage` for HA-setups or the import/export
-    feature of backy2.
+    feature of benji.
 
 sql meta backend
 ~~~~~~~~~~~~~~~~
@@ -32,7 +32,7 @@ sql meta backend
 The *sql meta backend* relies on sqlalchemy, a python ORM which works with a
 huge number of DBMS, e.g. MySQL, postgreSQL, sqlite, oracle.
 
-For backy2's purpose, you may use any of them depending a bit on how big your
+For benji's purpose, you may use any of them depending a bit on how big your
 backups are and how many versions you are storing. For a single workstation
 backup with 10-20 versions, sqlite is perfectly suitable. However you will
 benefit from postgreSQL's performance and stability when doing hundrets of
@@ -44,19 +44,19 @@ To configure the *sql meta backend*, please refer to ``backy.cfg``'s section
     [MetaBackend]
     # Of which type is the Metadata Backend Engine?
     # Available types:
-    #   backy2.meta_backends.sql
+    #   benji.meta_backends.sql
 
     #######################################
-    # backy2.meta_backends.sql
+    # benji.meta_backends.sql
     #######################################
-    type: backy2.meta_backends.sql
+    type: benji.meta_backends.sql
 
     # Which SQL Server?
     # Available servers:
     #   sqlite:////path/to/sqlitefile
     #   postgresql:///database
     #   postgresql://user:password@host:port/database
-    engine: sqlite:////var/lib/backy2/backy.sqlite
+    engine: sqlite:////var/lib/benji/backy.sqlite
 
 data backend
 ------------
@@ -68,36 +68,36 @@ determined by the ``backy.cfg`` configuration value in the section
     [DataBackend]
     # Which data backend to use?
     # Available types:
-    #   backy2.data_backends.file
-    #   backy2.data_backends.s3
+    #   benji.data_backends.file
+    #   benji.data_backends.s3
 
 
 file data backend
 ~~~~~~~~~~~~~~~~~
 
-The *file data backend* stores backy2's blocks in 4MB files [1]_ in a
+The *file data backend* stores benji's blocks in 4MB files [1]_ in a
 2-hierarchical directory structure::
 
-    $ find /var/lib/backy2/data
-    /var/lib/backy2/data
-    /var/lib/backy2/data/20
-    /var/lib/backy2/data/20/7d
-    /var/lib/backy2/data/20/7d/207d51da01kibRnRHsfsjdPkwGi9qLVU.blob
-    /var/lib/backy2/data/ea
-    /var/lib/backy2/data/ea/b2
-    /var/lib/backy2/data/ea/b2/eab2e98cee4yccDw2tf9j2HRkJUvDByG.blob
+    $ find /var/lib/benji/data
+    /var/lib/benji/data
+    /var/lib/benji/data/20
+    /var/lib/benji/data/20/7d
+    /var/lib/benji/data/20/7d/207d51da01kibRnRHsfsjdPkwGi9qLVU.blob
+    /var/lib/benji/data/ea
+    /var/lib/benji/data/ea/b2
+    /var/lib/benji/data/ea/b2/eab2e98cee4yccDw2tf9j2HRkJUvDByG.blob
     …
 
 There are several parameters in ``backy.cfg`` which can configure the *file data
 backend*::
 
     [DataBackend]
-    type: backy2.data_backends.file
+    type: benji.data_backends.file
 
     # Store data to this path. A structure of 2 folders depth will be created
     # in this path (e.g. '0a/33'). Blocks of DEFAULTS.block_size will be stored
     # there. This is your backup storage!
-    path: /var/lib/backy2/data
+    path: /var/lib/benji/data
 
     # How many writes to perform in parallel. This is useful if your backup space
     # can perform parallel writes faster than serial ones.
@@ -116,13 +116,13 @@ backend*::
 s3 data backend
 ~~~~~~~~~~~~~~~
 
-The *s3 data backend* stores backy2's blocks in 4MB objects [1]_ in an S3
+The *s3 data backend* stores benji's blocks in 4MB objects [1]_ in an S3
 compatible storage (e.g. amazon s3, riak cs, ceph object gateway).
 
 These are the parameters in ``backy.cfg`` to configure the *s3 data backend*::
 
     [DataBackend]
-    type: backy2.data_backends.s3
+    type: benji.data_backends.s3
 
     # Your s3 access key
     aws_access_key_id: key
@@ -140,7 +140,7 @@ These are the parameters in ``backy.cfg`` to configure the *s3 data backend*::
     is_secure: false
 
     # Store to this bucket name:
-    bucket_name: backy2
+    bucket_name: benji
 
     # How many s3 puts to perform in parallel
     simultaneous_writes: 5
