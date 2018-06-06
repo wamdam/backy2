@@ -23,6 +23,7 @@ htmlcov
 report.xml
 *..data*
 *..index*
+*.iml
 .coverage
 data
 benji.yaml
