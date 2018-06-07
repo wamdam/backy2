@@ -236,6 +236,8 @@ class Stats(Base):
 
 class Version(Base):
     __tablename__ = 'versions'
+    # This makes sure that SQLite won't reuse UIDs
+    __table_args__ = {'sqlite_autoincrement': True}
     uid = Column(VersionUidType, primary_key=True, nullable=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     name = Column(String, nullable=False, default='')
