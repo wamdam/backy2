@@ -22,11 +22,8 @@ class BenjiStore:
         self.block_cache = set()
         self.cow = {}  # contains version_uid: dict() of block id -> block
 
-    def get_versions(self):
-        return self.benji.ls()
-
-    def get_version(self, uid):
-        return self.benji.metadata_backend.get_version(uid)
+    def ls(self, version_uid=None):
+        return self.benji.ls(version_uid=version_uid)
 
     def _block_list(self, version, offset, length):
         # get cached blocks data

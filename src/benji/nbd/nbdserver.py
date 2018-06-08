@@ -162,7 +162,7 @@ class Server(object):
 
                     # we have negotiated a version and it will be used
                     # until the client disconnects
-                    version = self.store.get_version(data)
+                    version = self.store.ls(version_uid=data)[0]
 
                     self.log.info("[%s:%s] Negotiated export: %s" % (host, port, version.uid))
 
@@ -184,7 +184,7 @@ class Server(object):
                     break
 
                 elif opt == self.NBD_OPT_LIST:
-                    for version in self.store.get_versions():
+                    for version in self.store.ls():
                         version_encoded = version.uid.readable.encode("ascii")
                         writer.write(struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_SERVER, len(version_encoded) + 4))
                         writer.write(struct.pack(">L", len(version_encoded)))
