@@ -164,7 +164,7 @@ class Benji:
     def stats(self, version_uid=None, limit=None):
         return self._metadata_backend.get_stats(version_uid, limit)
 
-    def get_io_by_source(self, source, block_size):
+    def _get_io_by_source(self, source, block_size):
         res = parse.urlparse(source)
 
         if res.params or res.query or res.fragment:
@@ -274,7 +274,7 @@ class Benji:
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
 
             if source:
-                io = self.get_io_by_source(source, version.block_size)
+                io = self._get_io_by_source(source, version.block_size)
                 io.open_r(source)
         except:
             self._locking.unlock(lock_name=version_uid.readable)
@@ -389,7 +389,7 @@ class Benji:
             notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
 
-            io = self.get_io_by_source(target, version.block_size)
+            io = self._get_io_by_source(target, version.block_size)
             io.open_w(target, version.size, force)
         except:
             self._locking.unlock(lock_name=version_uid.readable)
@@ -535,7 +535,7 @@ class Benji:
                 'blocks_sparse': 0,
                 'start_time': time.time(),
             }
-        io = self.get_io_by_source(source, self._block_size)
+        io = self._get_io_by_source(source, self._block_size)
         io.open_r(source)
         source_size = io.size()
 
