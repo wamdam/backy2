@@ -108,7 +108,7 @@ class ImportExportTestCase():
     def test_import(self):
         benji_obj = self.benjiOpen(initdb=True)
         benji_obj.import_(StringIO(self.IMPORT))
-        version = benji_obj._metadata_backend.get_version(VersionUid(1))
+        version = benji_obj.ls(version_uid=VersionUid(1))[0]
         self.assertTrue(isinstance(version.uid, VersionUid))
         self.assertEqual(1, version.uid)
         self.assertEqual('data-backup', version.name)
@@ -120,7 +120,7 @@ class ImportExportTestCase():
         self.assertIsInstance(version.tags, list)
         self.assertEqual({'b_daily', 'b_weekly', 'b_monthly'}, set([tag.name for tag in version.tags]))
         self.assertEqual(datetime.datetime.strptime('2018-05-16T11:57:10', '%Y-%m-%dT%H:%M:%S'), version.date)
-        blocks = benji_obj._metadata_backend.get_blocks_by_version(VersionUid(1))
+        blocks = benji_obj.ls_version(VersionUid(1))
         self.assertTrue(len(blocks) > 0)
         max_i = len(blocks) - 1
         for i, block in enumerate(blocks):

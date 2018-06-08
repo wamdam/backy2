@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 
 import benji.benji
-from benji.metadata import BlockUid
+from benji.metadata import BlockUid, VersionUid
 from benji.tests.testcase import BackendTestCase
 
 BLOCK_SIZE = 1024*4096
@@ -66,7 +66,7 @@ class MiscTestCase(BackendTestCase, TestCase):
 
     def test_metabackend_version_not_found(self):
         backend = self.metadata_backend
-        self.assertRaises(KeyError, lambda: backend.get_version('123'))
+        self.assertRaises(KeyError, lambda: backend.get_version(VersionUid(123)))
 
     def test_metabackend_block(self):
         backend = self.metadata_backend

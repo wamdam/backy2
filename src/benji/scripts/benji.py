@@ -39,11 +39,11 @@ class Commands:
                 hints = hints_from_rbd_diff(data)
             backup_version_uid = benji_obj.backup(name, snapshot_name, source, hints, from_version_uid, tags)
             if self.machine_output:
-                benji_obj._metadata_backend.export_any('versions',
-                                               [benji_obj._metadata_backend.get_versions(version_uid=backup_version_uid)],
-                                               sys.stdout,
-                                               ignore_relationships=[((Version,), ('blocks',))]
-                                               )
+                benji_obj.export_any('versions',
+                                     [benji_obj.ls(version_uid=backup_version_uid)],
+                                     sys.stdout,
+                                     ignore_relationships=[((Version,), ('blocks',))]
+                                    )
         finally:
             if benji_obj:
                 benji_obj.close()
@@ -202,11 +202,11 @@ class Commands:
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
             if self.machine_output:
-                benji_obj._metadata_backend.export_any('versions',
-                                               versions,
-                                               sys.stdout,
-                                               ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
-                                               )
+                benji_obj.export_any('versions',
+                                     versions,
+                                     sys.stdout,
+                                     ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
+                                    )
             else:
                 self._ls_versions_tbl_output(versions)
         finally:
@@ -267,10 +267,10 @@ class Commands:
 
             if self.machine_output:
                 stats = list(stats) # resolve iterator, otherwise it's not serializable
-                benji_obj._metadata_backend.export_any('stats',
-                                               stats,
-                                               sys.stdout,
-                                               )
+                benji_obj.export_any('stats',
+                                     stats,
+                                     sys.stdout,
+                                    )
             else:
                 self._stats_tbl_output(stats)
         finally:
@@ -403,15 +403,16 @@ class Commands:
                                                                         dry_run=dry_run,
                                                                         keep_backend_metadata=keep_backend_metadata))
             if self.machine_output:
-                benji_obj._metadata_backend.export_any('versions',
-                                               [benji_obj._metadata_backend.get_versions(version_uid=version_uid)[0]
-                                                                        for version_uid in dismissed_version_uids],
-                                               sys.stdout,
-                                               ignore_relationships=[((Version,), ('blocks',))]
-                                               )
+                benji_obj.export_any('versions',
+                                     [benji_obj.ls(version_uid=version_uid)[0]
+                                            for version_uid in dismissed_version_uids],
+                                     sys.stdout,
+                                     ignore_relationships=[((Version,), ('blocks',))]
+                                    )
         finally:
                 if benji_obj:
                     benji_obj.close()
+
 
 def main():
     parser = argparse.ArgumentParser(

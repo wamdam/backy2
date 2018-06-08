@@ -821,7 +821,10 @@ class Benji:
                 logger.info('Exported version {} metadata to backend storage.'.format(version_uid.readable))
         finally:
             for version_uid in locked_version_uids:
-                self._locking.unlock(lock_name=version_uid.readable)
+                self._locking.unlock(lock_name=version_uid.readable)#
+
+    def export_any(self, *args, **kwargs):
+        return self._metadata_backend.export_any(*args, **kwargs)
 
     def import_(self, f):
         # TODO: Find a good way to lock here
