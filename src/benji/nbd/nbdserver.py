@@ -35,6 +35,7 @@ import struct
 import traceback
 
 from benji.exception import NbdServerAbortedNegotiationError
+from benji.metadata import VersionUid
 
 
 class Server(object):
@@ -151,8 +152,9 @@ class Server(object):
                     if not data:
                         raise IOError("Negotiation failed: no export name was provided")
 
-                    data = data.decode("utf-8")
-                    if data not in [v.uid for v in self.store.get_versions()]:
+                    data = data.decode("ascii")
+                    data = VersionUid.create_from_readables(data)
+                    if data not in [v.uid for v in self.store.ls()]:
                         if not fixed:
                             raise IOError("Negotiation failed: unknown export name")
 
