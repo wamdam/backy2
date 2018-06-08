@@ -1,6 +1,6 @@
 #!/bin/sh
 # vim: set noet ts=8:
-# postinst script for backy2
+# postinst script for Benji
 #
 # see: dh_installdeb(1)
 

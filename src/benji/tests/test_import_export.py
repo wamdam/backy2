@@ -62,17 +62,17 @@ class ImportExportTestCase():
             with open(os.path.join(testpath, 'hints'), 'w') as f:
                 f.write(json.dumps(hints))
 
-            backy = self.backyOpen(initdb=initdb)
+            benji = self.benjiOpen(initdb=initdb)
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
-                version_uid = backy.backup(
+                version_uid = benji.backup(
                     'data-backup',
                     'snapshot-name',
                     'file://' + image_filename,
                     hints_from_rbd_diff(hints.read()),
                     from_version
                 )
-            backy.close()
+            benji.close()
             version_uids.append((version_uid, size))
         return version_uids
 
@@ -83,16 +83,16 @@ class ImportExportTestCase():
         super().tearDown()
 
     def test_export(self):
-        backy = self.backyOpen(initdb=True)
+        benji = self.benjiOpen(initdb=True)
         self.version_uids = self.generate_versions(self.testpath.path)
         with StringIO() as f:
-            backy.export([version_uid[0] for version_uid in self.version_uids], f)
+            benji.export([version_uid[0] for version_uid in self.version_uids], f)
             f.seek(0)
             export = json.load(f)
             f.seek(0)
             print(f.getvalue())
             a = f.getvalue()
-        backy.close()
+        benji.close()
         self.assertEqual(MetaBackend.METADATA_VERSION, export['metadataVersion'])
         self.assertIsInstance(export['versions'], list)
         self.assertTrue(len(export['versions']) == 3)
@@ -106,9 +106,9 @@ class ImportExportTestCase():
 
 
     def test_import(self):
-        backy = self.backyOpen(initdb=True)
-        backy.import_(StringIO(self.IMPORT))
-        version = backy._meta_backend.get_version(VersionUid(1))
+        benji = self.benjiOpen(initdb=True)
+        benji.import_(StringIO(self.IMPORT))
+        version = benji._meta_backend.get_version(VersionUid(1))
         self.assertTrue(isinstance(version.uid, VersionUid))
         self.assertEqual(1, version.uid)
         self.assertEqual('data-backup', version.name)
@@ -120,7 +120,7 @@ class ImportExportTestCase():
         self.assertIsInstance(version.tags, list)
         self.assertEqual({'b_daily', 'b_weekly', 'b_monthly'}, set([tag.name for tag in version.tags]))
         self.assertEqual(datetime.datetime.strptime('2018-05-16T11:57:10', '%Y-%m-%dT%H:%M:%S'), version.date)
-        blocks = backy._meta_backend.get_blocks_by_version(VersionUid(1))
+        blocks = benji._meta_backend.get_blocks_by_version(VersionUid(1))
         self.assertTrue(len(blocks) > 0)
         max_i = len(blocks) - 1
         for i, block in enumerate(blocks):
@@ -130,7 +130,7 @@ class ImportExportTestCase():
                 self.assertEqual(4096, block.size)
             self.assertEqual(datetime.datetime.strptime('2018-05-16T11:57:10', '%Y-%m-%dT%H:%M:%S'), block.date)
             self.assertTrue(block.valid)
-        backy.close()
+        benji.close()
 
     IMPORT = """
             {
@@ -1256,7 +1256,7 @@ class ImportExportTestCase():
             }
             """
 
-class ImportExportCaseSQLLite_File(ImportExportTestCase, BenjiTestCase, TestCase):
+class ImportExportCaseSQLLite_File(ImportExportTestCase, BenjiTestCase, ):
 
     VERSIONS = 3
 
@@ -1278,7 +1278,7 @@ class ImportExportCaseSQLLite_File(ImportExportTestCase, BenjiTestCase, TestCase
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/benji.sqlite
             """
 
 class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BenjiTestCase, TestCase):
@@ -1292,7 +1292,6 @@ class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BenjiTestCase, T
             lockDirectory: {testpath}/lock
             hashFunction: blake2b,digest_size=32
             blockSize: 4096
-            exportMetadata: True
             io:
               file:
                 simultaneousReads: 5
@@ -1307,4 +1306,3 @@ class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BenjiTestCase, T
             metaBackend: 
               engine: postgresql://benji:verysecret@localhost:15432/benji
             """
-

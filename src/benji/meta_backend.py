@@ -437,7 +437,7 @@ class MetaBackend:
         if _destroydb:
             Base.metadata.drop_all(self._engine)
 
-        # this will create all tables. It will NOT delete any tables or data.
+        # This will create all tables. It will NOT delete any tables or data.
         # Instead, it will raise when something can't be created.
         # TODO: explicitly check if the database is empty
         Base.metadata.create_all(self._engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table

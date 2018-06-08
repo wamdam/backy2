@@ -32,9 +32,9 @@ info:
 
 build/benji.pex: env $(wildcard src/benji/*.py) $(wildcard src/benji/**/*.py)
 	mkdir -p build
-	rm build/backy || true
+	rm build/benji || true
 	rm -r $(PEXCACHE) || true
-	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m benji.scripts.backy:main -o build/benji.pex 'boto>=2.38.0' 'psycopg2>=2.6.1'
+	$(PEX) . --cache-dir=$(PEXCACHE) --no-wheel -m benji.scripts.benji:main -o build/benji.pex 'boto>=2.38.0' 'psycopg2>=2.6.1'
 
 .PHONY : clean
 clean:

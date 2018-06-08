@@ -10,14 +10,14 @@ class ConfigTestCase(TestCase, unittest.TestCase):
 
     CONFIG = """
         configurationVersion: '1.0.0'
-        logFile: /var/log/backy.log
+        logFile: /var/log/benji.log
         blockSize: 4194304
         hashFunction: sha512
         processName: benji
         metaBackend:
           type: sql
           sql:
-            engine: sqlite:////var/lib/benji/backy.sqlite
+            engine: sqlite:////var/lib/benji/benji.sqlite
         dataBackend:
           type: file
           file:

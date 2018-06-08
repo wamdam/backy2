@@ -42,15 +42,15 @@ class NbdTestCase:
             offset = random.randint(0, size-1-patch_size)
             self.patch(image_filename, offset, data)
 
-        backy = self.backyOpen(initdb=True)
-        version_uid = backy.backup(
+        benji = self.benjiOpen(initdb=True)
+        version_uid = benji.backup(
             'data-backup',
             'snapshot-name',
             'file://' + image_filename,
             None,
             None
         )
-        backy.close()
+        benji.close()
         return version_uid, size
 
     def setUp(self):
@@ -64,11 +64,11 @@ class NbdTestCase:
     def test(self):
         from benji.nbd.nbdserver import Server as NbdServer
         from benji.nbd.nbd import BenjiStore
-        backy = self.backyOpen(initdb=False)
+        benji = self.benjiOpen(initdb=False)
 
         hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
         cache_dir = self.config.get('nbd.cacheDirectory', types=str)
-        store = BenjiStore(backy, cachedir=cache_dir, hash_function=hash_function)
+        store = BenjiStore(benji, cachedir=cache_dir, hash_function=hash_function)
         addr = ('127.0.0.1', self.SERVER_PORT)
         read_only = False
         self.nbd_server = NbdServer(addr, store, read_only)
@@ -79,9 +79,9 @@ class NbdTestCase:
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
 
-        self.assertEqual({self.version_uid[0].readable}, set([version.uid for version  in backy.ls()]))
+        self.assertEqual({self.version_uid[0].readable}, set([version.uid for version  in benji.ls()]))
 
-        backy.close()
+        benji.close()
 
     def subprocess_run(self, args, success_regexp = None, check=True):
         completed = subprocess.run(args=args,
@@ -164,7 +164,7 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BenjiTestCase, TestCase):
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/benji.sqlite
             nbd:
               cacheDirectory: {testpath}/nbd-cache
             """

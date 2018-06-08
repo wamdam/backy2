@@ -703,6 +703,7 @@ class Benji:
         finally:
             # This will also cancel any outstanding read jobs
             io.close()
+            self._meta_backend.commit()
 
         if read_jobs != done_read_jobs:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
@@ -747,7 +748,7 @@ class Benji:
     def cleanup_fast(self, dt=3600):
         """ Delete unreferenced blob UIDs """
         if not self._locking.lock(lock_name='cleanup-fast', reason='Cleanup fast'):
-            raise AlreadyLocked('Another backy cleanup is running.')
+            raise AlreadyLocked('Another cleanup is running.')
         try:
             for uid_list in self._meta_backend.get_delete_candidates(dt):
                 logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
@@ -760,9 +761,9 @@ class Benji:
     def cleanup_full(self):
         """ Delete unreferenced blob UIDs starting with <prefix> """
         # in this mode, we compare all existing uids in data and meta.
-        # make sure, no other backy will start
+        # make sure, no other Benji will start
         if not self._locking.lock(reason='Cleanup full'):
-            raise AlreadyLocked('Other backy instances are running.')
+            raise AlreadyLocked('Other instances are running.')
         try:
             active_blob_uids = set(self._data_backend.list_blocks())
             active_block_uids = set(self._meta_backend.get_all_block_uids())

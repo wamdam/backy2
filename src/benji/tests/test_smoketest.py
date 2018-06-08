@@ -93,64 +93,64 @@ class SmokeTestCase:
             with open(os.path.join(testpath, 'hints'), 'w') as f:
                     f.write(json.dumps(hints))
 
-            backy = self.backyOpen(initdb=initdb, block_size=block_size)
+            benji = self.benjiOpen(initdb=initdb, block_size=block_size)
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
-                version_uid = backy.backup(
+                version_uid = benji.backup(
                     'data-backup',
                     'snapshot-name',
                     'file://' + image_filename,
                     hints_from_rbd_diff(hints.read()),
                     from_version
                 )
-            backy.close()
+            benji.close()
             version_uids.append(version_uid)
 
-            backy = self.backyOpen(initdb=initdb)
-            backy.rm(version_uid, force=True, keep_backend_metadata=True)
+            benji = self.benjiOpen(initdb=initdb)
+            benji.rm(version_uid, force=True, keep_backend_metadata=True)
             print('  Remove version successful')
-            backy.close()
+            benji.close()
 
-            backy = self.backyOpen(initdb=initdb)
-            backy.import_from_backend([version_uid])
+            benji = self.benjiOpen(initdb=initdb)
+            benji.import_from_backend([version_uid])
             print('  Import version from backend successful')
-            backy.close()
+            benji.close()
 
-            backy = self.backyOpen(initdb=initdb)
-            blocks = backy.ls_version(version_uid)
+            benji = self.benjiOpen(initdb=initdb)
+            blocks = benji.ls_version(version_uid)
             self.assertEqual(list(range(len(blocks))), sorted([block.id for block in blocks]))
             self.assertTrue(len(blocks) > 0)
             if len(blocks) > 1:
                 self.assertTrue(reduce(and_, [block.size == block_size for block in blocks[:-1]]))
             print('  Block list successful')
-            backy.close()
+            benji.close()
 
-            backy = self.backyOpen(initdb=initdb)
-            versions = backy.ls()
+            benji = self.benjiOpen(initdb=initdb)
+            versions = benji.ls()
             self.assertEqual(set(), set([version.uid for version in versions]) ^ set(version_uids))
             self.assertTrue(reduce(and_, [version.name == 'data-backup' for version in versions]))
             self.assertTrue(reduce(and_, [version.snapshot_name == 'snapshot-name' for version in versions]))
             self.assertTrue(reduce(and_, [version.block_size == block_size for version in versions]))
             self.assertTrue(reduce(and_, [version.size > 0 for version in versions]))
             print('  Version list successful')
-            backy.close()
+            benji.close()
 
-            backy = self.backyOpen(initdb=initdb)
-            self.assertTrue(backy.scrub(version_uid))
-            backy.close()
+            benji = self.benjiOpen(initdb=initdb)
+            benji.scrub(version_uid)
+            benji.close()
             print('  Deep scrub successful')
-            backy = self.backyOpen(initdb=initdb)
-            self.assertTrue(backy.deep_scrub(version_uid))
-            backy.close()
+            benji = self.benjiOpen(initdb=initdb)
+            benji.deep_scrub(version_uid)
+            benji.close()
             print('  Deep scrub successful')
-            backy = self.backyOpen(initdb=initdb)
-            self.assertTrue(backy.deep_scrub(version_uid, 'file://' + image_filename))
-            backy.close()
+            benji = self.benjiOpen(initdb=initdb)
+            benji.deep_scrub(version_uid, 'file://' + image_filename)
+            benji.close()
             print('  Deep scrub with source successful')
-            backy = self.backyOpen(initdb=initdb)
+            benji = self.benjiOpen(initdb=initdb)
             restore_filename = os.path.join(testpath, 'restore.{}'.format(i + 1))
-            backy.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
-            backy.close()
+            benji.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
+            benji.close()
             self.assertTrue(self.same(image_filename, restore_filename))
             print('  Restore successful')
 
@@ -158,16 +158,16 @@ class SmokeTestCase:
 
             # delete old versions
             if len(version_uids) > 10:
-                backy = self.backyOpen(initdb=initdb)
-                dismissed_version_uids = backy.enforce_retention_policy('data-backup', 'latest10,hours24,days30')
+                benji = self.benjiOpen(initdb=initdb)
+                dismissed_version_uids = benji.enforce_retention_policy('data-backup', 'latest10,hours24,days30')
                 for dismissed_version_uid in dismissed_version_uids:
                     version_uids.remove(dismissed_version_uid)
-                backy.close()
+                benji.close()
 
             if (i%7) == 0:
-                backy = self.backyOpen(initdb=initdb)
-                backy.cleanup_fast(dt=0)
-                backy.close()
+                benji = self.benjiOpen(initdb=initdb)
+                benji.cleanup_fast(dt=0)
+                benji.close()
 
 
 class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):
@@ -196,7 +196,7 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/benji.sqlite
             """
 
 
@@ -264,7 +264,7 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BenjiTestCase, TestCase):
               bandwidthRead: 0
               bandwidthWrite: 0
             metaBackend: 
-              engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/benji.sqlite
             """
 
 
@@ -305,7 +305,7 @@ class SmokeTestCasePostgreSQL_S3_ReadCache(SmokeTestCase, BenjiTestCase, TestCas
                 directory: {testpath}/read-cache
                 maximumSize: 16777216
             metaBackend: 
-              engine: sqlite:///{testpath}/backy.sqlite
+              engine: sqlite:///{testpath}/benji.sqlite
             """
 
 

@@ -21,7 +21,7 @@ class Config:
     CONFIG_FILE = 'benji.yaml'
 
     DEFAULT_CONFIG = """
-    logFile: /tmp/backy.log
+    logFile: /tmp/benji.log
     blockSize: 4194304
     hashFunction: blake2b,digest_size=32
     process_name: benji

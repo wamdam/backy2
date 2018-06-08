@@ -24,7 +24,7 @@ class MiscTestCase(BackendTestCase, TestCase):
           bandwidthRead: 0
           bandwidthWrite: 0
         metaBackend: 
-          engine: sqlite:///{testpath}/backy.sqlite                  
+          engine: sqlite:///{testpath}/benji.sqlite                  
         """
 
     def test_blocks_from_hints(self):

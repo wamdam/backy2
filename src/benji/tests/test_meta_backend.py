@@ -193,7 +193,7 @@ class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
         logFile: /dev/stderr
         hashFunction: blake2b,digest_size=32
         metaBackend: 
-          engine: sqlite:///{testpath}/backy.sqlite
+          engine: sqlite:///{testpath}/benji.sqlite
         """
 
 class SQLTestCasePostgreSQL(SQLTestCase, BackendTestCase, TestCase):

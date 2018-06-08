@@ -5,8 +5,8 @@ from sqlalchemy import create_engine
 
 from benji.config import Config as BenjiConfig
 
-backy_config = BenjiConfig()
-engine_url = backy_config.get('metaBackend.engine', types=str)
+benji_config = BenjiConfig()
+engine_url = benji_config.get('metaBackend.engine', types=str)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

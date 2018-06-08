@@ -10,12 +10,12 @@ from benji.utils import data_hexdigest
 
 
 class BenjiStore:
-    """ Makes backy storage look linear.
+    """ Makes Benji storage look linear.
     Also has a COW method.
     """
 
-    def __init__(self, backy, cachedir, hash_function):
-        self.backy = backy
+    def __init__(self, benji, cachedir, hash_function):
+        self.benji = benji
         self.cachedir = cachedir
         self.hash_function = hash_function
         self.blocks = {}  # block list cache by version
@@ -23,16 +23,16 @@ class BenjiStore:
         self.cow = {}  # contains version_uid: dict() of block id -> block
 
     def get_versions(self):
-        return self.backy.ls()
+        return self.benji.ls()
 
     def get_version(self, uid):
-        return self.backy.meta_backend.get_version(uid)
+        return self.benji.meta_backend.get_version(uid)
 
     def _block_list(self, version, offset, length):
         # get cached blocks data
         if not self.blocks.get(version.uid):
             # Only work with dereferenced blocks
-            self.blocks[version.uid] = [block.deref() for block in self.backy.meta_backend.get_blocks_by_version(version.uid)]
+            self.blocks[version.uid] = [block.deref() for block in self.benji.meta_backend.get_blocks_by_version(version.uid)]
         blocks = self.blocks[version.uid]
 
         block_number = offset // version.block_size
@@ -70,7 +70,7 @@ class BenjiStore:
 
     def _read(self, block, offset=0, length=None):
         if block.uid not in self.block_cache:
-            data = self.backy.data_backend.read(block, sync=True)
+            data = self.benji.data_backend.read(block, sync=True)
             with open(os.path.join(self.cachedir, block.uid), 'wb') as f:
                 f.write(data)
             self.block_cache.add(block.uid)
@@ -93,7 +93,7 @@ class BenjiStore:
         return b''.join(data)
 
     def get_cow_version(self, from_version):
-        cow_version = self.backy.clone_version('copy on write', from_version.uid, from_version.uid)
+        cow_version = self.benji.clone_version('copy on write', from_version.uid, from_version.uid)
         self.cow[cow_version.uid] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version
 
@@ -120,7 +120,7 @@ class BenjiStore:
                 logger.debug('COW: Updated block {}'.format(block.id))
             else:
                 # read the block from the original, update it and write it back
-                write_data = BytesIO(self.backy.data_backend.read(block, sync=True))
+                write_data = BytesIO(self.benji.data_backend.read(block, sync=True))
                 write_data.seek(_offset)
                 write_data.write(dataio.read(length))
                 write_data.seek(0)
@@ -148,14 +148,14 @@ class BenjiStore:
             data = self._read(block)
 
             # dump changed data
-            self.backy.data_backend.save(block, data, sync=True)
+            self.benji.data_backend.save(block, data, sync=True)
             logger.debug('Stored block {} uid {}'.format(block.id, block.uid))
 
             checksum = data_hexdigest(self.hash_function, data)
-            self.backy.meta_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
+            self.benji.meta_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
 
-        self.backy.meta_backend.set_version_valid(cow_version.uid)
-        self.backy.meta_backend.commit()
+        self.benji.meta_backend.set_version_valid(cow_version.uid)
+        self.benji.meta_backend.commit()
         logger.info('Fixation done. Deleting temporary data (PLEASE WAIT)')
         # TODO: Delete COW blocks and also those from block_cache
         for block_uid in self.block_cache:
