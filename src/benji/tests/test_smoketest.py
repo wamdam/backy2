@@ -186,6 +186,7 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):
               file:
                 path: {testpath}/data
                 consistencyCheckWrites: True
+                activeCompression: zstd
               compression:
                 - type: zstd
                   materials:
