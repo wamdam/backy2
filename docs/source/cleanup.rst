@@ -37,8 +37,8 @@ candidate list.
 In order to really delete blocks from the *data backend*, you'll need ``benji
 cleanup``.
 
-benji cleanup
--------------
+Cleanup
+-------
 
 To free up space on the *data backend*, you need to cleanup.
 There are two different cleanup methods, but you'll usually only need the
@@ -46,7 +46,7 @@ so-called *fast-cleanup*.
 
 .. command-output:: benji cleanup --help
 
-fast-cleanup
+Fast Cleanup
 ~~~~~~~~~~~~
 
 ``benji cleanup`` will go through the list of deletion candidates and check if
@@ -63,7 +63,7 @@ deletion condidates for more than one hour.
 
 .. _full_cleanup:
 
-full-cleanup
+Full Cleanup
 ~~~~~~~~~~~~
 
 There are times (e.g. when your database is corrupted or when you create a new

@@ -66,7 +66,7 @@ You can output this data with::
 
 .. _differential_backup:
 
-Differential backup
+Differential Backup
 -------------------
 
 Benji only backups changed blocks. It can do this in two different ways:
@@ -98,11 +98,11 @@ the size change has happened at the end of the volume, which is the case if you
 resize partitions, logical volumes or Ceph RBD images.
 
 
-Examples of differential backups
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Examples
+~~~~~~~~
 
-LVM (or any other diff unaware storage)
-***************************************
+LVM and other Images
+********************
 
 Day 1 (initial backup)::
 
@@ -165,7 +165,7 @@ Automation
 ^^^^^^^^^^
 
 This is how you can automate forward differential backups including automatic
-initial backups where necessary::
+initial backups where necessary:
 
 .. literalinclude:: ../../scripts/ceph.sh
 
@@ -186,22 +186,21 @@ This is what it does:
   ``rbd diff --whole-object <new snapshot> --from-snap <old snapshot> --format=json``.
 * Benji then only backups changes as listed in the *hints file*.
 
-These functions could be called each day by a small script (or even multiple times
-a day) and will automatically keep only one snapshot and create forward-differential
-backups.
+These functions could be called each day by a small script (or even multiple
+times a day) and will automatically keep only one snapshot and create
+forward-differential backups.
 
-.. NOTE:: This alone won't be enough to be safe. You will have to perform
-    additional scrubs. Please refer to section :ref:`scrubbing`.
+.. NOTE:: This alone won't be enough to be on the safe side. You will have to
+    check the validity of the backup data regularly. Please refer to section
+    :ref:`scrubbing`.
 
 Specifying a Block Size
 -----------------------
 
-To perform a backup Benji splits up the image into equal sized blocks.
-
-.. NOTE:: Except the last block which may vary in length.
+To perform a backup Benji splits up the image into equal sized blocks. [1]_
 
 By default the block size specified in the configuration file is used.
-But the block size can be changed on the command line on a version by version
+But the block size can also be changed on the command line on a version by version
 basis, but be aware that this will affect deduplication and increase the space
 usage.
 
@@ -210,7 +209,7 @@ volumes and Ceph images with the same Benji installation. While for Ceph 4MB
 is usually the best size, LVM volumes might profit from a smaller block size.
 
 If you want to base a new version on an old version (as it can be the case when
-doing a differential backup) the block sizes of the old and new version
+doing a differential backup) the block size of the old and new version
 have to match. Benji will terminate with an error if that is not the case.
 
 Tag Backups
@@ -231,6 +230,10 @@ Later on you can modify tags with the commands 'add-tag' and 'remove-tag':
     $ benji add-tag V0000000001 mytag
     $ benji rm-tag V0000000001 anothertag
 
+In the case of ``add-tag`` and ``rm-tag`` you can also specify multiple tags,
+just list them after the first one. It is no error to add or remove tags which
+already exist or which don't exist anymore respectively, Benji just emits a
+warning in these cases.
 
 Export Metadata
 ---------------
@@ -318,3 +321,5 @@ Example of a hints-file::
     ``rbd diff --whole-object``. As Benji by default also uses 4MB blocks,
     it will not have to recalculate which 4MB blocks are affected by more
     and smaller offset+length tuples (not that that'd take very long).
+
+.. [1] Except the last block which may vary in length.
