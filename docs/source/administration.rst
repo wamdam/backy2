@@ -79,7 +79,7 @@ You should monitor exit codes of Benji closely. Anything != 0 means: There was
 a problem.
 
 Benji writes all output including possible tracebacks and command lines to
-the configured logfile (see :ref:`config_file`).
+the configured logfile (see :ref:`configuration`).
 If anything goes wrong, you'll be able to visit this logfile and get
 enough information to troubleshoot the problem, even if this Benji call
 came from an automated script.

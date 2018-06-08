@@ -11,7 +11,7 @@ https://github.com/elemental-lf/benji/issues
 Documentation
 -------------
 
-https://benji-backup.me/docs/
+https://benji-backup.me/
 
 Security
 --------

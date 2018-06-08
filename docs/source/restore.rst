@@ -184,8 +184,6 @@ will be given::
 
 Even when encountering such an error, Benji will continue to restore.
 
-.. NOTE:: The philosophy behind this is that restores must allways succeed, even if there
-    are errors in the data. Most times invalid data is in irrelevant places or can
-    be fixed later. It's always worse to crash/break the restore process when an
-    error occurs.
-
+.. NOTE:: The philosophy behind this is that restores should always succeed, even if there
+    is data corruption. Often invalid data is in irrelevant places or can be fixed later.
+    You get as much of your data back as possible!

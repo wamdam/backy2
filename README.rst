@@ -28,7 +28,7 @@ Benji requires **Python 3.6.5 or newer** because older Python versions
 have some shortcomings in the concurrent.futures implementation which lead to an
 excessive memory usage.
 
-Main features
+Main Features
 -------------
 
 **Small backups**

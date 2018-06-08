@@ -1,11 +1,10 @@
 .. include:: global.rst.inc
+.. _configuration:
 
 Configuration
 =============
 
 Benji only needs to be configured once.
-
-.. _config_file:
 
 benji.yaml
 ----------
@@ -15,8 +14,8 @@ options:
 
 .. literalinclude:: ../../etc/benji.yaml
 
-Custom Configuration File
--------------------------
+Configuration File Location
+---------------------------
 
 Benji will by default search the following locations for configuration files:
 

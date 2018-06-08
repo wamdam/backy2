@@ -49,7 +49,7 @@ Data Backend
 ------------
 
 As mentioned above there are three data backend implementations. Please
-refer to section :ref:`config_file`.
+refer to section :ref:`configuration`.
 
 .. NOTE:: TODO: Information about the actual data layout
 .. NOTE:: TODO: Encryption
