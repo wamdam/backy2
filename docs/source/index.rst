@@ -1,10 +1,7 @@
 .. include:: global.rst.inc
 
-
 Benji Backup Documentation
 ==========================
-
-Benji Backup homepage: http://benji-backup.me/
 
 Overview
 --------
@@ -26,10 +23,5 @@ Overview
    cleanup
    administration
    datalayout
-   develop
    support
-   license
-   imprint
-
-.. TODO
-    logging
+   licenses

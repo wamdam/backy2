@@ -1,9 +1,9 @@
 .. include:: global.rst.inc
 .. highlight:: none
-.. _license:
+.. _licenses:
 
-License
-=======
+Licenses
+========
 
 .. literalinclude:: ../../LICENSE.txt
 

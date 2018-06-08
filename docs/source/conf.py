@@ -46,7 +46,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'benji'
+project = 'Benji Backup'
 copyright = '2017-2018, Daniel Kraft, Lars Fenneberg'
 authors = ['Daniel Kraft', 'Lars Fenneberg']
 

@@ -1,9 +1,9 @@
-What is Benji Backup?
-#####################
+Benji Backup
+############
 
-Benji Backup is a deduplicating block based backup software. It builds on the
-excellent foundations of `backy²<http://backy2.com/>` by Daniel Kraft. Many
-thanks go to him for making his work public and releasing backy² as
+Benji Backup is a block based deduplicating  backup software. It builds on the
+excellent foundations and concepts of `backy² <http://backy2.com/>`_ by Daniel Kraft.
+Many thanks go to him for making his work public and releasing backy² as
 open-source software!
 
 The primary use cases for Benji are:
@@ -13,7 +13,7 @@ The primary use cases for Benji are:
   drives or the cloud
 
 Benji features a Docker image and Helm chart for integration with
-`Kubernetes<https://kubernetes.io/>` and  `Rook<https://rook.io/>`. This makes it
+`Kubernetes <https://kubernetes.io/>`_ and  `Rook <https://rook.io/>`_. This makes it
 easy to setup a backup solution for your persistent volumes.
 
 Status
@@ -21,9 +21,8 @@ Status
 
 Benji is currently somewhere between alpha and beta quality. It passes all included
 tests with the exception of NBD. So NBD is probably broken right now and needs
-further work. The documentation and web site are not up-to-date. The packaging
-(Debian and PEX) also need work, but installation with ``pip install`` should
-be fine. The whole build system needs some love.
+some minor work. The documentation is mostly up-to-date but the web site is not.
+Installation with ``pip install`` should work fine.
 
 Benji requires **Python 3.6.5 or newer** because older Python versions
 have some shortcomings in the concurrent.futures implementation which lead to an
@@ -66,15 +65,15 @@ Main features
     contain mostly zeros and are deduplicated before reaching the target storage.
 
     In addition to this Benji supports fast state-of-the-art compression based on
-    `zstandard<https://github.com/facebook/zstd>`. This will further reduce the
+    `zstandard <https://github.com/facebook/zstd>`_. This will further reduce the
     required bandwidth and also reduce the storage space requirements.
 
 **Support for a variety of backup storage targets**
     Benji supports AWS S3 as a data backend but also has options to enable
-    compatibility with other S3 implementations like Google Storage, Ceph's
-    RADOS Gateway or `Minio<https://www.minio.io/>`.
+    compatibility with other S3 implementations like Google Storage, Ceph
+    RADOS Gateway or `Minio <https://www.minio.io/>`_.
 
-    Benji also supports `Backblaze<https://www.backblaze.com/>`'s B2 Cloud
+    Benji also supports `Backblaze's <https://www.backblaze.com/>`_ B2 Cloud
     Storage which opens up a very cost effective way to keep your backups.
 
     Last but not least Benji can also use any file based storage including
@@ -123,8 +122,7 @@ Main features
 **Simplicity: As simple as cp, but as clever as a backup solution needs to be**
     With a very small set of commands, good ``--help`` and intuitive usage,
     Benji feels mostly like ``cp``. And that's intentional, because we think,
-    a restore must be fool-proof and succeed even if you're woken up at 3am
-    and are drunk.
+    a restore must be fool-proof and succeed even if you're woken up at 3am.
 
 **Prevents you from doing something stupid**
     By providing a configuration value for how old backups need to be in order to
@@ -142,7 +140,8 @@ Main features
 
 **Free and Open Source Software**
     Anyone can review the source code and audit security and functionality.
-    Benji is licensed under the LGPLv3 license (:ref:`license`).
+    Benji is licensed under the LGPLv3 license. Please see the documentation
+    for a full list of licenses.
 
 
 

@@ -9,25 +9,25 @@ cycle with **sqlite** as metadata backend and a **file storage** backup target
 (e.g. NFS).
 
 
-What you need to know:
-----------------------
+Some Vocabulary
+---------------
 
 Backup source
-    A block device or image file to be backed up. Benji can not backup folders
+    A block device or image file to be backed up. Benji can't backup folders
     or multiple files. The source must not be modified during backup, so either
-    stop all writers or create a snapshot.
+    stop all writes or create a snapshot.
 
 Backup target
-    A storage (currently supported: filesystem, S3 and B2) to which the
-    backed up data will be saved.
+    A data storage (currently supported: filesystem, S3 and B2) to which the
+    backed up data will be saved. Also referred to as the *data backend*.
 
 Backup Metadata
     A SQL database containing information on how to reassemble the stored blocks
-    to get the original data back.
+    to get the original data back. Also referred to as the *meta backend*.
 
 Version
-    A version is a backup of specific backup source at a specific point in time.
-    A version is identified by its version UID.
+    A version is a backup of a specific backup source at a specific point in time.
+    A version is identified by a unique id.
 
 
 .. _installation:
@@ -183,8 +183,8 @@ machine readable JSON output for usage in scripts::
 Specifying ``-m`` automatically turns down the verbosity level to only output
 errors.
 
-deep-scrub
-----------
+deep-scrub and scrub
+--------------------
 
 Deep scrubbing reads all the blocks from the backup target (or some of them if you
 use the ``-p`` option) and compares them with the metadata or, if you pass a
