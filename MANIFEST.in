@@ -1,0 +1,8 @@
+include MANIFEST.in README.rst LICENSE.txt .dockerignore
+include requirements_docs.txt requirements_tests.txt
+recursive-include docs *.rst *.html Makefile *.gif
+recursive-include src *.py *.ini
+recursive-include images Dockerfile *.sh
+recursive-include scripts *.sh
+recursive-include charts *.yaml *.tpl .helmignore
+recursive-include tests Makefile *.yaml
