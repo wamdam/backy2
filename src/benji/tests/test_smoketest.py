@@ -218,11 +218,11 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BenjiTestCase, TestCase):
               file:
                 path: {testpath}/data
                 consistencyCheckWrites: True
+                activeCompression: zstd
               compression:
                 - type: zstd
                   materials:
                     level: 1
-                  active: true                   
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
@@ -254,11 +254,11 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BenjiTestCase, TestCase):
                 addressingStyle: path
                 disableEncodingType: false
                 consistencyCheckWrites: True
+                activeCompression: zstd
               compression:
                 - type: zstd
                   materials:
                     level: 1
-                  active: true                   
               simultaneousWrites: 1
               simultaneousReads: 1
               bandwidthRead: 0
@@ -292,11 +292,11 @@ class SmokeTestCasePostgreSQL_S3_ReadCache(SmokeTestCase, BenjiTestCase, TestCas
                 addressingStyle: path
                 disableEncodingType: false
                 consistencyCheckWrites: True
+                activeCompression: zstd
               compression:
                 - type: zstd
                   materials:
                     level: 1
-                  active: true                
               simultaneousWrites: 1
               simultaneousReads: 1
               bandwidthRead: 0
@@ -331,11 +331,11 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BenjiTestCase, TestCase):
                  readObjectAttempts: 1
                  uploadAttempts: 5
                  consistencyCheckWrites: True
+                 activeCompression: zstd
               compression:
                 - type: zstd
                   materials:
                     level: 1
-                  active: true                    
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0

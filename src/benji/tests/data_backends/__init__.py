@@ -120,7 +120,7 @@ class DatabackendTestCase(BackendTestCase):
         self.assertRaises(FileNotFoundError, lambda: self.data_backend.read(block, sync=True))
 
     def test_compression(self):
-        if self.data_backend.compression_active is not None:
+        if self.data_backend.active_compression is not None:
             block = Mock('Block', uid=BlockUid(1, 2), size=8192, checksum='CHECKSUM')
             self.data_backend.save(block, b'\0' * 8192, sync=True)
             self.data_backend.rm(block.uid)

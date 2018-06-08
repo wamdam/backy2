@@ -58,6 +58,8 @@ dataBackend:
   #  multiDelete: true or false (default is true)
   #  addressingStyle: path, virtual or auto (default is path)
   #  disableEncodingType: true or false (default is false)
+  #  activeEncryption: k1
+  #  activeCompression: zstd
 
   #b2:
   #   accountId: ***********
@@ -99,7 +101,6 @@ dataBackend:
   #       password: "your secret password"
   #       kdfSalt: !!binary /YkKwy9InZVqC4p+eAdhlA==
   #       kdfIterations: 16384
-  #     active: true
 
   # Currently only zstd compression is supported. You can specify the compression level:
   # Higher values mean better compression ratios but increased CPU use. For details please
@@ -109,7 +110,6 @@ dataBackend:
   #   - type: zstd
   #     materials:
   #       level: 3
-  #     active: true
 
   # How many writes to perform in parallel. This is useful if your data backend
   # can perform parallel writes faster than serial ones.

@@ -42,10 +42,10 @@ class DataBackend(metaclass=ABCMeta):
     def __init__(self, config):
         self.encryption = {}
         self.compression = {}
-        self.encryption_active = None
-        self.compression_active = None
+        self.active_encryption = None
+        self.active_compression = None
 
-        encryption_modules = config.get('dataBackend.encryption'.format(self.NAME), None, types=list)
+        encryption_modules = config.get('dataBackend.encryption', None, types=list)
         if encryption_modules is not None:
             for encryption_module_dict in encryption_modules:
                 type = config.get_from_dict(encryption_module_dict, 'type', types=str)
@@ -64,13 +64,15 @@ class DataBackend(metaclass=ABCMeta):
                     self.encryption[identifier] = encryption_module.Encryption(identifier=identifier,
                                                                                materials=materials)
 
-                if config.get_from_dict(encryption_module_dict, 'active', None, types=bool):
-                    if self.encryption_active is not None:
-                        raise ConfigurationError('Only one encryption module can be active at the same time.')
-                    logger.info('Encryption is enabled for the data backend.')
-                    self.encryption_active = self.encryption[identifier]
+        active_encryption = config.get('dataBackend.{}.activeEncryption'.format(self.NAME), None, types=str)
+        if active_encryption is not None:
+            if self.encryption and active_encryption in self.encryption:
+                logger.info('Encryption is enabled for the {} data backend.'.format(self.NAME))
+                self.active_encryption = self.encryption[active_encryption]
+            else:
+                raise ConfigurationError('Encryption identifier {} is unknown.'.format(active_encryption))
 
-        compression_modules = config.get('dataBackend.compression'.format(self.NAME), None, types=list)
+        compression_modules = config.get('dataBackend.compression', None, types=list)
         if compression_modules is not None:
             for compression_module_dict in compression_modules:
                 type = config.get_from_dict(compression_module_dict, 'type', types=str)
@@ -87,10 +89,13 @@ class DataBackend(metaclass=ABCMeta):
 
                     self.compression[type] = compression_module.Compression(materials=materials)
 
-                if config.get_from_dict(compression_module_dict, 'active', None, types=bool):
-                    if self.compression_active is not None:
-                        raise ConfigurationError('Only one compression module can be active at the same time.')
-                    self.compression_active = self.compression[type]
+        active_compression = config.get('dataBackend.{}.activeCompression'.format(self.NAME), None, types=str)
+        if active_compression is not None:
+            if self.compression and active_compression in self.compression:
+                logger.info('Encryption is enabled for the {} data backend.'.format(self.NAME))
+                self.active_compression = self.compression[active_compression]
+            else:
+                raise ConfigurationError('Compression type {} is unknown.'.format(active_compression))
 
         simultaneous_writes = config.get('dataBackend.simultaneousWrites', types=int)
         simultaneous_reads = config.get('dataBackend.simultaneousReads', types=int)
@@ -411,12 +416,12 @@ class DataBackend(metaclass=ABCMeta):
                 pass
 
     def _encrypt(self, data):
-        if self.encryption_active is not None:
-            data, materials = self.encryption_active.encrypt(data=data)
+        if self.active_encryption is not None:
+            data, materials = self.active_encryption.encrypt(data=data)
             metadata = {
                 self._ENCRYPTION_KEY: {
-                    'identifier': self.encryption_active.identifier,
-                    'type': self.encryption_active.NAME,
+                    'identifier': self.active_encryption.identifier,
+                    'type': self.active_encryption.NAME,
                     'materials': materials
                 }
             }
@@ -444,8 +449,8 @@ class DataBackend(metaclass=ABCMeta):
         self._compression_statistics['objects_considered'] += 1
         self._compression_statistics['data_in'] += len(data)
 
-        if self.compression_active is not None:
-            compressed_data, materials = self.compression_active.compress(data=data)
+        if self.active_compression is not None:
+            compressed_data, materials = self.active_compression.compress(data=data)
             if len(compressed_data) < len(data):
                 self._compression_statistics['objects_compressed'] += 1
                 self._compression_statistics['data_in_compression'] += len(data)
@@ -454,7 +459,7 @@ class DataBackend(metaclass=ABCMeta):
 
                 metadata = {
                     self._COMPRESSION_KEY: {
-                        'type': self.compression_active.NAME,
+                        'type': self.active_compression.NAME,
                         'materials': materials
                     }
                 }

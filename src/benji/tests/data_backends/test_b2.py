@@ -18,12 +18,13 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
              writeObjectAttempts: 1
              readObjectAttempts: 1
              uploadAttempts: 5
+             activeCompression: zstd
+             activeEncryption: k1
                 
           compression:
             - type: zstd
               materials:
                 level: 1
-              active: true
               
           encryption:
             - identifier: k1
@@ -31,7 +32,6 @@ class test_b2(DatabackendTestCase, unittest.TestCase):
               materials:
                 masterKey: !!binary |
                   e/i1X4NsuT9k+FIVe2kd3vtHVkzZsbeYv35XQJeV8nA=
-              active: true  
                 
           consistencyCheckWrites: True
           simultaneousWrites: 5
