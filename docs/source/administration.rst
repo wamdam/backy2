@@ -147,9 +147,13 @@ directories for more ones::
     2018-06-07T12:51:19
 
 With machine readable output you can use the option ``--include-blocks``
-to ``ls`` which also includes all blocks of this version in the output. Version UIDs
-will be represented as simple integers without the zero-filled V prefix. All Benji
-commands are able to take this representation as well.
+to ``ls`` which also includes all blocks of this version in the output.
+
+Version UIDs will be represented as simple integers without V prefix
+and being zero-filled. All Benji commands are able to take this
+representation as well, so you can use it in further commands as-is.
+
+All timestamps are in UTC and without timezone information.
 
 Debugging
 ~~~~~~~~~

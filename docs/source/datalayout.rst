@@ -45,6 +45,8 @@ You configure the location of your database with the ``metaBackend.engine``
 directive. Please refer to the SQLAlchemy documentation for options and format
 at http://docs.sqlalchemy.org/en/latest/core/engines.html.
 
+All timestamps in the database are in UTC and without timezone information.
+
 Data Backend
 ------------
 

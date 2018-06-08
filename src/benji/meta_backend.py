@@ -11,14 +11,15 @@ from binascii import hexlify, unhexlify
 from collections import namedtuple
 
 import sqlalchemy
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event, Index
-from sqlalchemy import func, distinct, desc
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event, Index, \
+    DateTime
+from sqlalchemy import distinct, desc
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.ext.mutable import MutableComposite
 from sqlalchemy.orm import sessionmaker, composite, CompositeProperty
-from sqlalchemy.types import DateTime, TypeDecorator
+from sqlalchemy.types import TypeDecorator
 
 from benji.exception import InputDataError, InternalError, NoChange
 from benji.logging import logger
@@ -216,7 +217,7 @@ Base = declarative_base()
 
 class Stats(Base):
     __tablename__ = 'stats'
-    date = Column("date", DateTime , default=func.now(), nullable=False)
+    date = Column("date", DateTime, nullable=False)
     # No foreign key references here, so that we can keep the stats around even when the version is deleted
     version_uid = Column(VersionUidType, primary_key=True)
     version_name = Column(String, nullable=False)
@@ -239,7 +240,7 @@ class Version(Base):
     # This makes sure that SQLite won't reuse UIDs
     __table_args__ = {'sqlite_autoincrement': True}
     uid = Column(VersionUidType, primary_key=True, nullable=False)
-    date = Column("date", DateTime , default=func.now(), nullable=False)
+    date = Column("date", DateTime, nullable=False)
     name = Column(String, nullable=False, default='')
     snapshot_name = Column(String, nullable=False, server_default='', default='')
     size = Column(BigInteger, nullable=False)
@@ -318,7 +319,7 @@ class Block(Base):
 
     # Sorted for best alignment to safe space (with PostgreSQL in mind)
     # id and uid_right are first because they are most likely to go to BigInteger in the future
-    date = Column("date", DateTime , default=func.now(), nullable=False) # 8 bytes
+    date = Column("date", DateTime, nullable=False) # 8 bytes
     id = Column(Integer, primary_key=True, nullable=False) # 4 bytes
     uid_right = Column(Integer, nullable=True) # 4 bytes
     uid_left = Column(Integer, nullable=True) # 4 bytes
@@ -354,21 +355,17 @@ class Block(Base):
                             self.id, self.uid, self.version_uid.readable)
 
 
-def inttime():
-    return int(time.time())
-
-
 class DeletedBlock(Base):
     __tablename__ = 'deleted_blocks'
-    id = Column(Integer, primary_key=True)
+    date = Column("date", DateTime, nullable=False)
+    # BigInteger as the id could get large over time
+    # Use INTEGER with SQLLite to get AUTOINCREMENT and the INTEGER type of SQLLite can store huge values anyway.
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, nullable=False)
     uid_left = Column(Integer, nullable=True)
     uid_right = Column(Integer, nullable=True)
-    size = Column(Integer, nullable=True)
-    # we need a date in order to find only delete candidates that are older than 1 hour.
-    time = Column(BigInteger, default=inttime, nullable=False)
 
     uid = composite(BlockUid, uid_left, uid_right, comparator_factory=BlockUidComparator)
-    __table_args__ = (Index('ix_blocks_uid_left_uid_right_2', 'uid_left', 'uid_right'),)
+    __table_args__ = (Index('ix_blocks_uid_left_uid_right_2', 'uid_left', 'uid_right'), {'sqlite_autoincrement': True})
 
     def __repr__(self):
        return "<DeletedBlock(id='%s', uid='%s')>" % (
@@ -381,7 +378,7 @@ class Lock(Base):
     process_id = Column(String, nullable=False, primary_key=True)
     lock_name = Column(String, nullable=False, primary_key=True)
     reason = Column(String, nullable=False)
-    date = Column("date", DateTime , default=func.now(), nullable=False)
+    date = Column("date", DateTime, nullable=False)
 
     def __repr__(self):
         return "<Lock(host='%s' process_id='%s' lock_name='%s')>" % (
@@ -463,6 +460,7 @@ class MetaBackend:
             block_size=block_size,
             valid=valid,
             protected=protected,
+            date=datetime.datetime.utcnow(),
         )
         try:
             self._session.add(version)
@@ -491,6 +489,7 @@ class MetaBackend:
             bytes_sparse=bytes_sparse,
             blocks_sparse=blocks_sparse,
             duration_seconds=duration_seconds,
+            date=datetime.datetime.utcnow(),
         )
         try:
             self._session.add(stats)
@@ -631,7 +630,7 @@ class MetaBackend:
                 block.checksum = checksum
                 block.size = size
                 block.valid = valid
-                block.date = datetime.datetime.now()
+                block.date = datetime.datetime.utcnow()
             else:
                 block = Block(
                     id=id,
@@ -639,7 +638,8 @@ class MetaBackend:
                     uid=block_uid,
                     checksum=checksum,
                     size=size,
-                    valid=valid
+                    valid=valid,
+                    date= datetime.datetime.utcnow(),
                     )
                 self._session.add(block)
 
@@ -709,7 +709,7 @@ class MetaBackend:
                 if affected_block.uid:
                     deleted_block = DeletedBlock(
                         uid=affected_block.uid,
-                        size=affected_block.size,
+                        date=datetime.datetime.utcnow(),
                     )
                     self._session.add(deleted_block)
             # The following delete statement will cascade this delete to the blocks table
@@ -726,10 +726,11 @@ class MetaBackend:
         rounds = 0
         false_positives_count = 0
         hit_list_count = 0
+        one_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(seconds=dt)
         while True:
             # http://stackoverflow.com/questions/7389759/memory-efficient-built-in-sqlalchemy-iterator-generator
             delete_candidates = self._session.query(DeletedBlock)\
-                .filter(DeletedBlock.time < (inttime() - dt))\
+                .filter(DeletedBlock.date < one_hour_ago)\
                 .limit(250)\
                 .all()
             if not delete_candidates:
@@ -943,6 +944,7 @@ class MetaBackendLocking:
             process_id=self._uuid,
             lock_name=lock_name,
             reason=reason,
+            date=datetime.datetime.utcnow(),
         )
         try:
             self._session.add(lock)

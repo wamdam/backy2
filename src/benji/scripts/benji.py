@@ -8,6 +8,7 @@ import os
 import sys
 
 import pkg_resources
+from dateutil import tz
 from prettytable import PrettyTable
 
 import benji.exception
@@ -124,7 +125,11 @@ class Commands:
                 benji.close()
 
     @staticmethod
-    def _ls_versions_tbl_output(versions):
+    def _local_time(date):
+        return date.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()).strftime("%Y-%m-%dT%H:%M:%S")
+
+    @classmethod
+    def _ls_versions_tbl_output(cls, versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
         tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
@@ -136,7 +141,7 @@ class Commands:
         tbl.align['block_size'] = 'r'
         for version in versions:
             tbl.add_row([
-                version.date.isoformat(timespec='seconds'),
+                cls._local_time(version.date),
                 version.uid.readable,
                 version.name,
                 version.snapshot_name,
@@ -148,8 +153,8 @@ class Commands:
                 ])
         print(tbl)
 
-    @staticmethod
-    def _stats_tbl_output(stats):
+    @classmethod
+    def _stats_tbl_output(cls, stats):
         tbl = PrettyTable()
         tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
                            'bytes read', 'blocks read', 'bytes written', 'blocks written',
@@ -169,7 +174,7 @@ class Commands:
         tbl.align['duration (s)'] = 'r'
         for stat in stats:
             tbl.add_row([
-                stat.date.isoformat(timespec='seconds'),
+                cls._local_time(stat.date),
                 stat.version_uid.readable,
                 stat.version_name,
                 stat.version_snapshot_name,
