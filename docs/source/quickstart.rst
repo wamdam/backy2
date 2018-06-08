@@ -23,7 +23,7 @@ Backup target
 
 Backup Metadata
     A SQL database containing information on how to reassemble the stored blocks
-    to get the original data back. Also referred to as the *meta backend*.
+    to get the original data back. Also referred to as the *metadata backend*.
 
 Version
     A version is a backup of a specific backup source at a specific point in time.

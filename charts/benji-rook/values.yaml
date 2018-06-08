@@ -22,7 +22,7 @@ benji:
   #  logFile: /tmp/benji.log
   #  hashFunction: blake2b,digest_size=32
   #  blockSize: 4194304
-  #  metaBackend:
+  #  metadataBackend:
   #    engine: postgresql://benji:secret@db-host:5432/benji
   #  dataBackend:
   #    type: s3

@@ -7,7 +7,7 @@ Benji is an important tool when it's responsible for company-wide backups.
 Backups, scrubs, restores and cleanups must run smoothly and need to be
 monitored closely.
 
-Also, as Benji has two parts (*meta backend and *data backend*), both have to
+Also, as Benji has two parts (*metadata backend and *data backend*), both have to
 be checked regularly and be as highly-available as possible.
 
 .. _administration-meta-backend:

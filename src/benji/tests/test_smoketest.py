@@ -195,7 +195,7 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
-            metaBackend: 
+            metadataBackend: 
               engine: sqlite:///{testpath}/benji.sqlite
             """
 
@@ -227,7 +227,7 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BenjiTestCase, TestCase):
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
-            metaBackend: 
+            metadataBackend: 
               engine: postgresql://benji:verysecret@localhost:15432/benji
             """
 
@@ -263,7 +263,7 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BenjiTestCase, TestCase):
               simultaneousReads: 1
               bandwidthRead: 0
               bandwidthWrite: 0
-            metaBackend: 
+            metadataBackend: 
               engine: sqlite:///{testpath}/benji.sqlite
             """
 
@@ -304,7 +304,7 @@ class SmokeTestCasePostgreSQL_S3_ReadCache(SmokeTestCase, BenjiTestCase, TestCas
               readCache:
                 directory: {testpath}/read-cache
                 maximumSize: 16777216
-            metaBackend: 
+            metadataBackend: 
               engine: sqlite:///{testpath}/benji.sqlite
             """
 
@@ -340,6 +340,6 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BenjiTestCase, TestCase):
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
-            metaBackend: 
+            metadataBackend: 
               engine: postgresql://benji:verysecret@localhost:15432/benji
             """

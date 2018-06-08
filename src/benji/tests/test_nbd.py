@@ -163,7 +163,7 @@ class NbdTestCaseSQLLite_File(NbdTestCase, BenjiTestCase, TestCase):
               simultaneousReads: 5
               bandwidthRead: 0
               bandwidthWrite: 0
-            metaBackend: 
+            metadataBackend:
               engine: sqlite:///{testpath}/benji.sqlite
             nbd:
               cacheDirectory: {testpath}/nbd-cache
@@ -215,7 +215,7 @@ class NbdTestCasePostgreSQL_S3(NbdTestCase, BenjiTestCase, TestCase):
               simultaneousReads: 1
               bandwidthRead: 0
               bandwidthWrite: 0   
-            metaBackend: 
+            metadataBackend:
               engine: postgresql://benji:verysecret@localhost:15432/benji
             nbd:
               cacheDirectory: {testpath}/nbd-cache

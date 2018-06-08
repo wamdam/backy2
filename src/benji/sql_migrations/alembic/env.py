@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from benji.config import Config as BenjiConfig
 
 benji_config = BenjiConfig()
-engine_url = benji_config.get('metaBackend.engine', types=str)
+engine_url = benji_config.get('metadataBackend.engine', types=str)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,7 +20,7 @@ config = context.config
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from benji.meta_backend import Base
+from benji.metadata import Base
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

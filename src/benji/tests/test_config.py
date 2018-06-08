@@ -14,7 +14,7 @@ class ConfigTestCase(TestCase, unittest.TestCase):
         blockSize: 4194304
         hashFunction: sha512
         processName: benji
-        metaBackend:
+        metadataBackend:
           type: sql
           sql:
             engine: sqlite:////var/lib/benji/benji.sqlite

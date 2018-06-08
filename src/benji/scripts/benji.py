@@ -15,7 +15,7 @@ import benji.exception
 from benji.benji import Benji
 from benji.config import Config
 from benji.logging import logger, init_logging
-from benji.meta_backend import Version, VersionUid
+from benji.metadata import Version, VersionUid
 from benji.utils import hints_from_rbd_diff, parametrized_hash_function, human_readable_duration
 
 __version__ = pkg_resources.get_distribution('benji').version
@@ -39,8 +39,8 @@ class Commands:
                 hints = hints_from_rbd_diff(data)
             backup_version_uid = benji.backup(name, snapshot_name, source, hints, from_version_uid, tags)
             if self.machine_output:
-                benji._meta_backend.export_any('versions',
-                                               [benji._meta_backend.get_versions(version_uid=backup_version_uid)],
+                benji._metadata_backend.export_any('versions',
+                                               [benji._metadata_backend.get_versions(version_uid=backup_version_uid)],
                                                sys.stdout,
                                                ignore_relationships=[((Version,), ('blocks',))]
                                                )
@@ -202,7 +202,7 @@ class Commands:
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
             if self.machine_output:
-                benji._meta_backend.export_any('versions',
+                benji._metadata_backend.export_any('versions',
                                                versions,
                                                sys.stdout,
                                                ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
@@ -267,7 +267,7 @@ class Commands:
 
             if self.machine_output:
                 stats = list(stats) # resolve iterator, otherwise it's not serializable
-                benji._meta_backend.export_any('stats',
+                benji._metadata_backend.export_any('stats',
                                                stats,
                                                sys.stdout,
                                                )
@@ -403,8 +403,8 @@ class Commands:
                                                                         dry_run=dry_run,
                                                                         keep_backend_metadata=keep_backend_metadata))
             if self.machine_output:
-                benji._meta_backend.export_any('versions',
-                                               [benji._meta_backend.get_versions(version_uid=version_uid)[0]
+                benji._metadata_backend.export_any('versions',
+                                               [benji._metadata_backend.get_versions(version_uid=version_uid)[0]
                                                                         for version_uid in dismissed_version_uids],
                                                sys.stdout,
                                                ignore_relationships=[((Version,), ('blocks',))]
@@ -556,7 +556,7 @@ def main():
     p.add_argument(
         '-f', '--full', action='store_true', default=False,
         help='Do a full cleanup. This will read the full metadata from the data backend (i.e. backup storage) '
-             'and compare it to the metadata in the meta backend. Unused data will then be deleted. '
+             'and compare it to the metadata in the metadata backend. Unused data will then be deleted. '
              'This is a slow, but complete process. A full cleanup must not run in parallel to ANY other jobs.')
     p.set_defaults(func='cleanup')
 

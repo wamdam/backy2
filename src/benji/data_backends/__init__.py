@@ -17,7 +17,7 @@ from prettytable import PrettyTable
 
 from benji.exception import InternalError, ConfigurationError
 from benji.logging import logger
-from benji.meta_backend import BlockUid, VersionUid
+from benji.metadata import BlockUid, VersionUid
 from benji.utils import TokenBucket, future_results_as_completed
 
 

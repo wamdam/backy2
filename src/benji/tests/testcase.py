@@ -11,7 +11,7 @@ from benji.config import Config
 from benji.data_backends import DataBackend
 from benji.exception import ConfigurationError
 from benji.logging import init_logging
-from benji.meta_backend import MetaBackend
+from benji.metadata import MetadataBackend
 
 
 class TestCase():
@@ -64,19 +64,19 @@ class BackendTestCase(TestCase):
                 for version_uid in self.data_backend.list_versions():
                     self.data_backend.rm_version(version_uid)
 
-        name = self.config.get('metaBackend', None, types=dict)
+        name = self.config.get('metadataBackend', None, types=dict)
         if name is not None:
-            meta_backend = MetaBackend(self.config)
-            meta_backend.initdb(_migratedb=False, _destroydb=True)
-            self.meta_backend = meta_backend.open(_migratedb=False)
+            metadata_backend = MetadataBackend(self.config)
+            metadata_backend.initdb(_migratedb=False, _destroydb=True)
+            self.metadata_backend = metadata_backend.open(_migratedb=False)
 
     def tearDown(self):
         if hasattr(self, 'data_backend'):
             uids = self.data_backend.list_blocks()
             self.assertEqual(0, len(uids))
             self.data_backend.close()
-        if hasattr(self, 'meta_backend'):
-            self.meta_backend.close()
+        if hasattr(self, 'metadata_backend'):
+            self.metadata_backend.close()
         super().tearDown()
 
 class BenjiTestCase(TestCase):

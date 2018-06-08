@@ -24,7 +24,7 @@ processName: benji
 # able to delete any version)
 disallowRemoveWhenYounger: 6
 
-metaBackend:
+metadataBackend:
   # Which SQL Server?
   # Available servers:
   #   sqlite:////path/to/sqlitefile

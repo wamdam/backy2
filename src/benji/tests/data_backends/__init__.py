@@ -1,7 +1,7 @@
 import random
 from unittest.mock import Mock
 
-from benji.meta_backend import Block, BlockUid, VersionUid
+from benji.metadata import Block, BlockUid, VersionUid
 from benji.tests.testcase import BackendTestCase
 
 

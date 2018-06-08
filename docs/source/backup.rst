@@ -240,9 +240,9 @@ the blocks are of no use without the corresponding metadata. Benji
 will need this information to get the blocks back in the correct order and
 restore your image.
 
-This information is stored in the *meta backend*. Additionally Benji will
+This information is stored in the *metadata backend*. Additionally Benji will
 save the metadata on the *data backend* automatically. Should you lose your
-*meta backend*, you can restore these metadata backups by using
+*metadata backend*, you can restore these metadata backups by using
 ``benji import-from-backend``.
 
 .. command-output:: benji import-from-backend --help
@@ -296,7 +296,7 @@ You can import such a dump of a version's metadata with ``benji import``.
 
 .. command-output:: benji import --help
 
-You can't import versions that already exist in the *meta backend*.
+You can't import versions that already exist in the *metadata backend*.
 
 .. _hints_file:
 

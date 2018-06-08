@@ -70,7 +70,7 @@ This represents a minimal configuration mit SQLite3 backend and file-based block
               type: file
               file:
                 path: /var/lib/benji
-            metaBackend:
+            metadataBackend:
               engine: sqlite:///var/lib/benji/benji.sqlite
 
 You might need to change the above paths. Benji will run as a normal user

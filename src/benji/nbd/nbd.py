@@ -5,7 +5,7 @@ import os
 from io import BytesIO
 
 from benji.logging import logger
-from benji.meta_backend import BlockUid
+from benji.metadata import BlockUid
 from benji.utils import data_hexdigest
 
 
@@ -26,13 +26,13 @@ class BenjiStore:
         return self.benji.ls()
 
     def get_version(self, uid):
-        return self.benji.meta_backend.get_version(uid)
+        return self.benji.metadata_backend.get_version(uid)
 
     def _block_list(self, version, offset, length):
         # get cached blocks data
         if not self.blocks.get(version.uid):
             # Only work with dereferenced blocks
-            self.blocks[version.uid] = [block.deref() for block in self.benji.meta_backend.get_blocks_by_version(version.uid)]
+            self.blocks[version.uid] = [block.deref() for block in self.benji.metadata_backend.get_blocks_by_version(version.uid)]
         blocks = self.blocks[version.uid]
 
         block_number = offset // version.block_size
@@ -152,10 +152,10 @@ class BenjiStore:
             logger.debug('Stored block {} uid {}'.format(block.id, block.uid))
 
             checksum = data_hexdigest(self.hash_function, data)
-            self.benji.meta_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
+            self.benji.metadata_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
 
-        self.benji.meta_backend.set_version_valid(cow_version.uid)
-        self.benji.meta_backend.commit()
+        self.benji.metadata_backend.set_version_valid(cow_version.uid)
+        self.benji.metadata_backend.commit()
         logger.info('Fixation done. Deleting temporary data (PLEASE WAIT)')
         # TODO: Delete COW blocks and also those from block_cache
         for block_uid in self.block_cache:

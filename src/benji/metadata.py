@@ -384,7 +384,7 @@ class Lock(Base):
         return "<Lock(host='%s' process_id='%s' lock_name='%s')>" % (
             self.host, self.process_id, self.lock_name)
 
-class MetaBackend:
+class MetadataBackend:
     """ Stores meta data in an sql database """
 
     METADATA_VERSION = '1.0.0'
@@ -394,7 +394,7 @@ class MetaBackend:
     _locking = None
 
     def __init__(self, config):
-        self._engine = sqlalchemy.create_engine(config.get('metaBackend.engine', types=str))
+        self._engine = sqlalchemy.create_engine(config.get('metadataBackend.engine', types=str))
 
     def open(self, _migratedb=True):
         if _migratedb:

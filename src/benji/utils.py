@@ -40,7 +40,7 @@ def parametrized_hash_function(config_hash_function):
     logger.debug('Using hash function {} with kwargs {}'.format(hash_name, kwargs))
     hash_function_w_kwargs = hash_function(**kwargs)
 
-    from benji.meta_backend import Block
+    from benji.metadata import Block
     if len(hash_function_w_kwargs.digest()) > Block.MAXIMUM_CHECKSUM_LENGTH:
         raise ConfigurationError('Specified hash function exceeds maximum digest length of {}.'
                                  .format(Block.MAXIMUM_CHECKSUM_LENGTH))
