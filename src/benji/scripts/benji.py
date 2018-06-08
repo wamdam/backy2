@@ -222,8 +222,13 @@ class Commands:
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
+            # Check if versions exist
             blocks1 = benji_obj.ls_version(version_uid1)
+            if not blocks1:
+                raise FileNotFoundError('Version {} doesn\'t exist.'.format(version_uid1.readable))
             blocks2 = benji_obj.ls_version(version_uid2)
+            if not blocks2:
+                raise FileNotFoundError('Version {} doesn\'t exist.'.format(version_uid2.readable))
             max_len = max(len(blocks1), len(blocks2))
             for i in range(max_len):
                 b1 = b2 = None
