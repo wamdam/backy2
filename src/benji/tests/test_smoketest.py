@@ -191,7 +191,6 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):
                 - type: zstd
                   materials:
                     level: 1
-                  active: true                
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
