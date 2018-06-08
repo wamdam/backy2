@@ -258,7 +258,7 @@ class Commands:
         if limit:
             limit = int(limit)
             if limit <= 0:
-                raise benji_obj.UsageError('Limit has to be a positive integer.')
+                raise benji.exception.UsageError('Limit has to be a positive integer.')
 
         benji_obj = None
         try:
