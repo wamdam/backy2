@@ -4,6 +4,7 @@ TODOs
 Probably soonish
 ----------------
 
+* Fix timezone problems
 * Work an Beji for Rook image
 * Fix NBD support
 * Standalone Docker image
