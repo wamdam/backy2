@@ -24,9 +24,6 @@ processName: benji
 # able to delete any version)
 disallowRemoveWhenYounger: 6
 
-# Export metadata to the data backend
-exportMetadata: True
-
 metaBackend:
   # Which SQL Server?
   # Available servers:
