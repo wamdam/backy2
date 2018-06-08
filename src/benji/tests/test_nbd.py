@@ -42,15 +42,15 @@ class NbdTestCase:
             offset = random.randint(0, size-1-patch_size)
             self.patch(image_filename, offset, data)
 
-        benji = self.benjiOpen(initdb=True)
-        version_uid = benji.backup(
+        benji_obj = self.benjiOpen(initdb=True)
+        version_uid = benji_obj.backup(
             'data-backup',
             'snapshot-name',
             'file://' + image_filename,
             None,
             None
         )
-        benji.close()
+        benji_obj.close()
         return version_uid, size
 
     def setUp(self):
@@ -64,11 +64,11 @@ class NbdTestCase:
     def test(self):
         from benji.nbd.nbdserver import Server as NbdServer
         from benji.nbd.nbd import BenjiStore
-        benji = self.benjiOpen(initdb=False)
+        benji_obj = self.benjiOpen(initdb=False)
 
         hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
         cache_dir = self.config.get('nbd.cacheDirectory', types=str)
-        store = BenjiStore(benji, cachedir=cache_dir, hash_function=hash_function)
+        store = BenjiStore(benji_obj, cachedir=cache_dir, hash_function=hash_function)
         addr = ('127.0.0.1', self.SERVER_PORT)
         read_only = False
         self.nbd_server = NbdServer(addr, store, read_only)
@@ -81,7 +81,7 @@ class NbdTestCase:
 
         self.assertEqual({self.version_uid[0].readable}, set([version.uid for version  in benji.ls()]))
 
-        benji.close()
+        benji_obj.close()
 
     def subprocess_run(self, args, success_regexp = None, check=True):
         completed = subprocess.run(args=args,

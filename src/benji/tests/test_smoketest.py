@@ -93,64 +93,64 @@ class SmokeTestCase:
             with open(os.path.join(testpath, 'hints'), 'w') as f:
                     f.write(json.dumps(hints))
 
-            benji = self.benjiOpen(initdb=initdb, block_size=block_size)
+            benji_obj = self.benjiOpen(initdb=initdb, block_size=block_size)
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
-                version_uid = benji.backup(
+                version_uid = benji_obj.backup(
                     'data-backup',
                     'snapshot-name',
                     'file://' + image_filename,
                     hints_from_rbd_diff(hints.read()),
                     from_version
                 )
-            benji.close()
+            benji_obj.close()
             version_uids.append(version_uid)
 
-            benji = self.benjiOpen(initdb=initdb)
-            benji.rm(version_uid, force=True, keep_backend_metadata=True)
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.rm(version_uid, force=True, keep_backend_metadata=True)
             print('  Remove version successful')
-            benji.close()
+            benji_obj.close()
 
-            benji = self.benjiOpen(initdb=initdb)
-            benji.import_from_backend([version_uid])
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.import_from_backend([version_uid])
             print('  Import version from backend successful')
-            benji.close()
+            benji_obj.close()
 
-            benji = self.benjiOpen(initdb=initdb)
-            blocks = benji.ls_version(version_uid)
+            benji_obj = self.benjiOpen(initdb=initdb)
+            blocks = benji_obj.ls_version(version_uid)
             self.assertEqual(list(range(len(blocks))), sorted([block.id for block in blocks]))
             self.assertTrue(len(blocks) > 0)
             if len(blocks) > 1:
                 self.assertTrue(reduce(and_, [block.size == block_size for block in blocks[:-1]]))
             print('  Block list successful')
-            benji.close()
+            benji_obj.close()
 
-            benji = self.benjiOpen(initdb=initdb)
-            versions = benji.ls()
+            benji_obj = self.benjiOpen(initdb=initdb)
+            versions = benji_obj.ls()
             self.assertEqual(set(), set([version.uid for version in versions]) ^ set(version_uids))
             self.assertTrue(reduce(and_, [version.name == 'data-backup' for version in versions]))
             self.assertTrue(reduce(and_, [version.snapshot_name == 'snapshot-name' for version in versions]))
             self.assertTrue(reduce(and_, [version.block_size == block_size for version in versions]))
             self.assertTrue(reduce(and_, [version.size > 0 for version in versions]))
             print('  Version list successful')
-            benji.close()
+            benji_obj.close()
 
-            benji = self.benjiOpen(initdb=initdb)
-            benji.scrub(version_uid)
-            benji.close()
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.scrub(version_uid)
+            benji_obj.close()
             print('  Deep scrub successful')
-            benji = self.benjiOpen(initdb=initdb)
-            benji.deep_scrub(version_uid)
-            benji.close()
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.deep_scrub(version_uid)
+            benji_obj.close()
             print('  Deep scrub successful')
-            benji = self.benjiOpen(initdb=initdb)
-            benji.deep_scrub(version_uid, 'file://' + image_filename)
-            benji.close()
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.deep_scrub(version_uid, 'file://' + image_filename)
+            benji_obj.close()
             print('  Deep scrub with source successful')
-            benji = self.benjiOpen(initdb=initdb)
+            benji_obj = self.benjiOpen(initdb=initdb)
             restore_filename = os.path.join(testpath, 'restore.{}'.format(i + 1))
-            benji.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
-            benji.close()
+            benji_obj.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
+            benji_obj.close()
             self.assertTrue(self.same(image_filename, restore_filename))
             print('  Restore successful')
 
@@ -158,16 +158,16 @@ class SmokeTestCase:
 
             # delete old versions
             if len(version_uids) > 10:
-                benji = self.benjiOpen(initdb=initdb)
-                dismissed_version_uids = benji.enforce_retention_policy('data-backup', 'latest10,hours24,days30')
+                benji_obj = self.benjiOpen(initdb=initdb)
+                dismissed_version_uids = benji_obj.enforce_retention_policy('data-backup', 'latest10,hours24,days30')
                 for dismissed_version_uid in dismissed_version_uids:
                     version_uids.remove(dismissed_version_uid)
-                benji.close()
+                benji_obj.close()
 
             if (i%7) == 0:
-                benji = self.benjiOpen(initdb=initdb)
-                benji.cleanup_fast(dt=0)
-                benji.close()
+                benji_obj = self.benjiOpen(initdb=initdb)
+                benji_obj.cleanup_fast(dt=0)
+                benji_obj.close()
 
 
 class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):

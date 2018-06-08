@@ -30,99 +30,99 @@ class Commands:
 
     def backup(self, name, snapshot_name, source, rbd, from_version_uid, block_size=None, tags=None):
         from_version_uid = VersionUid.create_from_readables(from_version_uid)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config, block_size=block_size)
+            benji_obj = Benji(self.config, block_size=block_size)
             hints = None
             if rbd:
                 data = ''.join([line for line in fileinput.input(rbd).readline()])
                 hints = hints_from_rbd_diff(data)
-            backup_version_uid = benji.backup(name, snapshot_name, source, hints, from_version_uid, tags)
+            backup_version_uid = benji_obj.backup(name, snapshot_name, source, hints, from_version_uid, tags)
             if self.machine_output:
-                benji._metadata_backend.export_any('versions',
-                                               [benji._metadata_backend.get_versions(version_uid=backup_version_uid)],
+                benji_obj._metadata_backend.export_any('versions',
+                                               [benji_obj._metadata_backend.get_versions(version_uid=backup_version_uid)],
                                                sys.stdout,
                                                ignore_relationships=[((Version,), ('blocks',))]
                                                )
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def restore(self, version_uid, target, sparse, force):
         version_uid = VersionUid.create_from_readables(version_uid)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            benji.restore(version_uid, target, sparse, force)
+            benji_obj = Benji(self.config)
+            benji_obj.restore(version_uid, target, sparse, force)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def protect(self, version_uids):
         version_uids = VersionUid.create_from_readables(version_uids)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             for version_uid in version_uids:
                 try:
-                    benji.protect(version_uid)
+                    benji_obj.protect(version_uid)
                 except benji.exception.NoChange:
                     logger.warning('Version {} already was protected.'.format(version_uid))
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def unprotect(self, version_uids):
         version_uids = VersionUid.create_from_readables(version_uids)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             for version_uid in version_uids:
                 try:
-                    benji.unprotect(version_uid)
+                    benji_obj.unprotect(version_uid)
                 except benji.exception.NoChange:
                     logger.warning('Version {} already was unprotected.'.format(version_uid))
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def rm(self, version_uids, force, keep_backend_metadata):
         version_uids = VersionUid.create_from_readables(version_uids)
         disallow_rm_when_younger_than_days = self.config.get('disallowRemoveWhenYounger', types=int)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             for version_uid in version_uids:
-                benji.rm(version_uid, force=force,
+                benji_obj.rm(version_uid, force=force,
                         disallow_rm_when_younger_than_days=disallow_rm_when_younger_than_days,
                         keep_backend_metadata=keep_backend_metadata)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def scrub(self, version_uid, percentile):
         version_uid = VersionUid.create_from_readables(version_uid)
         if percentile:
             percentile = int(percentile)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            benji.scrub(version_uid, percentile)
+            benji_obj = Benji(self.config)
+            benji_obj.scrub(version_uid, percentile)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def deep_scrub(self, version_uid, source, percentile):
         version_uid = VersionUid.create_from_readables(version_uid)
         if percentile:
             percentile = int(percentile)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            benji.deep_scrub(version_uid, source, percentile)
+            benji_obj = Benji(self.config)
+            benji_obj.deep_scrub(version_uid, source, percentile)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     @staticmethod
     def _local_time(date):
@@ -193,16 +193,16 @@ class Commands:
         print(tbl)
 
     def ls(self, name, snapshot_name=None, tag=None, include_blocks=False):
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            versions = benji.ls(version_name=name, version_snapshot_name=snapshot_name)
+            benji_obj = Benji(self.config)
+            versions = benji_obj.ls(version_name=name, version_snapshot_name=snapshot_name)
 
             if tag:
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
             if self.machine_output:
-                benji._metadata_backend.export_any('versions',
+                benji_obj._metadata_backend.export_any('versions',
                                                versions,
                                                sys.stdout,
                                                ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
@@ -210,8 +210,8 @@ class Commands:
             else:
                 self._ls_versions_tbl_output(versions)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def diff_meta(self, version_uid1, version_uid2):
         """ Output difference between two version in blocks.
@@ -219,11 +219,11 @@ class Commands:
         version_uid1 = VersionUid.create_from_readables(version_uid1)
         version_uid2 = VersionUid.create_from_readables(version_uid2)
         # TODO: Feel free to create a default diff format.
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            blocks1 = benji.ls_version(version_uid1)
-            blocks2 = benji.ls_version(version_uid2)
+            benji_obj = Benji(self.config)
+            blocks1 = benji_obj.ls_version(version_uid1)
+            blocks2 = benji_obj.ls_version(version_uid2)
             max_len = max(len(blocks1), len(blocks2))
             for i in range(max_len):
                 b1 = b2 = None
@@ -249,8 +249,8 @@ class Commands:
                 except BrokenPipeError:
                     pass
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def stats(self, version_uid, limit=None):
         version_uid = VersionUid.create_from_readables(version_uid)
@@ -258,70 +258,70 @@ class Commands:
         if limit:
             limit = int(limit)
             if limit <= 0:
-                raise benji.UsageError('Limit has to be a positive integer.')
+                raise benji_obj.UsageError('Limit has to be a positive integer.')
 
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            stats = benji.stats(version_uid, limit)
+            benji_obj = Benji(self.config)
+            stats = benji_obj.stats(version_uid, limit)
 
             if self.machine_output:
                 stats = list(stats) # resolve iterator, otherwise it's not serializable
-                benji._metadata_backend.export_any('stats',
+                benji_obj._metadata_backend.export_any('stats',
                                                stats,
                                                sys.stdout,
                                                )
             else:
                 self._stats_tbl_output(stats)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def cleanup(self, full):
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             if full:
-                benji.cleanup_full()
+                benji_obj.cleanup_full()
             else:
-                benji.cleanup_fast()
+                benji_obj.cleanup_fast()
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def export(self, version_uids, output_file=None, force=False):
         version_uids = VersionUid.create_from_readables(version_uids)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             if output_file is None:
-                benji.export(version_uids, sys.stdout)
+                benji_obj.export(version_uids, sys.stdout)
             else:
                 if os.path.exists(output_file) and not force:
                     raise FileExistsError('The output file already exists.')
 
                 with open(output_file, 'w') as f:
-                    benji.export(version_uids, f)
+                    benji_obj.export(version_uids, f)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def export_to_backend(self, version_uids, force=False):
         version_uids = VersionUid.create_from_readables(version_uids)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            benji.export_to_backend(version_uids, overwrite=force)
+            benji_obj = Benji(self.config)
+            benji_obj.export_to_backend(version_uids, overwrite=force)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def nbd(self, bind_address, bind_port, read_only):
         from benji.nbd.nbdserver import Server as NbdServer
         from benji.nbd.nbd import BenjiStore
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
             cache_dir = self.config.get('nbd.cacheDirectory', types=str)
             store = BenjiStore(benji, cachedir=cache_dir, hash_function=hash_function)
@@ -335,83 +335,83 @@ class Commands:
             logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
             server.serve_forever()
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def import_(self, input_file=None):
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             if input_file is None:
-                benji.import_(sys.stdin)
+                benji_obj.import_(sys.stdin)
             else:
                 with open(input_file, 'r') as f:
-                    benji.import_(f)
+                    benji_obj.import_(f)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def import_from_backend(self, version_uids):
         version_uids = VersionUid.create_from_readables(version_uids)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
-            benji.import_from_backend(version_uids)
+            benji_obj = Benji(self.config)
+            benji_obj.import_from_backend(version_uids)
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def add_tag(self, version_uid, names):
         version_uid = VersionUid.create_from_readables(version_uid)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             for name in names:
                 try:
-                    benji.add_tag(version_uid, name)
+                    benji_obj.add_tag(version_uid, name)
                 except benji.exception.NoChange:
                     logger.warning('Version {} already tagged with {}.'.format(version_uid, name))
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def rm_tag(self, version_uid, names):
         version_uid = VersionUid.create_from_readables(version_uid)
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             for name in names:
                 try:
-                    benji.rm_tag(version_uid, name)
+                    benji_obj.rm_tag(version_uid, name)
                 except benji.exception.NoChange:
                     logger.warning('Version {} has no tag {}.'.format(version_uid, name))
         finally:
-            if benji:
-                benji.close()
+            if benji_obj:
+                benji_obj.close()
 
     def initdb(self):
         Benji(self.config, initdb=True)
 
     def enforce_retention_policy(self, rules_spec, version_names, dry_run, keep_backend_metadata):
-        benji = None
+        benji_obj = None
         try:
-            benji = Benji(self.config)
+            benji_obj = Benji(self.config)
             dismissed_version_uids = []
             for version_name in version_names:
-                dismissed_version_uids.extend(benji.enforce_retention_policy(version_name=version_name,
+                dismissed_version_uids.extend(benji_obj.enforce_retention_policy(version_name=version_name,
                                                                         rules_spec=rules_spec,
                                                                         dry_run=dry_run,
                                                                         keep_backend_metadata=keep_backend_metadata))
             if self.machine_output:
-                benji._metadata_backend.export_any('versions',
-                                               [benji._metadata_backend.get_versions(version_uid=version_uid)[0]
+                benji_obj._metadata_backend.export_any('versions',
+                                               [benji_obj._metadata_backend.get_versions(version_uid=version_uid)[0]
                                                                         for version_uid in dismissed_version_uids],
                                                sys.stdout,
                                                ignore_relationships=[((Version,), ('blocks',))]
                                                )
         finally:
-                if benji:
-                    benji.close()
+                if benji_obj:
+                    benji_obj.close()
 
 def main():
     parser = argparse.ArgumentParser(
