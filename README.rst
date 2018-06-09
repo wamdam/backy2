@@ -20,9 +20,7 @@ Status
 ------
 
 Benji is currently somewhere between alpha and beta quality. It passes all included
-tests with the exception of NBD. So NBD is probably broken right now and needs
-some minor work. The documentation is mostly up-to-date but the web site is not.
-Installation with ``pip install`` should work fine.
+tests. The documentation is mostly up-to-date but the web site is not.
 
 Benji requires **Python 3.6.5 or newer** because older Python versions
 have some shortcomings in the concurrent.futures implementation which lead to an

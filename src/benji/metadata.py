@@ -8,7 +8,6 @@ import sqlite3
 import time
 import uuid
 from binascii import hexlify, unhexlify
-from collections import namedtuple
 
 import sqlalchemy
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event, Index, \
@@ -135,10 +134,29 @@ class BlockUidComparator(CompositeProperty.Comparator):
         other_tuples = [element.__composite_values__() for element in other]
         return sqlalchemy.sql.or_(*[sqlalchemy.sql.and_(*[clauses[0] == element[0], clauses[1] == element[1]]) for element in other_tuples])
 
+class BlockUidBase:
 
-DereferencedBlockUid = namedtuple('BlockUid', ['left', 'right'])
+    def __repr__(self):
+        return "{:x}-{:x}".format(
+            self.left if self.left is not None else 0,
+            self.right if self.right is not None else 0
+        )
 
-class DereferencedBlockUid:
+    def __eq__(self, other):
+        return isinstance(other, BlockUidBase) and \
+               other.left == self.left and \
+               other.right == self.right
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __bool__(self):
+        return self.left is not None and self.right is not None
+
+    def __hash__(self):
+        return hash((self.left, self.right))
+
+class DereferencedBlockUid(BlockUidBase):
 
     def __init__(self, left, right):
         self._left = left
@@ -155,13 +173,7 @@ class DereferencedBlockUid:
     def __composite_values__(self):
         return self.left, self.right
 
-    def __repr__(self):
-        return "{:x}-{:x}".format(
-            self.left if self.left is not None else 0,
-            self.right if self.right is not None else 0
-        )
-
-class BlockUid(MutableComposite):
+class BlockUid(BlockUidBase, MutableComposite):
 
     def __init__(self, left, right):
         self.left = left
@@ -173,26 +185,6 @@ class BlockUid(MutableComposite):
 
     def __composite_values__(self):
         return self.left, self.right
-
-    def __repr__(self):
-        return "{:x}-{:x}".format(
-            self.left if self.left is not None else 0,
-            self.right if self.right is not None else 0
-        )
-
-    def __eq__(self, other):
-        return isinstance(other, BlockUid) and \
-               other.left == self.left and \
-               other.right == self.right
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __bool__(self):
-        return self.left is not None and self.right is not None
-
-    def __hash__(self):
-        return hash((self.left, self.right))
 
     @classmethod
     def coerce(cls, key, value):

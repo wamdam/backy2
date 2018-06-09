@@ -7,13 +7,18 @@ Restore
 
 .. command-output:: benji restore --help
 
-There are two possible restore options:
+There are two possible restore options with Benji.
 
-Full restore
-------------
+.. NOTE:: If you determined which *version* you want to restore it is a
+    good idea to protect this *version* to prevent any accidental
+    or automatic removal by any retention policy enforcement that you
+    might have configure.
 
-A full restore happens either into a file (i.e. an image file), to a device (e.g.
-/dev/hda) or to a Ceph RBD volume.
+Full Restores
+-------------
+
+A full restore either saves the image into a file (i.e. an image file),
+to a device (e.g. /dev/hda) or to a Ceph RBD volume.
 
 The target is specified by the URI scheme. Examples::
 
@@ -21,60 +26,65 @@ The target is specified by the URI scheme. Examples::
     $ benji restore -f <version_uid> file:///dev/hdm
     $ benji restore <version_uid> rbd://pool/myvm_restore
 
-If the target already exists as
+If the target already exists, i.e.
 
 - it is a device file
-- the rbd volume exists
+- the Ceph RBD volume exists
 - the image file exists
 
 you need to ``--force`` the restore. Without ``--force`` Benji will throw
 an error and give you a hint::
 
-    benji restore 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 file://tmp/T
-        INFO: $ /home/dk/develop/benji/env/bin/benji restore 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 file://tmp/T
-       ERROR: Target already exists: file://tmp/T
-    Error opening restore target. You must force the restore.
+    $ benji restore V1  file://RESTORE
+        INFO: $ benji restore V1 file://RESTORE
+       ERROR: Restore target RESTORE already exists. Force the restore if you want to overwrite it.
 
 .. NOTE:: When restoring to a Ceph RBD volume, Benji will create this RBD
     volume for you if it does not exist.
 
-If the restore-target is full of 0x00 bytes, you can use the ``-s`` or ``--sparse``
-option for faster restores. With ``-s`` benji will not write (i.e. skip) empty
-blocks or blocks that contain only 0x00 bytes.
+If the restore target is full of zeros (or holes will read as zeros which is normally
+the case), you can use the ``-s`` or ``--sparse`` option for faster restores.
+With ``-s`` Benji will not write (i.e. skip) empty blocks or blocks that contain
+only zeros. This will also normally lead to less space usage on the restore target.
 
 Usually you can use ``-s`` if your restore target is
 
 - a new/non-existing Ceph RBD volume
-- a new/non-existing image file (benji will then create a sparse file)
+- a new/non-existing image file (Benji will then create a sparse file)
 
-.. CAUTION:: If you use ``-s`` on existing images, devices or files, restore-blocks which
-    do not exist or contain only 0x00 bytes will not be written, so whatever
-    random data was in there before the restore will remain.
+.. CAUTION:: If you use ``-s`` on existing images, devices or files, restoreed
+    blocks which are sparse will not be written, so whatever random data was
+    in there before the restore will remain.
 
+File-based Restores (NBD Server)
+--------------------------------
 
-Live-mount via NBD
-------------------
+Benji comes with its own NBD server which when started exports all known *versions*.
+These *versions* can then be mounted on any Linux host. The requirements on the
+Linux host are:
 
-benji has its own NBD server. So you can mount any existing backup of a
-filesystem directly.
+- loaded ``nbd`` kernel module (``modprobe nbd`` as root)
+- installed ``nbd-client`` program (RPM package ``nbd`` on RHEL/CentOS7/Fedora)
+
+The ``nbd-client`` contacts Benji's NBD server and connects an exported *version* to
+a NBD block device (``/dev/nbd*``) on the Linux host. After that your image data is
+available as a block device. If the image contains a filesystem it can be mounted
+normally. You can then search for the relevant files and restore them.
 
 .. command-output:: benji nbd --help
 
-Example::
+Read-Only Mount
+~~~~~~~~~~~~~~~
 
-    benji nbd -r 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-        INFO: $ /home/dk/develop/benji/env/bin/benji nbd -r 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
+This command will run the NBD server in read-only mode and wait for incoming connections::
+
+    $ benji nbd -r
         INFO: Starting to serve nbd on 127.0.0.1:10809
-        INFO: You may now start
-        INFO:   nbd-client -l 127.0.0.1 -p 10809
-        INFO: and then get the backup via
-        INFO:   modprobe nbd
-        INFO:   nbd-client -N <version> 127.0.0.1 -p 10809 /dev/nbd0
 
-You can then create a new nbd device with the given commands (as root)::
+You can then create a new NBD block device (as root)::
 
     # modprobe nbd
-    # nbd-client -N 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 127.0.0.1 -p 10809 /dev/nbd0
+    # nbd-client -N V0000000001 127.0.0.1 -p 10809 /dev/nbd0
     Negotiation: ..size = 10MB
     bs=1024, sz=10485760 bytes
 
@@ -82,7 +92,19 @@ You can then create a new nbd device with the given commands (as root)::
     partprobe /dev/nbd0
     mount -o ro,norecovery /dev/nbd0p1 /mnt
 
-The norecovery is required as benji blocks all writes with the ``-r`` option.
+If the image directly contains a filesystem you can skip the partprobe command
+and mount the ``/dev/nbd0`` device directly. The ``norecovery`` mount option
+is required as Benji  blocks all writes because of the ``-r`` option.
+
+When the NBD server receives an incoming connection it will output something
+like this::
+
+     INFO: Incoming connection from 127.0.0.1:33714
+    DEBUG: [127.0.0.1:33714]: opt=7, len=17, data=b'\x00\x00\x00\x0bV0000000001\x00\x00'
+    DEBUG: [127.0.0.1:33714]: opt=1, len=11, data=b'V0000000001'
+     INFO: [127.0.0.1:33714] Negotiated export: V0000000001
+     INFO: nbd is read only.
+
 When you're done::
 
     umount /mnt
@@ -92,95 +114,102 @@ In the other console, benji will tell you that nbd has disconnected::
 
     INFO: [127.0.0.1:38316] disconnecting
 
-You can then either reconnect or press ``ctrl+c`` to end the benji nbd server.
+You can then either reconnect or press ``ctrl+c`` to end Benji's NBD server.
 
-You may also mount the volume from another server. benji by default binds the
+You may also mount the volume from another server. Benji by default binds the
 NBD server to 127.0.0.1 (i.e. localhost). For this server to be reachable from
-the outside, bind to 0.0.0.0::
+the outside bind to 0.0.0.0::
 
-    benji nbd -a 0.0.0.0 -r 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
+    benji nbd -a 0.0.0.0 -r
 
 You can also chose an appropriate port with the ``-p`` option.
 
+Read-Write Mount
+~~~~~~~~~~~~~~~~
 
-Mount read-wite
-~~~~~~~~~~~~~~~
-
-In addition to providing read-only access, benji also allows *read-write* access
+In addition to providing read-only access, Benji also allows read-write access
 in a safe way. This means, the backup **will not be modified**.
-The signature is mostly the same::
+The command sequence is mostly the same (but note the missing ``-r``)::
 
-    benji nbd 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-        INFO: $ /home/dk/develop/benji/env/bin/benji nbd 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
+    $ benji nbd
         INFO: Starting to serve nbd on 127.0.0.1:10809
-        INFO: You may now start
-        INFO:   nbd-client -l 127.0.0.1 -p 10809
-        INFO: and then get the backup via
-        INFO:   modprobe nbd
-        INFO:   nbd-client -N <version> 127.0.0.1 -p 10809 /dev/nbd0
-        INFO: nbd is read/write.
 
 Of course you can then mount the volume read/write and fix all potential
 filesystem errors or database files or you can modify data in any way you want::
 
     # modprobe nbd
-    # nbd-client -N 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 127.0.0.1 -p 10809 /dev/nbd0
+    # nbd-client -N V0000000001 127.0.0.1 -p 10809 /dev/nbd0
     Negotiation: ..size = 10MB
     bs=1024, sz=10485760 bytes
 
     # partprobe /dev/nbd0
     # mount /dev/nbd0p1 /mnt
     # echo 'test' > /mnt/tmp/test  # example!
+    
+Any writes to the device will initiate a copy-on-write (COW) of the 
+original blocks to a new version that Benji will dynamically create for you.
 
-When you then disconnect from the nbd-client via::
+After you disconnect from the nbd-client via::
 
     umount /mnt
     nbd-client -d /dev/nbd0
 
-benji will do all the homework to create the copy-on-write backup::
+Benji will start to finalise the COW version. Depending on how many changes
+have been done to the original image this will take some time!
+::
 
     INFO: [127.0.0.1:46526] disconnecting
-    INFO: Fixating version 430d4f4e-2f1d-11e7-b961-a44e314f9270 with 1 blocks (PLEASE WAIT)
-    INFO: Fixation done. Deleting temporary data (PLEASE WAIT)
+    INFO: Fixating version V0000000002 with 1024 blocks, please wait!
+    INFO: Fixation done. Deleting temporary data, please wait!
     INFO: Finished.
 
-You can then safely press ``ctrl+c`` in benji in order to end the nbd server.
+You can then safely press ``ctrl+c`` in order to end the NBD server.
 
 .. CAUTION:: If you ``ctrl+c`` before the last "INFO: Finished." is reported,
     your copy-on-write clone will not be written completely and thus be invalid.
-    However, the original backup version **will in any case be valid**.
+    However, the original backup *version* **will be untouched in any case**.
 
-Writing to benji NBD will create a copy-on-write backup (example)::
+You can see the created COW *version* with ``benji ls``::
 
     $ benji ls
-    +---------------------+---------------+--------------------------------------+------+------------+--------------------------------------+-------+-----------+---------+
-    |         date        | name          | snapshot_name                        | size | size_bytes |                 uid                  | valid | protected | tags    |
-    +---------------------+---------------+--------------------------------------+------+------------+--------------------------------------+-------+-----------+---------+
-    | 2017-05-02 09:53:58 | copy on write | 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 | 2560 |   10485760 | 430d4f4e-2f1d-11e7-b961-a44e314f9270 |   1   |     0     |         |
-    +---------------------+---------------+--------------------------------------+------+------------+--------------------------------------+-------+-----------+---------+
-        INFO: Benji complete.
+        INFO: $ benji ls
+    +---------------------+-------------+------+-----------------------------------------+----------+------------+-------+-----------+------+
+    |         date        |     uid     | name | snapshot_name                           |     size | block_size | valid | protected | tags |
+    +---------------------+-------------+------+-----------------------------------------+----------+------------+-------+-----------+------+
+    | 2018-06-10T01:00:43 | V0000000001 | test |                                         | 41943040 |    4194304 |  True |   False   |      |
+    | 2018-06-10T01:01:16 | V0000000002 | test | nbd-cow-V0000000001-2018-06-10T01:01:16 | 41943040 |    4194304 |  True |    True   |      |
+    +---------------------+-------------+------+-----------------------------------------+----------+------------+-------+-----------+------+
 
-The name will be ``copy on write`` and the snapshot_name will be the version UID
-of the originating backup version.
+The name will be the same as the original *version*. The snapshot_name will start
+with the prefix *nbd-cow-* followed by the *version* UID followed by a timestamp.
 
-.. NOTE:: You may safely delete the original version and the copy-on-write
+The COW *version* will automatically be marked as protected by Benji to prevent
+removal by any automatic retention policy enforcement that you might have 
+configured. This makes sure that your repair work won't be destroyed. You will
+have to unprotect the *version* manually when it is no longer needed. After
+that you can remove it normally or wait for your retention policy enforcement 
+to clean it up.
+
+.. NOTE:: You can of course also restore the COW *version* like any other
+    *version* with ``benji retore``.
+
+.. NOTE:: You may safely delete the original *version* and the COW *version*
     independently of each other.
 
 
-Edge-Cases
-----------
+Restore of invalid Versions
+---------------------------
 
-Invalid blocks / versions
-~~~~~~~~~~~~~~~~~~~~~~~~~
+During a restore Benji will compare each restored block's checksum to the
+stored checksum in the metadata backend **no matter if the block has been
+marked as invalid previously**. If it encounters a difference, the block
+and all versions containing this block will be marked as invalid and a
+warning will be given::
 
-During full restore, benji will compare each restored block's checksum to the
-stored checksum from the metadata store **no matter if the block has been
-marked invalid previously**. If it encounters a difference, the block
-and all versions containing this block will be marked *invalid* and a warning
-will be given::
-
-   ERROR: Checksum mismatch during restore for block 2558 (is: a134381a9760b5569cdaa2b1496483a5cef0428b2de351593599aaac4a5525e8dc97610a3cf515bce685d1e2a1e76c054c3438382588669a909e2073dac1a25c should-be: asd, block-valid: 0). Block restored is invalid. Continuing.
-    INFO: Marked block invalid (UID 73923236eb5ttp7DJ6BdynMfwMnZamTF, Checksum asd. Affected versions: 90fbbeb6-1fbe-11e7-9f25-a44e314f9270, bc1af5e0-2f1c-11e7-b961-a44e314f9270, 0ffaf1ba-2f1d-11e7-b961-a44e314f9270, 2563c0a4-2f1d-11e7-b961-a44e314f9270, 430d4f4e-2f1d-11e7-b961-a44e314f9270
+   ERROR: Checksum mismatch during restore for block 9 (UID 1-a) (is: e36cee7fd34ae637... should-be: dea186672147e1e3..., block.valid: True). Block restored is invalid.
+    INFO: Marked block invalid (UID 1-a, Checksum dea186672147e1e3. Affected versions: V0000000001, V0000000002
+    INFO: Marked version invalid (UID V0000000001)
+    INFO: Marked version invalid (UID V0000000002)
 
 Even when encountering such an error, Benji will continue to restore.
 

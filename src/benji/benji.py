@@ -1,12 +1,15 @@
 # -*- encoding: utf-8 -*-
 
 import datetime
+import errno
+import hashlib
 import importlib
 import math
+import os
 import random
 import time
 from concurrent.futures import CancelledError, TimeoutError
-from io import StringIO
+from io import StringIO, BytesIO
 from urllib import parse
 
 from benji.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
@@ -83,7 +86,7 @@ class Benji:
             self._data_backend_object = self._data_backend_module.DataBackend(self.config)
         return self._data_backend_object
 
-    def _prepare_version(self, name, snapshot_name, size=None, from_version_uid=None):
+    def _clone_version(self, name, snapshot_name, size=None, from_version_uid=None):
         """ Prepares the metadata for a new version.
         If from_version_uid is given, this is taken as the base, otherwise
         a pure sparse version is created.
@@ -149,9 +152,6 @@ class Benji:
         notify(self._process_name)
         self._locking.unlock(lock_name=version.uid.readable)
         return version
-
-    def clone_version(self, name, snapshot_name, from_version_uid):
-        return self._prepare_version(name, snapshot_name, None, from_version_uid)
 
     def ls(self, version_uid=None, version_name=None, version_snapshot_name=None):
         return self._metadata_backend.get_versions(version_uid=version_uid, version_name=version_name,
@@ -558,7 +558,7 @@ class Benji:
             sparse_blocks = set()
             read_blocks = set(range(num_blocks))
 
-        version = self._prepare_version(name, snapshot_name, source_size, from_version_uid)
+        version = self._clone_version(name, snapshot_name, source_size, from_version_uid)
 
         if not self._locking.lock(lock_name=version.uid.readable, reason='Backup'):
             raise AlreadyLocked('Version {} is locked.'.format(version.uid))
@@ -870,3 +870,209 @@ class Benji:
                 logger.warning('Version {} couldn\'t be deleted, it\'s currently locked.')
 
         return map(lambda version: version.uid, dismissed_versions)
+
+# The reason for this class being here is that it accesses private attributes of class Benji
+# and I don't want to make them all generally publicly available.
+# Maybe they could inherit from the same base class in the future, but currently their
+# functionality seems very different. So we just define that BenjiStore objects may access
+# private attributes of Benji objects.
+class BenjiStore:
+    def __init__(self, benji_obj):
+        self._benji_obj = benji_obj
+        self._cachedir = self._benji_obj.config.get('nbd.cacheDirectory', types=str)
+        self._blocks = {}  # block list cache by version
+        self._block_cache = set()
+        self._cow = {}  # contains version_uid: dict() of block id -> block
+
+    def open(self, version, read_only):
+        if not self._benji_obj._locking.lock(lock_name=version.uid.readable, reason='NBD'):
+            raise AlreadyLocked('Version {} is locked.'.format(version.uid))
+
+    def close(self, version):
+        self._benji_obj._locking.unlock(lock_name=version.uid.readable)
+
+    def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None):
+        return self._benji_obj._metadata_backend.get_versions(version_uid=version_uid, version_name=version_name,
+                                                   version_snapshot_name=version_snapshot_name)
+
+    def _block_list(self, version, offset, length):
+        # get cached blocks data
+        if not self._blocks.get(version.uid):
+            # Only work with dereferenced blocks
+            self._blocks[version.uid] = [block.deref()
+                                        for block in self._benji_obj._metadata_backend.get_blocks_by_version(version.uid)]
+        blocks = self._blocks[version.uid]
+
+        block_number = offset // version.block_size
+        block_offset = offset % version.block_size
+
+        chunks = []
+        while True:
+            try:
+                block = blocks[block_number]
+            except IndexError:
+                # We round up the size reported by the NBD server to a multiple of 4096 which is the maximum
+                # block size supported by NBD. So we might need to fake up to 4095 bytes (of zeros) here.
+                if length > 4095:
+                    # Don't throw one of our own exceptions here as we need an exception with an errno value
+                    # to communicate it back in the NBD response.
+                    raise OSError(errno.EIO)
+                read_length = min(block.size-block_offset, length)
+                chunks.append((None, 0, read_length))  # hint: return \0s
+            else:
+                assert block.id == block_number
+                read_length = min(block.size-block_offset, length)
+                chunks.append((block, block_offset, read_length))
+            block_number += 1
+            block_offset = 0
+            length -= read_length
+            assert length >= 0
+            if length == 0:
+                break
+
+        return chunks
+
+    @staticmethod
+    def _cache_filename(block_uid):
+        filename = '{:016x}-{:016x}'.format(block_uid.left, block_uid.right)
+        digest = hashlib.md5(filename.encode('ascii')).hexdigest()
+        return '{}/{}/{}-{}'.format(digest[0:2], digest[2:4], digest[:8], filename)
+
+    def _read(self, block, offset=0, length=None):
+        if block.uid not in self._block_cache:
+            data = self._benji_obj._data_backend.read(block, sync=True)
+            filename = os.path.join(self._cachedir, self._cache_filename(block.uid))
+            try:
+                with open(filename, 'wb') as f:
+                    f.write(data)
+            except FileNotFoundError:
+                os.makedirs(os.path.dirname(filename), exist_ok=True)
+                with open(filename, 'wb') as f:
+                    f.write(data)
+            self._block_cache.add(block.uid)
+        with open(os.path.join(self._cachedir, self._cache_filename(block.uid)), 'rb') as f:
+            f.seek(offset)
+            if length is None:
+                return f.read()
+            else:
+                return f.read(length)
+
+    def read(self, version, cow_version, offset, length):
+        if cow_version:
+            cow = self._cow[cow_version.uid.int]
+        else:
+            cow = None
+        read_list = self._block_list(version, offset, length)
+        data = []
+        for block, offset, length in read_list:
+            # If block is in COW version, read it from there
+            if block is not None and cow is not None and block.id in cow:
+                block = cow[block.id]
+                logger.debug('Reading block {}:{}:{} from COW version.'.format(block, offset, length))
+            else:
+                logger.debug('Reading block {}:{}:{}.'.format(block, offset, length))
+
+            if block is None:
+                logger.warning('Tried to read data beyond device (offset {}).'.format(offset))
+                data.append(b'\0' * length)
+            elif not block.uid:    # sparse block
+                data.append(b'\0' * length)
+            else:
+                data.append(self._read(block, offset, length))
+        return b''.join(data)
+
+    def get_cow_version(self, from_version):
+        #_clone_version(self, name, snapshot_name, size=None, from_version_uid=None):
+        cow_version = self._benji_obj._clone_version(name=from_version.name,
+                                                     snapshot_name='nbd-cow-{}-{}'
+                                                        .format(from_version.uid.readable,
+                                                                datetime.datetime.now().isoformat(timespec='seconds')),
+                                                     from_version_uid=from_version.uid)
+        if not self._benji_obj._locking.lock(lock_name=cow_version.uid.readable, reason='NBD COW'):
+            raise AlreadyLocked('Version {} is locked.'.format(cow_version.uid))
+        self._cow[cow_version.uid.int] = {}  # contains version_uid: dict() of block id -> uid
+        return cow_version
+
+    def _save(self, block, data):
+        filename = os.path.join(self._cachedir, self._cache_filename(block.uid))
+        try:
+            with open(filename, 'wb') as f:
+                f.write(data)
+        except FileNotFoundError:
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            with open(filename, 'wb') as f:
+                f.write(data)
+        self._block_cache.add(block.uid)
+
+    def _rm(self, block):
+        filename = os.path.join(self._cachedir, self._cache_filename(block.uid))
+        os.unlink(filename)
+
+    def write(self, cow_version, offset, data):
+        """ Copy on write backup writer """
+        dataio = BytesIO(data)
+        cow = self._cow[cow_version.uid.int]
+        write_list = self._block_list(cow_version, offset, len(data))
+        for block, _offset, length in write_list:
+            if block is None:
+                logger.warning('Tried to save data beyond device, it will be lost (offset {}).'.format(offset))
+                continue
+            if block.id in cow:
+                # the block is already copied, so update it.
+                with open(os.path.join(self._cachedir, self._cache_filename(block.uid)), 'r+b') as f:
+                    f.seek(offset)
+                logger.debug('COW: Updated block {}'.format(block.id))
+            else:
+                # read the block from the original, update it and write it back
+                if block.uid:
+                    write_data = BytesIO(self._benji_obj._data_backend.read(block, sync=True))
+                    write_data.seek(_offset)
+                    write_data.write(dataio.read(length))
+                    write_data.seek(0)
+                else: # was a sparse block
+                    write_data = BytesIO(data)
+                # Save a copy of the changed data and record the changed block UID
+                block.uid = BlockUid(cow_version.uid.int, block.id + 1)
+                block.checksum = None
+                self._save(block, write_data.read())
+                cow[block.id] = block
+                logger.debug('COW: Wrote block {} into {}'.format(block.id, block.uid))
+
+    def flush(self, cow_version):
+        # TODO: Maybe fixate partly?
+        pass
+
+    def fixate(self, cow_version):
+        # save blocks into version
+        logger.info('Fixating version {} with {} blocks, please wait!'.format(
+            cow_version.uid,
+            len(self._cow[cow_version.uid.int].items())
+        ))
+
+        for block in self._cow[cow_version.uid.int].values():
+            logger.debug('Fixating block {} uid {}'.format(block.id, block.uid))
+            data = self._read(block)
+
+            # dump changed data
+            self._benji_obj._data_backend.save(block, data, sync=True)
+            logger.debug('Stored block {} uid {}'.format(block.id, block.uid))
+
+            # TODO: Add deduplication (maybe share code with backup?), detect sparse blocks?
+            checksum = data_hexdigest(self._benji_obj._hash_function, data)
+            self._benji_obj._metadata_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
+
+        self._benji_obj._metadata_backend.commit()
+        self._benji_obj._metadata_backend.set_version_valid(cow_version.uid)
+        self._benji_obj._metadata_backend.protect_version(cow_version.uid)
+        logger.info('Fixation done. Deleting temporary data, please wait!')
+        # TODO: Delete COW blocks and also those from block_cache
+        for block_uid in self._block_cache:
+            # TODO if this block is in the current version (and in no other?)
+            # rm this block from cache
+            # rm block uid from self._block_cache
+            pass
+        for block_id, block in self._cow[cow_version.uid.int].items():
+            pass
+        del(self._cow[cow_version.uid.int])
+        self._benji_obj._locking.unlock(lock_name=cow_version.uid.readable)
+        logger.info('Finished.')

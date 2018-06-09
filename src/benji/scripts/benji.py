@@ -12,11 +12,12 @@ from dateutil import tz
 from prettytable import PrettyTable
 
 import benji.exception
-from benji.benji import Benji
+from benji.benji import Benji, BenjiStore
 from benji.config import Config
 from benji.logging import logger, init_logging
 from benji.metadata import Version, VersionUid
-from benji.utils import hints_from_rbd_diff, parametrized_hash_function, human_readable_duration
+from benji.nbdserver import NbdServer
+from benji.utils import hints_from_rbd_diff, human_readable_duration
 
 __version__ = pkg_resources.get_distribution('benji').version
 
@@ -322,22 +323,13 @@ class Commands:
                 benji_obj.close()
 
     def nbd(self, bind_address, bind_port, read_only):
-        from benji.nbd.nbdserver import Server as NbdServer
-        from benji.nbd.nbd import BenjiStore
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
-            hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
-            cache_dir = self.config.get('nbd.cacheDirectory', types=str)
-            store = BenjiStore(benji, cachedir=cache_dir, hash_function=hash_function)
+            store = BenjiStore(benji_obj)
             addr = (bind_address, bind_port)
             server = NbdServer(addr, store, read_only)
             logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
-            logger.info("You may now start")
-            logger.info("  nbd-client -l %s -p %s" % (addr[0], addr[1]))
-            logger.info("and then get the backup via")
-            logger.info("  modprobe nbd")
-            logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
             server.serve_forever()
         finally:
             if benji_obj:

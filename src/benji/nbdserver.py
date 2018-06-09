@@ -2,8 +2,11 @@
 """
 swiftnbd. server module
 
-Changed to support benji blocks instead of swift in 2015 by
+Changed to support backy2 blocks instead of swift in 2015 by
 Daniel Kraft <daniel.kraft@d9t.de>
+
+Updated in 2018 by
+Lars Fenneberg <lf@lemental.net>
 
 Copyright (C) 2013-2015 by Juan J. Martinez <jjm@usebox.net>
 
@@ -38,7 +41,7 @@ from benji.exception import NbdServerAbortedNegotiationError
 from benji.metadata import VersionUid
 
 
-class Server(object):
+class NbdServer:
     """
     Class implementing the server.
     """
@@ -154,7 +157,7 @@ class Server(object):
 
                     data = data.decode("ascii")
                     data = VersionUid.create_from_readables(data)
-                    if data not in [v.uid for v in self.store.ls()]:
+                    if data not in [v.uid for v in self.store.get_versions()]:
                         if not fixed:
                             raise IOError("Negotiation failed: unknown export name")
 
@@ -164,7 +167,8 @@ class Server(object):
 
                     # we have negotiated a version and it will be used
                     # until the client disconnects
-                    version = self.store.ls(version_uid=data)[0]
+                    version = self.store.get_versions(version_uid=data)[0]
+                    self.store.open(version, self.read_only)
 
                     self.log.info("[%s:%s] Negotiated export: %s" % (host, port, version.uid))
 
@@ -186,7 +190,7 @@ class Server(object):
                     break
 
                 elif opt == self.NBD_OPT_LIST:
-                    for version in self.store.ls():
+                    for version in self.store.get_versions():
                         version_encoded = version.uid.readable.encode("ascii")
                         writer.write(struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_SERVER, len(version_encoded) + 4))
                         writer.write(struct.pack(">L", len(version_encoded)))
@@ -248,10 +252,7 @@ class Server(object):
 
                 elif cmd == self.NBD_CMD_READ:
                     try:
-                        if cow_version:
-                            data = self.store.read(cow_version, offset, length)
-                        else:
-                            data = self.store.read(version, offset, length)
+                        data = self.store.read(version, cow_version, offset, length)
                     except Exception as exception:
                         self.log.error("[%s:%s] NBD_CMD_READ: %s\n%s" % (host, port, exception, traceback.format_exc()))
                         yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
@@ -260,6 +261,7 @@ class Server(object):
                     yield from self.nbd_response(writer, handle, data=data)
 
                 elif cmd == self.NBD_CMD_FLUSH:
+                    # Return success right away when we're read only or when we haven't written anythin yet.
                     if self.read_only or not cow_version:
                         yield from self.nbd_response(writer, handle)
                         continue
@@ -286,6 +288,7 @@ class Server(object):
         finally:
             if cow_version:
                 self.store.fixate(cow_version)
+            self.store.close(version)
             writer.close()
 
 

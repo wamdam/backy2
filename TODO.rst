@@ -4,7 +4,6 @@ TODOs
 Probably soonish
 ----------------
 
-* Fix timezone problems
 * Work an Beji for Rook image
 * Fix NBD support
 * Standalone Docker image
@@ -34,3 +33,4 @@ Unsorted collection
 * Native Google Storage backend
 * alembic and database migrations probably need some work
 * Better NBD server performance (if possible)
+* Deduplication and sparse detection in NBD fixate()?

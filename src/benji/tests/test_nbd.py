@@ -6,9 +6,11 @@ import subprocess
 import threading
 from unittest import TestCase
 
+from benji.benji import BenjiStore
 from benji.logging import logger
+from benji.metadata import VersionUid
+from benji.nbdserver import NbdServer
 from benji.tests.testcase import BenjiTestCase
-from benji.utils import parametrized_hash_function
 
 kB = 1024
 MB = kB * 1024
@@ -32,11 +34,11 @@ class NbdTestCase:
         return data
 
     def generate_version(self, testpath):
-        size = 16*MB
+        size = 4*MB
         image_filename = os.path.join(testpath, 'image')
         with open(image_filename, 'wb') as f:
             f.truncate(size)
-        for j in range(random.randint(10, 20)):
+        for j in range(random.randint(20, 30)):
             patch_size = random.randint(0, 128*kB)
             data = self.random_bytes(patch_size)
             offset = random.randint(0, size-1-patch_size)
@@ -62,13 +64,8 @@ class NbdTestCase:
         super().tearDown()
 
     def test(self):
-        from benji.nbd.nbdserver import Server as NbdServer
-        from benji.nbd.nbd import BenjiStore
         benji_obj = self.benjiOpen(initdb=False)
-
-        hash_function = parametrized_hash_function(self.config.get('hashFunction', types=str))
-        cache_dir = self.config.get('nbd.cacheDirectory', types=str)
-        store = BenjiStore(benji_obj, cachedir=cache_dir, hash_function=hash_function)
+        store = BenjiStore(benji_obj)
         addr = ('127.0.0.1', self.SERVER_PORT)
         read_only = False
         self.nbd_server = NbdServer(addr, store, read_only)
@@ -79,7 +76,7 @@ class NbdTestCase:
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
 
-        self.assertEqual({self.version_uid[0].readable}, set([version.uid for version  in benji.ls()]))
+        self.assertEqual({self.version_uid[0], VersionUid(2)}, set([version.uid for version  in benji_obj.ls()]))
 
         benji_obj.close()
 
@@ -99,7 +96,6 @@ class NbdTestCase:
             if not re.match(success_regexp, completed.stdout, re.I|re.M|re.S):
                 self.fail('command {} failed: {}'.format(' '.join(args), completed.stdout.replace('\n', '|')))
 
-
     def nbd_client(self, version_uid):
         self.subprocess_run(args=['sudo', 'nbd-client', '127.0.0.1', '-p', str(self.SERVER_PORT), '-l'],
                             success_regexp='^Negotiation: ..\n{}\n$'.format(version_uid[0].readable))
@@ -112,7 +108,7 @@ class NbdTestCase:
         nbd_data = bytearray()
         with open(self.NBD_DEVICE, 'rb') as f:
             while True:
-                data = f.read(1024 * 1024)
+                data = f.read(64 * 1024 + random.randint(0, 8192))
                 if not data:
                     break
                 count += len(data)
@@ -123,15 +119,20 @@ class NbdTestCase:
         logger.info('image_data size {}, nbd_data size {}'.format(len(image_data), len(nbd_data)))
         self.assertEqual(image_data, bytes(nbd_data))
 
-        with open(self.NBD_DEVICE, 'r+b') as f:
-            for offset in range(0,size,4096):
-                f.seek(offset)
-                data = self.random_bytes(4096)
-                written = f.write(data)
-                self.assertEqual(len(data), written)
-                f.seek(offset)
-                read_data = f.read(4096)
-                self.assertEqual(data, read_data)
+        f = os.open(self.NBD_DEVICE, os.O_RDWR)
+        for offset in range(0,size,4096):
+            os.lseek(f, offset, os.SEEK_SET)
+            data = self.random_bytes(4096)
+            written = os.write(f, data)
+            os.fsync(f)
+            self.assertEqual(len(data), written)
+            # Discard cache so that the read request below really goes to the NBD server
+            os.posix_fadvise(f, offset, len(data), os.POSIX_FADV_DONTNEED)
+
+            os.lseek(f, offset, os.SEEK_SET)
+            read_data = os.read(f, 4096)
+            self.assertEqual(data, read_data)
+        os.close(f)
 
         self.subprocess_run(args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE],
                             success_regexp='^disconnect, sock, done\n$')
@@ -189,7 +190,7 @@ class NbdTestCasePostgreSQL_S3(NbdTestCase, BenjiTestCase, TestCase):
                 simultaneousReads: 5
             dataBackend:
               type: s3
-              s3_boto3:
+              s3:
                 awsAccessKeyId: minio
                 awsSecretAccessKey: minio123
                 endpointUrl: http://127.0.0.1:9901/
