@@ -10,18 +10,6 @@ from benji.io import IO as _IO
 from benji.logging import logger
 from benji.utils import data_hexdigest
 
-if hasattr(os, 'posix_fadvise'):
-    posix_fadvise = os.posix_fadvise
-else:  # pragma: no cover
-    logger.warning('Running without `posix_fadvise`.')
-    os.POSIX_FADV_RANDOM = None
-    os.POSIX_FADV_SEQUENTIAL = None
-    os.POSIX_FADV_WILLNEED = None
-    os.POSIX_FADV_DONTNEED = None
-
-    def posix_fadvise(*args, **kw):
-        return
-
 
 class IO(_IO):
 
@@ -74,7 +62,7 @@ class IO(_IO):
             data = source_file.read(block.size)
             t2 = time.time()
             # throw away cache
-            posix_fadvise(source_file.fileno(), offset, block.size, os.POSIX_FADV_DONTNEED)
+            os.posix_fadvise(source_file.fileno(), offset, block.size, os.POSIX_FADV_DONTNEED)
 
         if not data:
             raise EOFError('EOF reached on source when there should be data.')
@@ -97,7 +85,7 @@ class IO(_IO):
         offset = block.id * self._block_size
         self._writer.seek(offset)
         written = self._writer.write(data)
-        posix_fadvise(self._writer.fileno(), offset, len(data), os.POSIX_FADV_DONTNEED)
+        os.posix_fadvise(self._writer.fileno(), offset, len(data), os.POSIX_FADV_DONTNEED)
         assert written == len(data)
 
     def close(self):
