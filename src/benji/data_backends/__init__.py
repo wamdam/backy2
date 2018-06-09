@@ -554,8 +554,8 @@ class DataBackend(metaclass=ABCMeta):
 
     def _block_uid_to_key(self, block_uid):
         key_name = '{:016x}-{:016x}'.format(block_uid.left, block_uid.right)
-        hash = hashlib.md5(key_name.encode('ascii')).hexdigest()
-        return '{}{}/{}/{}-{}'.format(self._BLOCKS_PREFIX, hash[0:2], hash[2:4], hash[:8], key_name)
+        digest = hashlib.md5(key_name.encode('ascii')).hexdigest()
+        return '{}{}/{}/{}-{}'.format(self._BLOCKS_PREFIX, digest[0:2], digest[2:4], digest[:8], key_name)
 
     def _key_to_block_uid(self, key):
         bpl = len(self._BLOCKS_PREFIX)
