@@ -56,8 +56,8 @@ Usually you can use ``-s`` if your restore target is
     blocks which are sparse will not be written, so whatever random data was
     in there before the restore will remain.
 
-File-based Restores (NBD Server)
---------------------------------
+NBD Server
+----------
 
 Benji comes with its own NBD server which when started exports all known *versions*.
 These *versions* can then be mounted on any Linux host. The requirements on the

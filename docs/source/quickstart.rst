@@ -26,8 +26,8 @@ Backup Metadata
     to get the original data back. Also referred to as the *metadata backend*.
 
 Version
-    A version is a backup of a specific backup source at a specific point in time.
-    A version is identified by a unique id.
+    A *version* is a backup of a specific backup source at a specific point in time.
+    A *version* is identified by a unique id.
 
 .. _backup:
 
@@ -39,12 +39,12 @@ Backup
     $ benji initdb
         INFO: $ benji initdb
 
-   .. NOTE:: Initializing a database multiple times does **not** destroy any
-       data, instead it will fail because it finds already existing tables.
+   .. NOTE:: Initializing the database multiple times does **not** destroy any
+       data. Instead it will fail because it finds already existing tables.
 
-2. Create demo data:
+2. Create some demo data:
 
-   For demonstration purpose, create a 40MB test file::
+   For demonstration purpose create a 40MB test file::
 
     $ dd if=/dev/urandom of=TESTFILE bs=1M count=40
     40+0 records in
@@ -102,12 +102,14 @@ machine readable JSON output for usage in scripts::
 Specifying ``-m`` automatically turns down the verbosity level to only output
 errors.
 
-Deep-scrub and Scrub
+Deep Scrub and Scrub
 --------------------
 
-Deep scrubbing reads all the blocks from the backup target (or some of them if you
-use the ``-p`` option) and compares them with the metadata or, if you pass a
-source option (``-s``), also with the original data. ::
+Deep scrubbing reads all the blocks of a particular *version* from the data backend
+(or some of them if you use the ``-p`` option) and compares the checksums of these
+blocks to the checksums recorded in the metadata backend. If you pass the
+source option (``-s``) the blocks will also be compared to the original source data.
+::
 
     $ benji deep-scrub v1
         INFO: $ benji deep-scrub v1
@@ -122,8 +124,9 @@ source option (``-s``), also with the original data. ::
         INFO: Deep scrubbed 9/10 blocks (90.0%)
         INFO: Deep scrubbed 10/10 blocks (100.0%)
 
-If an error occurs (for example, if backup target blocks couldn't be read or data
-has changed), the output from ``deep-scrub`` looks like this::
+If an error occurs (for example, if some blocks couldn't be read or a
+checksum mismatch was detected), the output from ``deep-scrub`` looks
+like this::
 
     $ benji deep-scrub v1
         INFO: $ benji deep-scrub v1
@@ -133,7 +136,7 @@ has changed), the output from ``deep-scrub`` looks like this::
         INFO: Deep scrubbed 4/10 blocks (40.0%)
         INFO: Deep scrubbed 5/10 blocks (50.0%)
         INFO: Deep scrubbed 6/10 blocks (60.0%)
-       ERROR: Checksum mismatch during deep scrub for block 6 (UID 1-7) (is: 729a77dc964e5f543e6f10697386429d5978a1681a86fce1101aa2abcb41c5cc should-be: b70aeb070b95df31f68fd19c99e33f2826bd2c50049ca48c27b58743ab8a8d64).
+       ERROR: Checksum mismatch during deep scrub of block 6 (UID 1-7) (is: 729a77dc964e5f54... should-be: b70aeb070b95df31...).
         INFO: Marked block invalid (UID 1-7, Checksum b70aeb070b95df31. Affected versions: V0000000001
         INFO: Marked version invalid (UID V0000000001)
         INFO: Deep scrubbed 8/10 blocks (80.0%)
@@ -155,9 +158,9 @@ Also, the version is marked invalid as you can see here::
     | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 | False |   False   |      |
     +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
 
-Just in case you are able to fix the error, just scrub again and Benji will mark the version valid again.
+Just in case you are able to fix the error, just scrub again and Benji will mark the version as valid again.
 
-There is also a little brother to ``deep-scrub`` which only check for metadata consistency and block existence::
+There also is a little brother to ``deep-scrub`` which only checks metadata consistency and block existence::
 
     $ benji scrub v1
         INFO: $ benji scrub v1
@@ -211,16 +214,13 @@ If you want to overwrite data, you must ``--force``.
 Version Removal and Cleanup
 ---------------------------
 
-You can remove any given backup version by::
+You can remove any given backup *version* by::
 
-    $ benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: $ /usr/bin/benji rm 8fd42f1a-2364-11e7-8594-00163e8c0370
-       ERROR: Unexpected exception
-       ERROR: 'Version 8fd42f1a-2364-11e7-8594-00163e8c0370 is too young. Will not delete.'
-       […]
-        INFO: Benji failed.
+    $ benji rm V0000000001
+        INFO: $ benji rm V0000000001
+       ERROR: Version V0000000001 is too young. Will not delete it.
 
-What prevents this version from being deleted is the ``benji.yaml`` option::
+What prevents this *version* from being deleted is the ``benji.yaml`` option::
 
     disallowRemoveWhenYounger: 6
 
@@ -258,12 +258,11 @@ There is also the option (``-f`` or ``--full``) to do a full cleanup which itera
 through all the blocks in the backend storage. This should only be used when an
 inconsistency is suspected as it can take a very long time to complete.
 
-    .. NOTE:: A full cleanup must not be run parallel to ANY other Benji jobs.
-        Benji will prevent you from doing this by creating a global lock.
+.. NOTE:: A full cleanup must not be run parallel to ANY other Benji jobs.
+    Benji will prevent you from doing this by creating a global lock.
 
 .. CAUTION:: Parallelism has been tested successfully with PostgreSQL. It might
     not work reliably with other DBMS.
-
 
 .. [1] Benji uses blake2b with a 32 byte digest size but this can be configured
     in ``benji.yaml``. blake2b is the recommended hash function as it is very

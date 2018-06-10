@@ -4,9 +4,10 @@ TODOs
 Probably soonish
 ----------------
 
-* Work an Beji for Rook image
-* Fix NBD support
+* Work an Benji for Rook image
 * Standalone Docker image
+* Document retention policy enforcement
+* Document Docker image(s)
 * Update website
 * Make it possible to import all version metadata from the data backend at once
 * Redo animated GIFs ("CLI videos")

@@ -22,6 +22,7 @@ README
     backup
     scrub
     restore
+    enforce
     cleanup
     administration
     datalayout

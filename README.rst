@@ -47,14 +47,15 @@ Main Features
     possible. This means, sparse blocks (i.e. blocks which are holes or are
     all zeros) will be skipped on restore.
 
-**File-based restores**
+**NBD server facilitating file-based restores**
     Benji brings its own NBD (network block device) server which makes backup
-    images directly mountable and enables file-based restores - even via the
-    network on another machine.
+    images directly mountable - even over the network on another machine. This
+    enables file-based restores without restoring the whole image.
 
     These mounts are read/write (unless you specify ``-r``) and writing to them
-    creates a copy-on-write backup version (**i.e. the original version is not**
-    **modified**).
+    creates a copy-on-write backup version (**i.e. the original version is not modified**).
+    This makes it possible to do repairs on the image (``fsck``, etc.) and restore
+    the repaired copy afterwards.
 
 **Small bandwidth requirements**
     As only changed blocks are written to the backup target, a small connection
