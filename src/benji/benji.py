@@ -1064,6 +1064,7 @@ class BenjiStore:
         self._benji_obj._metadata_backend.commit()
         self._benji_obj._metadata_backend.set_version_valid(cow_version.uid)
         self._benji_obj._metadata_backend.protect_version(cow_version.uid)
+        self._benji_obj.export_to_backend([cow_version.uid], overwrite=True, locking=False)
         logger.info('Fixation done. Deleting temporary data, please wait!')
         # TODO: Delete COW blocks and also those from block_cache
         for block_uid in self._block_cache:
