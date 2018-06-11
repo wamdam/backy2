@@ -1,5 +1,5 @@
 Benji Backup
-############
+============
 
 Benji Backup is a block based deduplicating  backup software. It builds on the
 excellent foundations and concepts of `backy² <http://backy2.com/>`_ by Daniel Kraft.

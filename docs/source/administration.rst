@@ -22,17 +22,29 @@ Metadata Redundancy
 ~~~~~~~~~~~~~~~~~~~
 
 Benji already exports the version metadata to the *data backend*, too. You
-can restore this information with ``benji import-from-backend``.
+can restore this information with ``benji import-from-backend``:
+
+.. command-output::benji import-from-backend --help
+
+The metadata-backend-less uses this import from the data backend to
+populate an in-memory database to enable restores when the metadata
+backend is unavailable, please see section :ref:`metadata_backend_less`.
 
 You can also make further copies of the metadata with ``benji export``
 and store them somewhere safe to increase your redundancy even more. It is
-advisable to compress them as the JSON export format is quite verbose.
+advisable to compress them as the JSON export format is quite redundant.
+
+.. command-output::benji export --help
+
+You can import these exports again with:
+
+.. command-output::benji import --help
+
+If the imported *version* already exists in the metadata backend Benji
+terminates with an error and doesn't proceed with the import.
 
 So now, even if your backup database server crashes, you'll still be able
-to reimport all existing versions again.
-
-.. NOTE:: **After** re-importing many versions, it is recommended to start a
-    ``benji cleanup -f`` run as shown in section :ref:`full_cleanup`.
+to reimport all existing versions again!
 
 .. ATTENTION:: When you remove (``benji rm``) versions from the database and
     then call ``benji cleanup``, the blocks containing the backed up *data* will

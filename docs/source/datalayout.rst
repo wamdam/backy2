@@ -53,8 +53,5 @@ Data Backend
 As mentioned above there are three data backend implementations. Please
 refer to section :ref:`configuration`.
 
-.. NOTE:: TODO: Information about the actual data layout
-.. NOTE:: TODO: Encryption
-.. NOTE:: TODO: Compression
-.. NOTE:: TODO: Mention metadata accompanying blocks
-
+.. todo:: Document information about the actual data layout, encryption,
+    compression and mention metadata accompanying blocks.
