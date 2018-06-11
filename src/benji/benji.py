@@ -76,7 +76,7 @@ class Benji:
         notify(self._process_name)  # i.e. set process name without notification
 
         if self._locking.is_locked():
-            raise AlreadyLocked('Another process is already running.')
+            raise AlreadyLocked('Another instance is already running.')
 
     # This implements a lazy creation of the data backend object so that any network connections
     # are only opened and expensive encryption calculations are only done when the object is really used.
@@ -106,51 +106,64 @@ class Benji:
                 raise InternalError('Size needs to be specified if there is no base version.')
 
         num_blocks = int(math.ceil(size / self._block_size))
-        # we always start with invalid versions, then validate them after backup
-        version = self._metadata_backend.set_version(
-            version_name=name,
-            snapshot_name=snapshot_name,
-            size=size,
-            block_size=self._block_size,
-            valid=False)
-        if not self._locking.lock(lock_name=version.uid.readable, reason='Preparing version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version.uid))
-        for id in range(num_blocks):
-            if old_blocks:
-                try:
-                    old_block = old_blocks[id]
-                except IndexError:
+
+        try:
+            # we always start with invalid versions, then validate them after backup
+            version = self._metadata_backend.set_version(
+                version_name=name,
+                snapshot_name=snapshot_name,
+                size=size,
+                block_size=self._block_size,
+                valid=False,
+                protected=True)
+            self._locking.lock_version(version.uid, reason='Preparing version')
+            self._metadata_backend.unprotect_version(version.uid)
+
+            for id in range(num_blocks):
+                if old_blocks:
+                    try:
+                        old_block = old_blocks[id]
+                    except IndexError:
+                        uid = None
+                        checksum = None
+                        block_size = self._block_size
+                        valid = True
+                    else:
+                        assert old_block.id == id
+                        uid = old_block.uid
+                        checksum = old_block.checksum
+                        block_size = old_block.size
+                        valid = old_block.valid
+                else:
                     uid = None
                     checksum = None
                     block_size = self._block_size
                     valid = True
-                else:
-                    assert old_block.id == id
-                    uid = old_block.uid
-                    checksum = old_block.checksum
-                    block_size = old_block.size
-                    valid = old_block.valid
-            else:
-                uid = None
-                checksum = None
-                block_size = self._block_size
-                valid = True
 
-            # the last block can differ in size, so let's check
-            _offset = id * self._block_size
-            new_block_size = min(self._block_size, size - _offset)
-            if new_block_size != block_size:
-                # last block changed, so set back all info
-                block_size = new_block_size
-                uid = None
-                checksum = None
-                valid = False
+                # the last block can differ in size, so let's check
+                _offset = id * self._block_size
+                new_block_size = min(self._block_size, size - _offset)
+                if new_block_size != block_size:
+                    # last block changed, so set back all info
+                    block_size = new_block_size
+                    uid = None
+                    checksum = None
+                    valid = False
 
-            self._metadata_backend.set_block(id, version.uid, uid, checksum, block_size, valid, upsert=False)
-            notify(self._process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable, (id + 1) / num_blocks * 100))
-        self._metadata_backend.commit()
-        notify(self._process_name)
-        self._locking.unlock(lock_name=version.uid.readable)
+                self._metadata_backend.set_block(id, version.uid, uid, checksum, block_size, valid, upsert=False)
+                notify(self._process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable, (id + 1) / num_blocks * 100))
+
+            self._metadata_backend.commit()
+        except:
+            self._metadata_backend.rollback()
+            if version:
+                self._metadata_backend.unprotect_version(version.uid)
+            if self._locking.is_version_locked(version.uid):
+                self._locking.unlock_version(version.uid)
+            raise
+        finally:
+            notify(self._process_name)
+
         return version
 
     def ls(self, version_uid=None, version_name=None, version_snapshot_name=None):
@@ -188,16 +201,14 @@ class Benji:
                 )
 
     def scrub(self, version_uid, percentile=100):
-        if not self._locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-
+        self._locking.lock_version(version_uid, reason='Scrubbing version')
         try:
             version = self._metadata_backend.get_version(version_uid)
             if not version.valid:
                 raise IOError('Version {} is already marked as invalid.'.format(version_uid.readable))
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
         except:
-            self._locking.unlock(lock_name=version_uid.readable)
+            self._locking.unlock_version(version_uid)
             raise
 
         valid = True
@@ -249,7 +260,7 @@ class Benji:
         except:
             raise
         finally:
-            self._locking.unlock(lock_name=version_uid.readable)
+            self._locking.unlock_version(version_uid)
             notify(self._process_name)
 
         if read_jobs != done_read_jobs:
@@ -266,9 +277,7 @@ class Benji:
             raise IOError('Scrub of version {} failed.'.format(version_uid.readable))
 
     def deep_scrub(self, version_uid, source=None, percentile=100):
-        if not self._locking.lock(lock_name=version_uid.readable, reason='Scrubbing version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-
+        self._locking.lock_version(version_uid, reason='Deep scrubbing')
         try:
             version = self._metadata_backend.get_version(version_uid)
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
@@ -277,7 +286,7 @@ class Benji:
                 io = self._get_io_by_source(source, version.block_size)
                 io.open_r(source)
         except:
-            self._locking.unlock(lock_name=version_uid.readable)
+            self._locking.unlock_version(version_uid)
             raise
 
         valid = True
@@ -350,7 +359,7 @@ class Benji:
                 if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
                     logger.info('Deep scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,  done_read_jobs / read_jobs * 100))
         except:
-            self._locking.unlock(lock_name=version_uid.readable)
+            self._locking.unlock_version(version_uid)
             raise
         finally:
             if source:
@@ -367,7 +376,7 @@ class Benji:
             try:
                 self._metadata_backend.set_version_valid(version_uid)
             except:
-                self._locking.unlock(lock_name=version_uid.readable)
+                self._locking.unlock_version(version_uid)
                 raise
         else:
             # version is set invalid by set_blocks_invalid.
@@ -375,15 +384,13 @@ class Benji:
             # FIXME: we set state to False but don't mark any blocks as invalid.
             logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
 
-        self._locking.unlock(lock_name=version_uid.readable)
+        self._locking.unlock_version(version_uid)
 
         if not valid:
             raise IOError('Deep scrub of version {} failed.'.format(version_uid.readable))
 
     def restore(self, version_uid, target, sparse=False, force=False):
-        if not self._locking.lock(lock_name=version_uid.readable, reason='Restoring version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-
+        self._locking.lock_version(version_uid, reason='Restoring version')
         try:
             version = self._metadata_backend.get_version(version_uid)  # raise if version not exists
             notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
@@ -392,7 +399,7 @@ class Benji:
             io = self._get_io_by_source(target, version.block_size)
             io.open_w(target, version.size, force)
         except:
-            self._locking.unlock(lock_name=version_uid.readable)
+            self._locking.unlock_version(version_uid)
             raise
 
         try:
@@ -458,7 +465,7 @@ class Benji:
             raise
         finally:
             io.close()
-            self._locking.unlock(lock_name=version_uid.readable)
+            self._locking.unlock_version(version_uid)
             notify(self._process_name)
 
         if read_jobs != done_read_jobs:
@@ -478,9 +485,7 @@ class Benji:
         self._metadata_backend.unprotect_version(version_uid)
 
     def rm(self, version_uid, force=True, disallow_rm_when_younger_than_days=0, keep_backend_metadata=False):
-        if not self._locking.lock(lock_name=version_uid.readable, reason='Removing version'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-        try:
+        with self._locking.with_version_lock(version_uid, reason='Removing version'):
             version = self._metadata_backend.get_version(version_uid)
 
             if version.protected:
@@ -504,17 +509,11 @@ class Benji:
                     pass
 
             logger.info('Removed backup version {} with {} blocks.'.format(version_uid.readable, num_blocks))
-        finally:
-            self._locking.unlock(lock_name=version_uid.readable)
 
     def rm_from_backend(self, version_uid):
-        if not self._locking.lock(lock_name=version_uid.readable, reason='Removing version from backend storage'):
-            raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
-        try:
+        with self._locking.with_version_lock(version_uid, reason='Removing version from data backend'):
             self._data_backend.rm_version(version_uid)
-            logger.info('Removed backup version {} metadata from backend storage.'.format(version_uid.readable))
-        finally:
-            self._locking.unlock(lock_name=version_uid.readable)
+        logger.info('Removed backup version {} metadata from backend storage.'.format(version_uid.readable))
 
     def backup(self, name, snapshot_name, source, hints=None, from_version_uid=None, tags=None):
         """ Create a backup from source.
@@ -559,10 +558,7 @@ class Benji:
             read_blocks = set(range(num_blocks))
 
         version = self._clone_version(name, snapshot_name, source_size, from_version_uid)
-
-        if not self._locking.lock(lock_name=version.uid.readable, reason='Backup'):
-            raise AlreadyLocked('Version {} is locked.'.format(version.uid))
-
+        self._locking.update_version_lock(version.uid, reason='Backup')
         blocks = self._metadata_backend.get_blocks_by_version(version.uid)
 
         if from_version_uid and hints is not None:
@@ -740,31 +736,24 @@ class Benji:
             )
 
         logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags if tags else [])))
-        self._locking.unlock(lock_name=version.uid.readable)
+        self._locking.unlock_version(version.uid)
         # It might be tempting to return a Version object here but this will only lead to SQLAlchemy errors
         return version.uid
 
 
     def cleanup_fast(self, dt=3600):
-        """ Delete unreferenced blob UIDs """
-        if not self._locking.lock(lock_name='cleanup-fast', reason='Cleanup fast'):
-            raise AlreadyLocked('Another cleanup is running.')
-        try:
+        with self._locking.with_lock(lock_name='cleanup-fast',
+                                reason='Cleanup (fast)',
+                                locked_msg='Another fast cleanup is already running.'):
             for uid_list in self._metadata_backend.get_delete_candidates(dt):
                 logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
                 no_del_uids = self._data_backend.rm_many(uid_list)
                 if no_del_uids:
                     logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
-        finally:
-            self._locking.unlock(lock_name='cleanup-fast')
 
     def cleanup_full(self):
-        """ Delete unreferenced blob UIDs starting with <prefix> """
-        # in this mode, we compare all existing uids in data and meta.
-        # make sure, no other Benji will start
-        if not self._locking.lock(reason='Cleanup full'):
-            raise AlreadyLocked('Other instances are running.')
-        try:
+        with self._locking.with_lock(reason='Cleanup (full)',
+                                locked_msg='Another instance has already taken the global lock.'):
             active_blob_uids = set(self._data_backend.list_blocks())
             active_block_uids = set(self._metadata_backend.get_all_block_uids())
             delete_candidates = active_blob_uids.difference(active_block_uids)
@@ -775,8 +764,6 @@ class Benji:
                 except FileNotFoundError:
                     continue
             logger.info('Cleanup: Removed {} blobs'.format(len(delete_candidates)))
-        finally:
-            self._locking.unlock()
 
     def add_tag(self, version_uid, name):
         self._metadata_backend.add_tag(version_uid, name)
@@ -795,23 +782,21 @@ class Benji:
         try:
             locked_version_uids = []
             for version_uid in version_uids:
-                if not self._locking.lock(lock_name=version_uid.readable, reason='Exporting version(s)'):
-                    raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+                self._locking.lock_version(version_uid, reason='Exporting version')
                 locked_version_uids.append(version_uid)
 
             self._metadata_backend.export(version_uids, f)
             logger.info('Exported version {} metadata.'.format(version_uid.readable))
         finally:
             for version_uid in locked_version_uids:
-                self._locking.unlock(lock_name=version_uid.readable)
+                self._locking.unlock_version(version_uid)
 
     def export_to_backend(self, version_uids, overwrite=False, locking=True):
         try:
             locked_version_uids = []
             if locking:
                 for version_uid in version_uids:
-                    if not self._locking.lock(lock_name=version_uid.readable, reason='Exporting verion(s) to backend storage'):
-                        raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+                    self._locking.lock_version(version_uid, reason='Exporting version to data backend')
                     locked_version_uids.append(version_uid)
 
             for version_uid in version_uids:
@@ -821,7 +806,7 @@ class Benji:
                 logger.info('Exported version {} metadata to backend storage.'.format(version_uid.readable))
         finally:
             for version_uid in locked_version_uids:
-                self._locking.unlock(lock_name=version_uid.readable)#
+                self._locking.unlock_version(version_uid)
 
     def export_any(self, *args, **kwargs):
         return self._metadata_backend.export_any(*args, **kwargs)
@@ -836,8 +821,7 @@ class Benji:
         try:
             locked_version_uids = []
             for version_uid in version_uids:
-                if not self._locking.lock(lock_name=version_uid.readable, reason='Importing version(s) from backend storage'):
-                    raise AlreadyLocked('Version {} is locked.'.format(version_uid.readable))
+                self._locking.lock_version(version_uid, reason='Importing version from data backend')
                 locked_version_uids.append(version_uid)
 
             for version_uid in version_uids:
@@ -847,7 +831,7 @@ class Benji:
                 logger.info('Imported version {} metadata from backend storage.'.format(version_uid.readable))
         finally:
             for version_uid in locked_version_uids:
-                self._locking.unlock(lock_name=version_uid.readable)
+                self._locking.unlock_version(version_uid)
 
     def enforce_retention_policy(self, version_name, rules_spec, dry_run=False, keep_backend_metadata=False):
         versions = self._metadata_backend.get_versions(version_name=version_name)
@@ -885,11 +869,10 @@ class BenjiStore:
         self._cow = {}  # contains version_uid: dict() of block id -> block
 
     def open(self, version, read_only):
-        if not self._benji_obj._locking.lock(lock_name=version.uid.readable, reason='NBD'):
-            raise AlreadyLocked('Version {} is locked.'.format(version.uid))
+        self._benji_obj._locking.lock_version(version.uid, reason='NBD')
 
     def close(self, version):
-        self._benji_obj._locking.unlock(lock_name=version.uid.readable)
+        self._benji_obj._locking.unlock_version(version.uid)
 
     def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None):
         return self._benji_obj._metadata_backend.get_versions(version_uid=version_uid, version_name=version_name,
@@ -988,8 +971,7 @@ class BenjiStore:
                                                         .format(from_version.uid.readable,
                                                                 datetime.datetime.now().isoformat(timespec='seconds')),
                                                      from_version_uid=from_version.uid)
-        if not self._benji_obj._locking.lock(lock_name=cow_version.uid.readable, reason='NBD COW'):
-            raise AlreadyLocked('Version {} is locked.'.format(cow_version.uid))
+        self._benji_obj._locking.update_version_lock(cow_version.uid, reason='NBD COW')
         self._cow[cow_version.uid.int] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version
 
@@ -1075,5 +1057,5 @@ class BenjiStore:
         for block_id, block in self._cow[cow_version.uid.int].items():
             pass
         del(self._cow[cow_version.uid.int])
-        self._benji_obj._locking.unlock(lock_name=cow_version.uid.readable)
+        self._benji_obj._locking.unlock_version(cow_version)
         logger.info('Finished.')

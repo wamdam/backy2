@@ -150,9 +150,9 @@ class SQLTestCase:
 
     def test_lock_version(self):
         locking = self.metadata_backend.locking()
-        self.assertTrue(locking.lock(lock_name='V0000000001', reason='locking test'))
-        self.assertRaises(InternalError, lambda: locking.lock(lock_name='V0000000001', reason='locking test'))
-        locking.unlock(lock_name='V0000000001')
+        locking.lock_version(VersionUid(1), reason='locking test')
+        self.assertRaises(InternalError, lambda: locking.lock_version(VersionUid(1), reason='locking test'))
+        locking.unlock_version(VersionUid(1))
 
     def test_lock_global(self):
         locking = self.metadata_backend.locking()
@@ -171,6 +171,29 @@ class SQLTestCase:
         self.assertTrue(locking.is_locked())
         locking.unlock()
         self.assertFalse(locking.is_locked())
+
+    def test_is_version_locked(self):
+        locking = self.metadata_backend.locking()
+        lock = locking.lock_version(VersionUid(1), reason='locking test')
+        self.assertTrue(locking.is_version_locked(VersionUid(1)))
+        locking.unlock_version(VersionUid(1))
+        self.assertFalse(locking.is_version_locked(VersionUid(1)))
+
+    def test_lock_version_context_manager(self):
+        locking = self.metadata_backend.locking()
+        with locking.with_version_lock(VersionUid(1), reason='locking test'):
+            with self.assertRaises(InternalError):
+                locking.lock_version(VersionUid(1), reason='locking test')
+        locking.lock_version(VersionUid(1), reason='locking test')
+        locking.unlock_version(VersionUid(1))
+
+    def test_lock_context_manager(self):
+        locking = self.metadata_backend.locking()
+        with locking.with_lock(reason='locking test'):
+            with self.assertRaises(InternalError):
+                locking.lock(reason='locking test')
+        locking.lock(reason='locking test')
+        locking.unlock()
 
     def test_version_uid_create_from_readable(self):
         self.assertEqual(VersionUid(1), VersionUid.create_from_readables(1))

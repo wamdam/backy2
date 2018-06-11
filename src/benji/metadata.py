@@ -8,6 +8,7 @@ import sqlite3
 import time
 import uuid
 from binascii import hexlify, unhexlify
+from contextlib import contextmanager
 
 import sqlalchemy
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, LargeBinary, Boolean, inspect, event, Index, \
@@ -20,7 +21,7 @@ from sqlalchemy.ext.mutable import MutableComposite
 from sqlalchemy.orm import sessionmaker, composite, CompositeProperty
 from sqlalchemy.types import TypeDecorator
 
-from benji.exception import InputDataError, InternalError, NoChange
+from benji.exception import InputDataError, InternalError, NoChange, AlreadyLocked
 from benji.logging import logger
 
 
@@ -927,7 +928,7 @@ class MetaBackendLocking:
         self._uuid = uuid.uuid1().hex
         self._locks = {}
 
-    def lock(self, lock_name=GLOBAL_LOCK, reason=None):
+    def lock(self, *, lock_name=GLOBAL_LOCK, reason=None, locked_msg=None):
         if lock_name in self._locks:
             raise InternalError('Attempt to acquire lock "{}" twice'.format(lock_name))
 
@@ -941,26 +942,39 @@ class MetaBackendLocking:
         try:
             self._session.add(lock)
             self._session.commit()
-        except SQLAlchemyError:
+        except SQLAlchemyError: # this is actually too broad and will also include other errors
             self._session.rollback()
-            return False
+            if locked_msg is not None:
+                raise AlreadyLocked(locked_msg)
+            else:
+                raise AlreadyLocked('Lock {} is already taken.'.format(lock_name))
         except:
             self._session.rollback()
             raise
         else:
             self._locks[lock_name] = lock
-            return True
 
-    def is_locked(self, lock_name=GLOBAL_LOCK):
+    def is_locked(self, *, lock_name=GLOBAL_LOCK):
         try:
             locks = self._session.query(Lock).filter_by(host=self._host, lock_name=lock_name, process_id=self._uuid).all()
         except:
             self._session.rollback()
             raise
+        else:
+            return len(locks) > 0
 
-        return len(locks) > 0
+    def update_lock(self, *, lock_name=GLOBAL_LOCK, reason=None):
+        try:
+            lock = self._session.query(Lock).filter_by(host=self._host, lock_name=lock_name, process_id=self._uuid).first()
+            if not lock:
+                raise InternalError('Lock {} isn\'t held by this instance or doesn\'t exist.'.format(lock_name))
+            lock.reason = reason
+            self._session.commit()
+        except:
+            self._session.rollback()
+            raise
 
-    def unlock(self, lock_name=GLOBAL_LOCK):
+    def unlock(self, *, lock_name=GLOBAL_LOCK):
         if lock_name not in self._locks:
             raise InternalError('Attempt to release lock "{}" even though it isn\'t held'.format(lock_name))
 
@@ -983,3 +997,41 @@ class MetaBackendLocking:
             except:
                 pass
         self._locks = {}
+
+    def lock_version(self, version_uid, reason=None):
+        self.lock(lock_name=version_uid.readable,
+                  reason=reason,
+                  locked_msg='Version {} is already locked.'.format(version_uid.readable))
+
+    def is_version_locked(self, version_uid):
+        return self.is_locked(lock_name=version_uid.readable)
+
+    def update_version_lock(self, version_uid, reason=None):
+        self.update_lock(lock_name=version_uid.readable, reason=reason)
+
+    def unlock_version(self, version_uid):
+        self.unlock(lock_name=version_uid.readable)
+
+    @contextmanager
+    def with_lock(self, *, lock_name=GLOBAL_LOCK, reason=None, locked_msg=None, unlock=True):
+        self.lock(lock_name=lock_name, reason=reason, locked_msg=locked_msg)
+        try:
+            yield
+        except:
+            self.unlock(lock_name=lock_name)
+            raise
+        else:
+            if unlock:
+                self.unlock(lock_name=lock_name)
+
+    @contextmanager
+    def with_version_lock(self, version_uid, reason=None, unlock=True):
+        self.lock_version(version_uid, reason=reason)
+        try:
+            yield
+        except:
+            self.unlock_version(version_uid)
+            raise
+        else:
+            if unlock:
+                self.unlock_version(version_uid)
