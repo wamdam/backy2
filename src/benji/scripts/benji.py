@@ -626,9 +626,9 @@ def main():
 
     # logging ERROR only when machine output is selected
     if args.machine_output:
-        init_logging(config.get('logFile', types=str), logging.ERROR)
+        init_logging(config.get('logFile', types=(str, type(None))), logging.ERROR)
     else:
-        init_logging(config.get('logFile', types=str), console_level)
+        init_logging(config.get('logFile', types=(str, type(None))), console_level)
 
     commands = Commands(args.machine_output, config)
     func = getattr(commands, args.func)
