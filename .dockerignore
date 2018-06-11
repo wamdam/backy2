@@ -1,3 +1,7 @@
-**
-!images
-!scripts
+.git
+docs
+charts
+website
+etc
+tests
+**/tests

@@ -1,7 +1,6 @@
 FROM rook/toolbox:v0.7.1 AS build
 
 ENV CEPH_VERSION 12.2.5
-ENV BENJI_TREEISH master
 
 # If you change VENV_PATH you also need to change the path to activate in scripts/backup.sh.
 ENV VENV_PATH /benji
@@ -26,8 +25,9 @@ RUN . $VENV_PATH/bin/activate && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rados" && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rbd"
 
+ADD . /benji-source/
 RUN . $VENV_PATH/bin/activate && \
-	pip install git+https://github.com/elemental-lf/benji@$BENJI_TREEISH
+	pip install /benji-source/
 
 FROM rook/toolbox:v0.7.1 AS runtime
 
