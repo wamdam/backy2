@@ -27,7 +27,7 @@ class ImportExportTestCase():
             f.write(data)
 
     def generate_versions(self, testpath):
-        from_version = None
+        base_version = None
         version_uids = []
         old_size = 0
         initdb = True
@@ -67,7 +67,7 @@ class ImportExportTestCase():
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
                 version_uid = benji_obj.backup('data-backup', 'snapshot-name', 'file://' + image_filename,
-                                               hints_from_rbd_diff(hints.read()), from_version)
+                                               hints_from_rbd_diff(hints.read()), base_version)
             benji_obj.close()
             version_uids.append((version_uid, size))
         return version_uids

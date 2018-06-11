@@ -216,6 +216,8 @@ class Stats(Base):
     date = Column("date", DateTime, nullable=False)
     # No foreign key references here, so that we can keep the stats around even when the version is deleted
     version_uid = Column(VersionUidType, primary_key=True)
+    base_version_uid = Column(VersionUidType, nullable=True)
+    hints_supplied = Column(Boolean, nullable=False)
     version_name = Column(String, nullable=False)
     version_snapshot_name = Column(String, nullable=False)
     version_size = Column(BigInteger, nullable=False)
@@ -472,11 +474,13 @@ class MetadataBackend:
 
         return version
 
-    def set_stats(self, version_uid, version_name, version_snapshot_name, version_size, version_block_size, bytes_read,
-                  blocks_read, bytes_written, blocks_written, bytes_found_dedup, blocks_found_dedup, bytes_sparse,
-                  blocks_sparse, duration_seconds):
+    def set_stats(self, *, version_uid, base_version_uid, hints_supplied, version_name, version_snapshot_name,
+                  version_size, version_block_size, bytes_read, blocks_read, bytes_written, blocks_written,
+                  bytes_found_dedup, blocks_found_dedup, bytes_sparse, blocks_sparse, duration_seconds):
         stats = Stats(
             version_uid=version_uid,
+            base_version_uid=base_version_uid,
+            hints_supplied=hints_supplied,
             version_name=version_name,
             version_snapshot_name=version_snapshot_name,
             version_size=version_size,

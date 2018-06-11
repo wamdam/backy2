@@ -86,18 +86,18 @@ class Benji:
             self._data_backend_object = self._data_backend_module.DataBackend(self.config)
         return self._data_backend_object
 
-    def _clone_version(self, name, snapshot_name, size=None, from_version_uid=None):
+    def _clone_version(self, name, snapshot_name, size=None, base_version_uid=None):
         """ Prepares the metadata for a new version.
         If from_version_uid is given, this is taken as the base, otherwise
         a pure sparse version is created.
         """
-        if from_version_uid:
-            old_version = self._metadata_backend.get_version(from_version_uid)  # raise if not exists
+        if base_version_uid:
+            old_version = self._metadata_backend.get_version(base_version_uid)  # raise if not exists
             if not old_version.valid:
                 raise UsageError('You cannot base new version on an invalid one.')
             if old_version.block_size != self._block_size:
                 raise UsageError('You cannot base new version on an old version with a different block size.')
-            old_blocks = self._metadata_backend.get_blocks_by_version(from_version_uid)
+            old_blocks = self._metadata_backend.get_blocks_by_version(base_version_uid)
             if not size:
                 size = old_version.size
         else:
@@ -522,7 +522,7 @@ class Benji:
             self._data_backend.rm_version(version_uid)
         logger.info('Removed backup version {} metadata from backend storage.'.format(version_uid.readable))
 
-    def backup(self, name, snapshot_name, source, hints=None, from_version_uid=None, tags=None):
+    def backup(self, name, snapshot_name, source, hints=None, base_version_uid=None, tags=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -564,11 +564,11 @@ class Benji:
             sparse_blocks = set()
             read_blocks = set(range(num_blocks))
 
-        version = self._clone_version(name, snapshot_name, source_size, from_version_uid)
+        version = self._clone_version(name, snapshot_name, source_size, base_version_uid)
         self._locking.update_version_lock(version.uid, reason='Backup')
         blocks = self._metadata_backend.get_blocks_by_version(version.uid)
 
-        if from_version_uid and hints is not None:
+        if base_version_uid and hints is not None:
             # SANITY CHECK:
             # Check some blocks outside of hints if they are the same in the
             # from_version backup and in the current backup. If they
@@ -746,6 +746,8 @@ class Benji:
         logger.debug('Stats: {}'.format(stats))
         self._metadata_backend.set_stats(
             version_uid=version.uid,
+            base_version_uid=base_version_uid,
+            hints_supplied=hints is not None,
             version_name=name,
             version_snapshot_name=snapshot_name,
             version_size=source_size,
@@ -993,13 +995,13 @@ class BenjiStore:
                 data.append(self._read(block, offset, length))
         return b''.join(data)
 
-    def get_cow_version(self, from_version):
+    def get_cow_version(self, base_version):
         #_clone_version(self, name, snapshot_name, size=None, from_version_uid=None):
         cow_version = self._benji_obj._clone_version(
-            name=from_version.name,
+            name=base_version.name,
             snapshot_name='nbd-cow-{}-{}'.format(
-                from_version.uid.readable, datetime.datetime.now().isoformat(timespec='seconds')),
-            from_version_uid=from_version.uid)
+                base_version.uid.readable, datetime.datetime.now().isoformat(timespec='seconds')),
+            base_version_uid=base_version.uid)
         self._benji_obj._locking.update_version_lock(cow_version.uid, reason='NBD COW')
         self._cow[cow_version.uid.int] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version

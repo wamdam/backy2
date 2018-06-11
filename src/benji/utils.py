@@ -11,6 +11,7 @@ from time import time
 
 from Crypto.Hash import SHA512
 from Crypto.Protocol.KDF import PBKDF2
+from dateutil import tz
 from dateutil.relativedelta import relativedelta
 
 from benji.exception import ConfigurationError
@@ -91,15 +92,29 @@ def derive_key(*, password, salt, iterations, key_length):
     return PBKDF2(password=password, salt=salt, dkLen=key_length, count=iterations, hmac_hash_module=SHA512)
 
 
-# Based on https://code.activestate.com/recipes/578113-human-readable-format-for-a-given-time-delta/
-def human_readable_duration(duration):
-    delta = relativedelta(seconds=duration)
-    attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
-    readable = []
-    for attr in attrs:
-        if getattr(delta, attr) or attr == attrs[-1]:
-            readable.append('{:02}{}'.format(getattr(delta, attr), attr[:1]))
-    return ' '.join(readable)
+class PrettyPrint:
+    # Based on https://code.activestate.com/recipes/578113-human-readable-format-for-a-given-time-delta/
+    @staticmethod
+    def duration(duration):
+        delta = relativedelta(seconds=duration)
+        attrs = ['years', 'months', 'days', 'hours', 'minutes', 'seconds']
+        readable = []
+        for attr in attrs:
+            if getattr(delta, attr) or attr == attrs[-1]:
+                readable.append('{:02}{}'.format(getattr(delta, attr), attr[:1]))
+        return ' '.join(readable)
+
+    # Based on: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
+    def bytes(num, suffix='B'):
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+            if abs(num) < 1024.0:
+                return "%3.1f%s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f%s%s" % (num, 'Yi', suffix)
+
+    @staticmethod
+    def local_time(date):
+        return date.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # token_bucket.py

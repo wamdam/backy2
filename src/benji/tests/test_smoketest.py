@@ -47,7 +47,7 @@ class SmokeTestCase:
 
     def test(self):
         testpath = self.testpath.path
-        from_version = None
+        base_version = None
         version_uids = []
         old_size = 0
         initdb = True
@@ -99,7 +99,7 @@ class SmokeTestCase:
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
                 version_uid = benji_obj.backup('data-backup', 'snapshot-name', 'file://' + image_filename,
-                                               hints_from_rbd_diff(hints.read()), from_version)
+                                               hints_from_rbd_diff(hints.read()), base_version)
             benji_obj.close()
             version_uids.append(version_uid)
 
@@ -157,7 +157,7 @@ class SmokeTestCase:
             benji_obj.close()
             self.assertTrue(self.same(image_filename, restore_filename_2))
             print('  Metadata-backend-less restore successful')
-            from_version = version_uid
+            base_version = version_uid
 
             # delete old versions
             if len(version_uids) > 10:

@@ -8,7 +8,6 @@ import os
 import sys
 
 import pkg_resources
-from dateutil import tz
 from prettytable import PrettyTable
 
 import benji.exception
@@ -17,7 +16,7 @@ from benji.config import Config
 from benji.logging import logger, init_logging
 from benji.metadata import Version, VersionUid
 from benji.nbdserver import NbdServer
-from benji.utils import hints_from_rbd_diff, human_readable_duration
+from benji.utils import hints_from_rbd_diff, PrettyPrint
 
 __version__ = pkg_resources.get_distribution('benji').version
 
@@ -29,8 +28,8 @@ class Commands:
         self.machine_output = machine_output
         self.config = config
 
-    def backup(self, name, snapshot_name, source, rbd, from_version_uid, block_size=None, tags=None):
-        from_version_uid = VersionUid.create_from_readables(from_version_uid)
+    def backup(self, name, snapshot_name, source, rbd, base_version_uid, block_size=None, tags=None):
+        base_version_uid = VersionUid.create_from_readables(base_version_uid)
         benji_obj = None
         try:
             benji_obj = Benji(self.config, block_size=block_size)
@@ -38,7 +37,7 @@ class Commands:
             if rbd:
                 data = ''.join([line for line in fileinput.input(rbd).readline()])
                 hints = hints_from_rbd_diff(data)
-            backup_version_uid = benji_obj.backup(name, snapshot_name, source, hints, from_version_uid, tags)
+            backup_version_uid = benji_obj.backup(name, snapshot_name, source, hints, base_version_uid, tags)
             if self.machine_output:
                 benji_obj.export_any(
                     'versions', [benji_obj.ls(version_uid=backup_version_uid)],
@@ -128,10 +127,6 @@ class Commands:
             if benji_obj:
                 benji_obj.close()
 
-    @staticmethod
-    def _local_time(date):
-        return date.replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()).strftime("%Y-%m-%dT%H:%M:%S")
-
     @classmethod
     def _ls_versions_tbl_output(cls, versions):
         tbl = PrettyTable()
@@ -144,12 +139,12 @@ class Commands:
         tbl.align['block_size'] = 'r'
         for version in versions:
             tbl.add_row([
-                cls._local_time(version.date),
+                PrettyPrint.local_time(version.date),
                 version.uid.readable,
                 version.name,
                 version.snapshot_name,
-                version.size,
-                version.block_size,
+                PrettyPrint.bytes(version.size),
+                PrettyPrint.bytes(version.block_size),
                 version.valid,
                 version.protected,
                 ",".join(sorted([t.name for t in version.tags])),
@@ -160,39 +155,35 @@ class Commands:
     def _stats_tbl_output(cls, stats):
         tbl = PrettyTable()
         tbl.field_names = [
-            'date', 'uid', 'name', 'snapshot_name', 'size', 'block_size', 'bytes read', 'blocks read', 'bytes written',
-            'blocks written', 'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)'
+            'date', 'uid', 'name', 'snapshot_name', 'size', 'block_size', 'read', 'written', 'dedup', 'sparse',
+            'duration (s)'
         ]
+        tbl.align['uid'] = 'l'
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
         tbl.align['size bytes'] = 'r'
         tbl.align['size blocks'] = 'r'
-        tbl.align['bytes read'] = 'r'
-        tbl.align['blocks read'] = 'r'
-        tbl.align['bytes written'] = 'r'
-        tbl.align['blocks written'] = 'r'
-        tbl.align['bytes dedup'] = 'r'
-        tbl.align['blocks dedup'] = 'r'
-        tbl.align['bytes sparse'] = 'r'
-        tbl.align['blocks sparse'] = 'r'
+        tbl.align['read'] = 'r'
+        tbl.align['written'] = 'r'
+        tbl.align['dedup'] = 'r'
+        tbl.align['sparse'] = 'r'
         tbl.align['duration (s)'] = 'r'
         for stat in stats:
+            augmented_version_uid = '{}{}{}'.format(
+                stat.version_uid.readable, ',\nbase {}'.format(stat.base_version_uid.readable)
+                if stat.base_version_uid else '', ', hints' if stat.hints_supplied else '')
             tbl.add_row([
-                cls._local_time(stat.date),
-                stat.version_uid.readable,
+                PrettyPrint.local_time(stat.date),
+                augmented_version_uid,
                 stat.version_name,
                 stat.version_snapshot_name,
-                stat.version_size,
-                stat.version_block_size,
-                stat.bytes_read,
-                stat.blocks_read,
-                stat.bytes_written,
-                stat.blocks_written,
-                stat.bytes_found_dedup,
-                stat.blocks_found_dedup,
-                stat.bytes_sparse,
-                stat.blocks_sparse,
-                human_readable_duration(stat.duration_seconds),
+                PrettyPrint.bytes(stat.version_size),
+                PrettyPrint.bytes(stat.version_block_size),
+                PrettyPrint.bytes(stat.bytes_read),
+                PrettyPrint.bytes(stat.bytes_written),
+                PrettyPrint.bytes(stat.bytes_found_dedup),
+                PrettyPrint.bytes(stat.bytes_sparse),
+                PrettyPrint.duration(stat.duration_seconds),
             ])
         print(tbl)
 
@@ -439,7 +430,7 @@ def main():
     p.add_argument('name', help='Backup name (e.g. the hostname)')
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the RBD snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as RBD JSON format')
-    p.add_argument('-f', '--from-version', dest='from_version_uid', default=None, help='Use this version as base')
+    p.add_argument('-f', '--from-version', dest='base_version_uid', default=None, help='Use this version as base')
     p.add_argument(
         '-t',
         '--tag',
@@ -488,7 +479,7 @@ def main():
         action='store_true',
         help="Force removal of version, even if it's younger than the configured disallow_rm_when_younger_than_days.")
     p.add_argument(
-        '-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
+        '-k', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
     p.add_argument('version_uids', metavar='version_uid', nargs='+')
     p.set_defaults(func='rm')
 
@@ -496,7 +487,7 @@ def main():
     p = subparsers.add_parser('enforce', help="Enforce the given retenion policy on each listed version.")
     p.add_argument('--dry-run', action='store_true', help='Dry run: Only show which versions would be removed.')
     p.add_argument(
-        '-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
+        '-k', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
     p.add_argument('rules_spec', help='Retention rules specification')
     p.add_argument('version_names', metavar='version_name', nargs='+')
     p.set_defaults(func='enforce_retention_policy')
