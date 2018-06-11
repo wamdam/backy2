@@ -98,7 +98,7 @@ def human_readable_duration(duration):
     readable = []
     for attr in attrs:
         if getattr(delta, attr) or attr == attrs[-1]:
-            readable.append('{}{}'.format(getattr(delta, attr), attr[:1]))
+            readable.append('{:02}{}'.format(getattr(delta, attr), attr[:1]))
     return ' '.join(readable)
 
 
