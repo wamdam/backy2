@@ -5,9 +5,7 @@ Quick Start
 ===========
 
 This guide will show you how to do a *backup* - *scrub* - *restore* - *cleanup*
-cycle with **sqlite** as metadata backend and a **file storage** backup target
-(e.g. NFS).
-
+cycle.
 
 Some Vocabulary
 ---------------
@@ -258,7 +256,7 @@ There is also the option (``-f`` or ``--full``) to do a full cleanup which itera
 through all the blocks in the backend storage. This should only be used when an
 inconsistency is suspected as it can take a very long time to complete.
 
-.. NOTE:: A full cleanup must not be run parallel to ANY other Benji jobs.
+.. NOTE:: A full cleanup must run in parallel to any other Benji jobs.
     Benji will prevent you from doing this by creating a global lock.
 
 .. CAUTION:: Parallelism has been tested successfully with PostgreSQL. It might

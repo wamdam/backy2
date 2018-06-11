@@ -8,8 +8,8 @@ Source Code
 
 The source code is hosted on GitHub at `https://github.com/elemental-lf/benji <https://github.com/elemental-lf/benji>`_.
 
-README
-------
+Overview
+--------
 
 .. include:: ../../README.rst
 

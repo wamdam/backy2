@@ -19,6 +19,9 @@ can be installed via private repository::
     apt-get update
     apt-get --no-install-recommends python3.6 python3.6-venv python3.6-dev git gcc
 
+.. NOTE:: For more information about this Personal Package Archive (PPA)
+    please see https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa.
+
 CentOS 7
 --------
 
@@ -26,6 +29,16 @@ As with Ubuntu you need to install a recent Python version from a third-party re
 
     yum install -y https://centos7.iuscommunity.org/ius-release.rpm
     yum install -y python36u-devel python36u-pip python36u-libs python36u-setuptools
+
+Redhat Enterprise Linux 7
+-------------------------
+
+Almost the some procedure as on CentOS::
+
+    yum install -y https://rhel7.iuscommunity.org/ius-release.rpm
+    yum install -y python36u-devel python36u-pip python36u-libs python36u-setuptools
+
+.. NOTE:: For more information about the IOS Community Project please see https://ius.io/.
 
 Common to All Distributions
 ---------------------------
@@ -79,5 +92,8 @@ This represents a minimal configuration mit SQLite3 backend and file-based block
 You might need to change the above paths. Benji will run as a normal user
 without problems, but it will probably need root privileges to access most
 backup sources.
+
+The configuration above is suited to jump right into the section
+:ref:`quickstart` and try out everything.
 
 Please see :ref:`configuration` for a full list of configuration options.
