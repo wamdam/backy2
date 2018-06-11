@@ -48,11 +48,13 @@ class Commands:
             if benji_obj:
                 benji_obj.close()
 
-    def restore(self, version_uid, target, sparse, force):
+    def restore(self, version_uid, target, sparse, force, metadata_backend_less=False):
         version_uid = VersionUid.create_from_readables(version_uid)
         benji_obj = None
         try:
-            benji_obj = Benji(self.config)
+            benji_obj = Benji(self.config, in_memory=metadata_backend_less)
+            if metadata_backend_less:
+                benji_obj.import_from_backend([version_uid])
             benji_obj.restore(version_uid, target, sparse, force)
         finally:
             if benji_obj:
@@ -457,6 +459,11 @@ def main():
         action='store_true',
         help='Restore only existing blocks. Works only with file ' + 'and RBD targets, not with LVM. Faster.')
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
+    p.add_argument(
+        '-M',
+        '--metadata-backend-less',
+        action='store_true',
+        help='Restore directly from data backend without requiring the metadata backend.')
     p.add_argument('version_uid')
     p.add_argument('target', help='Source (URL like, e.g. file:///dev/sda or rbd://pool/imagename)')
     p.set_defaults(func='restore')

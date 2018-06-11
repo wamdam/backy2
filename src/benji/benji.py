@@ -46,7 +46,7 @@ def blocks_from_hints(hints, block_size):
 
 class Benji:
 
-    def __init__(self, config, block_size=None, initdb=False, _destroydb=False, _migratedb=True):
+    def __init__(self, config, block_size=None, initdb=False, in_memory=False, _destroydb=False, _migratedb=True):
 
         self.config = config
 
@@ -66,8 +66,8 @@ class Benji:
             raise ConfigurationError('Data backend type {} not found.'.format(name))
         self._data_backend_object = None
 
-        metadata_backend = MetadataBackend(config)
-        if initdb:
+        metadata_backend = MetadataBackend(config, in_memory=in_memory)
+        if initdb or in_memory:
             metadata_backend.initdb(_destroydb=_destroydb, _migratedb=_migratedb)
 
         self._metadata_backend = metadata_backend.open(_migratedb=_migratedb)

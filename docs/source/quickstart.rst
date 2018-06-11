@@ -22,6 +22,7 @@ Backup target
 Backup Metadata
     A SQL database containing information on how to reassemble the stored blocks
     to get the original data back. Also referred to as the *metadata backend*.
+    For restores the metadata backend is not compulsory. See :ref:`metadata_backend_less`.
 
 Version
     A *version* is a backup of a specific backup source at a specific point in time.

@@ -14,8 +14,8 @@ There are two possible restore options with Benji.
     or automatic removal by any retention policy enforcement that you
     might have configure.
 
-Full Restores
--------------
+Full Restore
+------------
 
 A full restore either saves the image into a file (i.e. an image file),
 to a device (e.g. /dev/hda) or to a Ceph RBD volume.
@@ -55,6 +55,21 @@ Usually you can use ``-s`` if your restore target is
 .. CAUTION:: If you use ``-s`` on existing images, devices or files, restoreed
     blocks which are sparse will not be written, so whatever random data was
     in there before the restore will remain.
+
+.. _metadata_backend_less:
+
+With Unavailable Metadata Backend
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``benji restore`` also supports a mode (``-M`` or ``--metadata-backend-less``)
+where it doesn't require its metadata backend to be up und running. In this mode
+Benji will import the backup of the *version's* metadata from the data backend
+into an ad-hoc in-memory database and then restore the image normally. This is
+for failure scenarios where the database is unavailable and you still need to
+restore a *version*. But because of the database unavailability you can't just
+execute ``benji ls`` to determine the right *version* to restore, you need to
+generate some reports beforehand and save them somewhere to be able to chose
+the right *version*!
 
 NBD Server
 ----------
@@ -197,7 +212,7 @@ to clean it up.
     independently of each other.
 
 
-Restore of invalid Versions
+Restore of Invalid Versions
 ---------------------------
 
 During a restore Benji will compare each restored block's checksum to the

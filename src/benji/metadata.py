@@ -388,8 +388,12 @@ class MetadataBackend:
 
     _locking = None
 
-    def __init__(self, config):
-        self._engine = sqlalchemy.create_engine(config.get('metadataBackend.engine', types=str))
+    def __init__(self, config, in_memory=False):
+        if not in_memory:
+            self._engine = sqlalchemy.create_engine(config.get('metadataBackend.engine', types=str))
+        else:
+            logger.info('Running in metadata-backend-less mode.')
+            self._engine = sqlalchemy.create_engine('sqlite://')
 
     def open(self, _migratedb=True):
         if _migratedb:
