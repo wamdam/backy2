@@ -144,13 +144,19 @@ class SmokeTestCase:
             benji_obj.deep_scrub(version_uid, 'file://' + image_filename)
             benji_obj.close()
             print('  Deep scrub with source successful')
+            restore_filename_1 = os.path.join(testpath, 'restore.{}'.format(i + 1))
+            restore_filename_2 = os.path.join(testpath, 'restore-mdl.{}'.format(i + 1))
             benji_obj = self.benjiOpen(initdb=initdb)
-            restore_filename = os.path.join(testpath, 'restore.{}'.format(i + 1))
-            benji_obj.restore(version_uid, 'file://' + restore_filename, sparse=False, force=False)
+            benji_obj.restore(version_uid, 'file://' + restore_filename_1, sparse=False, force=False)
             benji_obj.close()
-            self.assertTrue(self.same(image_filename, restore_filename))
+            self.assertTrue(self.same(image_filename, restore_filename_1))
             print('  Restore successful')
-
+            benji_obj = self.benjiOpen(in_memory=True)
+            benji_obj.import_from_backend([version_uid])
+            benji_obj.restore(version_uid, 'file://' + restore_filename_2, sparse=False, force=False)
+            benji_obj.close()
+            self.assertTrue(self.same(image_filename, restore_filename_2))
+            print('  Metadata-backend-less restore successful')
             from_version = version_uid
 
             # delete old versions
