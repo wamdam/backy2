@@ -8,7 +8,9 @@ class HashTestCase(unittest.TestCase):
     def test_sha512(self):
         hash_function = parametrized_hash_function('sha512')
         hash_function.update(b'test123')
-        self.assertEqual('daef4953b9783365cad6615223720506cc46c5167cd16ab500fa597aa08ff964eb24fb19687f34d7665f778fcb6c5358fc0a5b81e1662cf90f73a2671c53f991', hash_function.hexdigest())
+        self.assertEqual(
+            'daef4953b9783365cad6615223720506cc46c5167cd16ab500fa597aa08ff964eb24fb19687f34d7665f778fcb6c5358fc0a5b81e1662cf90f73a2671c53f991',
+            hash_function.hexdigest())
 
     def test_blake2_16(self):
         hash_function = parametrized_hash_function('blake2b,digest_size=16')

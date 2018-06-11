@@ -14,6 +14,7 @@ kB = 1024
 MB = kB * 1024
 GB = MB * 1024
 
+
 class ImportExportTestCase():
 
     @staticmethod
@@ -32,23 +33,23 @@ class ImportExportTestCase():
         initdb = True
         image_filename = os.path.join(testpath, 'image')
         for i in range(self.VERSIONS):
-            print('Run {}'.format(i+1))
+            print('Run {}'.format(i + 1))
             hints = []
             if old_size and random.randint(0, 10) == 0:  # every 10th time or so do not apply any changes.
                 size = old_size
             else:
-                size = 32*4*kB + random.randint(-4*kB, 4*kB)
+                size = 32 * 4 * kB + random.randint(-4 * kB, 4 * kB)
                 old_size = size
                 for j in range(random.randint(0, 10)):  # up to 10 changes
                     if random.randint(0, 1):
-                        patch_size = random.randint(0, 4*kB)
+                        patch_size = random.randint(0, 4 * kB)
                         data = self.random_bytes(patch_size)
                         exists = "true"
                     else:
-                        patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
+                        patch_size = random.randint(0, 4 * 4 * kB)  # we want full blocks sometimes
                         data = b'\0' * patch_size
                         exists = "false"
-                    offset = random.randint(0, size-1-patch_size)
+                    offset = random.randint(0, size - 1 - patch_size)
                     print('    Applied change at {}:{}, exists {}'.format(offset, patch_size, exists))
                     self.patch(image_filename, offset, data)
                     hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
@@ -65,13 +66,8 @@ class ImportExportTestCase():
             benji_obj = self.benjiOpen(initdb=initdb)
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
-                version_uid = benji_obj.backup(
-                    'data-backup',
-                    'snapshot-name',
-                    'file://' + image_filename,
-                    hints_from_rbd_diff(hints.read()),
-                    from_version
-                )
+                version_uid = benji_obj.backup('data-backup', 'snapshot-name', 'file://' + image_filename,
+                                               hints_from_rbd_diff(hints.read()), from_version)
             benji_obj.close()
             version_uids.append((version_uid, size))
         return version_uids
@@ -103,7 +99,6 @@ class ImportExportTestCase():
         self.assertEqual(4096, version['block_size'])
         self.assertTrue(version['valid'])
         self.assertFalse(version['protected'])
-
 
     def test_import(self):
         benji_obj = self.benjiOpen(initdb=True)
@@ -1256,6 +1251,7 @@ class ImportExportTestCase():
             }
             """
 
+
 class ImportExportCaseSQLLite_File(ImportExportTestCase, BenjiTestCase, TestCase):
 
     VERSIONS = 3
@@ -1281,7 +1277,11 @@ class ImportExportCaseSQLLite_File(ImportExportTestCase, BenjiTestCase, TestCase
               engine: sqlite:///{testpath}/benji.sqlite
             """
 
-class ImportExportTestCasePostgreSQL_File(ImportExportTestCase, BenjiTestCase, ):
+
+class ImportExportTestCasePostgreSQL_File(
+        ImportExportTestCase,
+        BenjiTestCase,
+):
 
     VERSIONS = 3
 

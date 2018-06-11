@@ -7,6 +7,7 @@ from logging.handlers import WatchedFileHandler
 
 logger = logging.getLogger(__name__)
 
+
 def init_logging(logfile, console_level):  # pragma: no cover
     handlers = []
 
@@ -47,5 +48,6 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         return
 
     logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
 
 sys.excepthook = handle_exception

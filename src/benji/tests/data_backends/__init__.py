@@ -14,7 +14,9 @@ class DatabackendTestCase(BackendTestCase):
         saved_uids = self.data_backend.list_blocks()
         self.assertEqual(0, len(saved_uids))
 
-        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100), size=BLOB_SIZE, checksum='CHECKSUM') for i in range(NUM_BLOBS)]
+        blocks = [
+            Mock('Block', uid=BlockUid(i + 1, i + 100), size=BLOB_SIZE, checksum='CHECKSUM') for i in range(NUM_BLOBS)
+        ]
         data_by_uid = {}
         for block in blocks:
             data = self.random_bytes(BLOB_SIZE)
@@ -47,8 +49,9 @@ class DatabackendTestCase(BackendTestCase):
         saved_uids = self.data_backend.list_blocks()
         self.assertEqual(0, len(saved_uids))
 
-        blocks = [Mock('Block', uid=BlockUid(i + 1, i + 100), size=BLOB_SIZE, checksum='CHECKSUM')
-                                                                                for i in range(NUM_BLOBS)]
+        blocks = [
+            Mock('Block', uid=BlockUid(i + 1, i + 100), size=BLOB_SIZE, checksum='CHECKSUM') for i in range(NUM_BLOBS)
+        ]
         data_by_uid = {}
         for block in blocks:
             data = self.random_bytes(BLOB_SIZE)
@@ -108,7 +111,7 @@ class DatabackendTestCase(BackendTestCase):
             self.skipTest('not applicable to this backend')
 
     def test_not_exists(self):
-        block = Mock(Block, uid=BlockUid(1,2), size=15, checksum='CHECKSUM')
+        block = Mock(Block, uid=BlockUid(1, 2), size=15, checksum='CHECKSUM')
         self.data_backend.save(block, b'test_not_exists', sync=True)
 
         data = self.data_backend.read(block, sync=True)
@@ -129,7 +132,7 @@ class DatabackendTestCase(BackendTestCase):
 
     def test_block_uid_to_key(self):
         for i in range(100):
-            block_uid = BlockUid(random.randint(1, pow(2,32) - 1), random.randint(1, pow(2,32) - 1))
+            block_uid = BlockUid(random.randint(1, pow(2, 32) - 1), random.randint(1, pow(2, 32) - 1))
             key = self.data_backend._block_uid_to_key(block_uid)
             block_uid_2 = self.data_backend._key_to_block_uid(key)
             self.assertEqual(block_uid, block_uid_2)
@@ -138,7 +141,7 @@ class DatabackendTestCase(BackendTestCase):
 
     def test_version_uid_to_key(self):
         for i in range(100):
-            version_uid = VersionUid(random.randint(1, pow(2,32) - 1))
+            version_uid = VersionUid(random.randint(1, pow(2, 32) - 1))
             key = self.data_backend._version_uid_to_key(version_uid)
             version_uid_2 = self.data_backend._key_to_version_uid(key)
             self.assertEqual(version_uid, version_uid_2)

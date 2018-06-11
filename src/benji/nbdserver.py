@@ -71,7 +71,7 @@ class NbdServer:
     # fixed newstyle handshake
     NBD_HANDSHAKE_FLAGS = (1 << 0)
 
-    NBD_FLAG_HAS_FLAGS = (1<< 0)
+    NBD_FLAG_HAS_FLAGS = (1 << 0)
     NBD_FLAG_READ_ONLY = (1 << 1)
     NBD_FLAG_SEND_FLUSH = (1 << 2)
     NBD_FLAG_SEND_FUA = (1 << 3)
@@ -110,7 +110,7 @@ class NbdServer:
         try:
             host, port = writer.get_extra_info("peername")
             version, cow_version = None, None
-            self.log.info("Incoming connection from %s:%s" % (host,port))
+            self.log.info("Incoming connection from %s:%s" % (host, port))
 
             # initial handshake
             writer.write(b"NBDMAGIC" + struct.pack(">QH", self.NBD_HANDSHAKE, self.NBD_HANDSHAKE_FLAGS))
@@ -144,7 +144,7 @@ class NbdServer:
 
                 if length:
                     data = yield from reader.readexactly(length)
-                    if(len(data) != length):
+                    if (len(data) != length):
                         raise IOError("Negotiation failed: %s bytes expected" % length)
                 else:
                     data = None
@@ -183,7 +183,7 @@ class NbdServer:
                     # size of 4096
                     size = math.ceil(version.size / 4096) * 4096
                     writer.write(struct.pack('>QH', size, export_flags))
-                    writer.write(b"\x00"*124)
+                    writer.write(b"\x00" * 124)
                     yield from writer.drain()
 
                     # Transition to transmission phase
@@ -192,7 +192,9 @@ class NbdServer:
                 elif opt == self.NBD_OPT_LIST:
                     for version in self.store.get_versions():
                         version_encoded = version.uid.readable.encode("ascii")
-                        writer.write(struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_SERVER, len(version_encoded) + 4))
+                        writer.write(
+                            struct.pack(">QLLL", self.NBD_REPLY, opt, self.NBD_REP_SERVER,
+                                        len(version_encoded) + 4))
                         writer.write(struct.pack(">L", len(version_encoded)))
                         writer.write(version_encoded)
                         yield from writer.drain()
@@ -224,7 +226,8 @@ class NbdServer:
                 if magic != self.NBD_REQUEST:
                     raise IOError("Bad magic number, disconnecting")
 
-                self.log.debug("[%s:%s]: cmd=%s, handle=%s, offset=%s, len=%s" % (host, port, cmd, handle, offset, length))
+                self.log.debug(
+                    "[%s:%s]: cmd=%s, handle=%s, offset=%s, len=%s" % (host, port, cmd, handle, offset, length))
 
                 if cmd == self.NBD_CMD_DISC:
                     self.log.info("[%s:%s] disconnecting" % (host, port))
@@ -232,7 +235,7 @@ class NbdServer:
 
                 elif cmd == self.NBD_CMD_WRITE:
                     data = yield from reader.readexactly(length)
-                    if(len(data) != length):
+                    if (len(data) != length):
                         raise IOError("%s bytes expected, disconnecting" % length)
 
                     if self.read_only:
@@ -245,7 +248,8 @@ class NbdServer:
                         self.store.write(cow_version, offset, data)
                     except Exception as exception:
                         self.log.error("[%s:%s] NBD_CMD_WRITE: %s\n%s" % (host, port, exception, traceback.format_exc()))
-                        yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
+                        yield from self.nbd_response(
+                            writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle)
@@ -255,7 +259,8 @@ class NbdServer:
                         data = self.store.read(version, cow_version, offset, length)
                     except Exception as exception:
                         self.log.error("[%s:%s] NBD_CMD_READ: %s\n%s" % (host, port, exception, traceback.format_exc()))
-                        yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
+                        yield from self.nbd_response(
+                            writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle, data=data)
@@ -270,7 +275,8 @@ class NbdServer:
                         self.store.flush(cow_version)
                     except Exception as exception:
                         self.log.error("[%s:%s] NBD_CMD_FLUSH: %s\n%s" % (host, port, exception, traceback.format_exc()))
-                        yield from self.nbd_response(writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
+                        yield from self.nbd_response(
+                            writer, handle, error=exception.errno if hasattr(exception, 'errno') else errno.EIO)
                         continue
 
                     yield from self.nbd_response(writer, handle)
@@ -291,7 +297,6 @@ class NbdServer:
             self.store.close(version)
             writer.close()
 
-
     def serve_forever(self):
         """Create and run the asyncio loop"""
         addr, port = self.address
@@ -308,7 +313,7 @@ class NbdServer:
         server.close()
         loop.run_until_complete(server.wait_closed())
         loop.close()
-        
+
     def stop(self):
         if not self.loop.is_closed():
             self.loop.call_soon_threadsafe(self.loop.stop)

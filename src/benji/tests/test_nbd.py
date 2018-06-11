@@ -16,6 +16,7 @@ kB = 1024
 MB = kB * 1024
 GB = MB * 1024
 
+
 class NbdTestCase:
 
     @staticmethod
@@ -34,24 +35,18 @@ class NbdTestCase:
         return data
 
     def generate_version(self, testpath):
-        size = 4*MB
+        size = 4 * MB
         image_filename = os.path.join(testpath, 'image')
         with open(image_filename, 'wb') as f:
             f.truncate(size)
         for j in range(random.randint(20, 30)):
-            patch_size = random.randint(0, 128*kB)
+            patch_size = random.randint(0, 128 * kB)
             data = self.random_bytes(patch_size)
-            offset = random.randint(0, size-1-patch_size)
+            offset = random.randint(0, size - 1 - patch_size)
             self.patch(image_filename, offset, data)
 
         benji_obj = self.benjiOpen(initdb=True)
-        version_uid = benji_obj.backup(
-            'data-backup',
-            'snapshot-name',
-            'file://' + image_filename,
-            None,
-            None
-        )
+        version_uid = benji_obj.backup('data-backup', 'snapshot-name', 'file://' + image_filename, None, None)
         benji_obj.close()
         return version_uid, size
 
@@ -76,33 +71,39 @@ class NbdTestCase:
         self.nbd_server.serve_forever()
         self.nbd_client_thread.join()
 
-        self.assertEqual({self.version_uid[0], VersionUid(2)}, set([version.uid for version  in benji_obj.ls()]))
+        self.assertEqual({self.version_uid[0], VersionUid(2)}, set([version.uid for version in benji_obj.ls()]))
 
         benji_obj.close()
 
-    def subprocess_run(self, args, success_regexp = None, check=True):
-        completed = subprocess.run(args=args,
-                                   stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT,
-                                   encoding='utf-8',
-                                   errors='ignore'
-                                   )
+    def subprocess_run(self, args, success_regexp=None, check=True):
+        completed = subprocess.run(
+            args=args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding='utf-8',
+            errors='ignore')
 
         if check and completed.returncode != 0:
-          self.fail('command {} failed: {}'.format(' '.join(args), completed.stdout.replace('\n', '|')))
+            self.fail('command {} failed: {}'.format(' '.join(args), completed.stdout.replace('\n', '|')))
 
         if success_regexp:
-            if not re.match(success_regexp, completed.stdout, re.I|re.M|re.S):
+            if not re.match(success_regexp, completed.stdout, re.I | re.M | re.S):
                 self.fail('command {} failed: {}'.format(' '.join(args), completed.stdout.replace('\n', '|')))
 
     def nbd_client(self, version_uid):
-        self.subprocess_run(args=['sudo', 'nbd-client', '127.0.0.1', '-p', str(self.SERVER_PORT), '-l'],
-                            success_regexp='^Negotiation: ..\n{}\n$'.format(version_uid[0].readable))
+        self.subprocess_run(
+            args=['sudo', 'nbd-client', '127.0.0.1', '-p',
+                  str(self.SERVER_PORT), '-l'],
+            success_regexp='^Negotiation: ..\n{}\n$'.format(version_uid[0].readable))
 
         version_uid, size = version_uid
-        self.subprocess_run(args=['sudo', 'nbd-client', '-N', version_uid.readable, '127.0.0.1', '-p', str(self.SERVER_PORT), self.NBD_DEVICE],
-                            success_regexp='^Negotiation: ..size = \d+MB\nbs=1024, sz=\d+ bytes\n$')
+        self.subprocess_run(
+            args=[
+                'sudo', 'nbd-client', '-N', version_uid.readable, '127.0.0.1', '-p',
+                str(self.SERVER_PORT), self.NBD_DEVICE
+            ],
+            success_regexp='^Negotiation: ..size = \d+MB\nbs=1024, sz=\d+ bytes\n$')
 
         count = 0
         nbd_data = bytearray()
@@ -120,7 +121,7 @@ class NbdTestCase:
         self.assertEqual(image_data, bytes(nbd_data))
 
         f = os.open(self.NBD_DEVICE, os.O_RDWR)
-        for offset in range(0,size,4096):
+        for offset in range(0, size, 4096):
             os.lseek(f, offset, os.SEEK_SET)
             data = self.random_bytes(4096)
             written = os.write(f, data)
@@ -134,8 +135,8 @@ class NbdTestCase:
             self.assertEqual(data, read_data)
         os.close(f)
 
-        self.subprocess_run(args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE],
-                            success_regexp='^disconnect, sock, done\n$')
+        self.subprocess_run(
+            args=['sudo', 'nbd-client', '-d', self.NBD_DEVICE], success_regexp='^disconnect, sock, done\n$')
 
         # Signal NBD server to stop
         self.nbd_server.stop()

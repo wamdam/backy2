@@ -38,17 +38,26 @@ class DataBackend(ReadCacheDataBackend):
         else:
             account_info = InMemoryAccountInfo()
 
-        b2.bucket.Bucket.MAX_UPLOAD_ATTEMPTS  = config.get_from_dict(our_config, 'uploadAttempts', types=int,
-                                                                     check_func=lambda v: v >= 1,
-                                                                     check_message='Must be a positive integer')
+        b2.bucket.Bucket.MAX_UPLOAD_ATTEMPTS = config.get_from_dict(
+            our_config,
+            'uploadAttempts',
+            types=int,
+            check_func=lambda v: v >= 1,
+            check_message='Must be a positive integer')
 
-        self._write_object_attempts = config.get_from_dict(our_config, 'writeObjectAttempts', types=int,
-                                                           check_func=lambda  v: v >= 1,
-                                                           check_message='Must be a positive integer')
+        self._write_object_attempts = config.get_from_dict(
+            our_config,
+            'writeObjectAttempts',
+            types=int,
+            check_func=lambda v: v >= 1,
+            check_message='Must be a positive integer')
 
-        self._read_object_attempts = config.get_from_dict(our_config, 'readObjectAttempts', types=int,
-                                                           check_func=lambda  v: v >= 1,
-                                                           check_message='Must be a positive integer')
+        self._read_object_attempts = config.get_from_dict(
+            our_config,
+            'readObjectAttempts',
+            types=int,
+            check_func=lambda v: v >= 1,
+            check_message='Must be a positive integer')
 
         self.service = b2.api.B2Api(account_info)
         if account_info_file is not None:
@@ -62,7 +71,7 @@ class DataBackend(ReadCacheDataBackend):
                 self.service.authorize_account('production', account_id, application_key)
         else:
             self.service.authorize_account('production', account_id, application_key)
-            
+
         self.bucket = self.service.get_bucket_by_name(bucket_name)
 
     def _write_object(self, key, data):
@@ -71,9 +80,10 @@ class DataBackend(ReadCacheDataBackend):
                 self.bucket.upload_bytes(data, key)
             except B2Error:
                 if i + 1 < self._write_object_attempts:
-                    sleep_time = (2 ** (i + 1)) + (random.randint(0, 1000) / 1000)
-                    logger.warning('Upload of object with key {} to B2 failed repeatedly, will try again in {:.2f} seconds.'
-                                   .format(key, sleep_time))
+                    sleep_time = (2**(i + 1)) + (random.randint(0, 1000) / 1000)
+                    logger.warning(
+                        'Upload of object with key {} to B2 failed repeatedly, will try again in {:.2f} seconds.'.format(
+                            key, sleep_time))
                     time.sleep(sleep_time)
                     continue
                 raise
@@ -88,12 +98,13 @@ class DataBackend(ReadCacheDataBackend):
             except B2Error as exception:
                 # Currently FileNotPresent isn't always signaled correctly.
                 # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-                if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-                #if isinstance(exception, FileNotPresent):
+                if isinstance(exception,
+                              FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
+                    #if isinstance(exception, FileNotPresent):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
-                        sleep_time = (2 ** (i + 1)) + (random.randint(0, 1000) / 1000)
+                        sleep_time = (2**(i + 1)) + (random.randint(0, 1000) / 1000)
                         logger.warning('Download of object with key {} to B2 failed, will try again in {:.2f} seconds.'
                                        .format(key, sleep_time))
                         time.sleep(sleep_time)
@@ -120,12 +131,13 @@ class DataBackend(ReadCacheDataBackend):
             except B2Error as exception:
                 # Currently FileNotPresent isn't always signaled correctly.
                 # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-                if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-                #if isinstance(exception, FileNotPresent):
+                if isinstance(exception,
+                              FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
+                    #if isinstance(exception, FileNotPresent):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
-                        sleep_time = (2 ** (i + 1)) + (random.randint(0, 1000) / 1000)
+                        sleep_time = (2**(i + 1)) + (random.randint(0, 1000) / 1000)
                         logger.warning('Object length request for key {} to B2 failed, will try again in {:.2f} seconds.'
                                        .format(key, sleep_time))
                         time.sleep(sleep_time)
@@ -144,7 +156,7 @@ class DataBackend(ReadCacheDataBackend):
             # Currently FileNotPresent isn't always signaled correctly.
             # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
             if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-            #if isinstance(exception, FileNotPresent):
+                #if isinstance(exception, FileNotPresent):
                 raise FileNotFoundError('Object {} not found.'.format(key)) from None
             else:
                 raise
@@ -163,6 +175,7 @@ class DataBackend(ReadCacheDataBackend):
         return errors
 
     def _list_objects(self, prefix=''):
-        return [file_version_info.file_name for (file_version_info, folder_name) in
-                                                            self.bucket.ls(folder_to_list=prefix, recursive=True)]
-
+        return [
+            file_version_info.file_name
+            for (file_version_info, folder_name) in self.bucket.ls(folder_to_list=prefix, recursive=True)
+        ]

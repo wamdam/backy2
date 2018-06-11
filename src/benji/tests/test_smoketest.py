@@ -14,6 +14,7 @@ kB = 1024
 MB = kB * 1024
 GB = MB * 1024
 
+
 class SmokeTestCase:
 
     @staticmethod
@@ -53,25 +54,26 @@ class SmokeTestCase:
         image_filename = os.path.join(testpath, 'image')
         block_size = random.sample({512, 1024, 2048, 4096}, 1)[0]
         for i in range(100):
-            print('Run {}'.format(i+1))
+            print('Run {}'.format(i + 1))
             hints = []
             if not os.path.exists(image_filename):
                 open(image_filename, 'wb').close()
             if old_size and random.randint(0, 10) == 0:  # every 10th time or so do not apply any changes.
                 size = old_size
             else:
-                size = 32*4*kB + random.randint(-4*kB, 4*kB)
+                size = 32 * 4 * kB + random.randint(-4 * kB, 4 * kB)
                 for j in range(random.randint(0, 10)):  # up to 10 changes
                     if random.randint(0, 1):
-                        patch_size = random.randint(0, 4*kB)
+                        patch_size = random.randint(0, 4 * kB)
                         data = self.random_bytes(patch_size)
                         exists = "true"
                     else:
-                        patch_size = random.randint(0, 4*4*kB)  # we want full blocks sometimes
+                        patch_size = random.randint(0, 4 * 4 * kB)  # we want full blocks sometimes
                         data = b'\0' * patch_size
                         exists = "false"
                     offset = random.randint(0, size - patch_size - 1)
-                    print('    Applied change at {}({}):{}, exists {}'.format(offset, int(offset / 4096), patch_size, exists))
+                    print('    Applied change at {}({}):{}, exists {}'.format(offset, int(offset / 4096), patch_size,
+                                                                              exists))
                     self.patch(image_filename, offset, data)
                     hints.append({'offset': offset, 'length': patch_size, 'exists': exists})
 
@@ -91,18 +93,13 @@ class SmokeTestCase:
 
             print('  Applied {} changes, size is {}.'.format(len(hints), size))
             with open(os.path.join(testpath, 'hints'), 'w') as f:
-                    f.write(json.dumps(hints))
+                f.write(json.dumps(hints))
 
             benji_obj = self.benjiOpen(initdb=initdb, block_size=block_size)
             initdb = False
             with open(os.path.join(testpath, 'hints')) as hints:
-                version_uid = benji_obj.backup(
-                    'data-backup',
-                    'snapshot-name',
-                    'file://' + image_filename,
-                    hints_from_rbd_diff(hints.read()),
-                    from_version
-                )
+                version_uid = benji_obj.backup('data-backup', 'snapshot-name', 'file://' + image_filename,
+                                               hints_from_rbd_diff(hints.read()), from_version)
             benji_obj.close()
             version_uids.append(version_uid)
 
@@ -164,7 +161,7 @@ class SmokeTestCase:
                     version_uids.remove(dismissed_version_uid)
                 benji_obj.close()
 
-            if (i%7) == 0:
+            if (i % 7) == 0:
                 benji_obj = self.benjiOpen(initdb=initdb)
                 benji_obj.cleanup_fast(dt=0)
                 benji_obj.close()

@@ -69,7 +69,8 @@ class RetentionFilter():
     def __init__(self, rules_spec, reference_time=None):
         self.reference_time = time.time() if reference_time is None else reference_time
         self.rules = self._parse_rules(rules_spec)
-        logger.debug('Retention filter set up with reference time {} and rules {}'.format(self.reference_time, self.rules))
+        logger.debug('Retention filter set up with reference time {} and rules {}'.format(
+            self.reference_time, self.rules))
 
     def filter(self, versions):
         # Category labels without latest
@@ -101,8 +102,8 @@ class RetentionFilter():
                 logger.warning('Version {}: {}'.format(version.uid.readable, exception))
                 continue
 
-            logger.debug('Time and time delta for version {} are {} and {}.'
-                         .format(version.uid.readable, version.date, td))
+            logger.debug('Time and time delta for version {} are {} and {}.'.format(version.uid.readable, version.date,
+                                                                                    td))
 
             for category in categories:
                 timecount = getattr(td, category)
@@ -124,8 +125,10 @@ class RetentionFilter():
 
         return dismissed_versions
 
+
 class _TimedeltaError(RuntimeError):
     pass
+
 
 class _Timedelta:
     """
@@ -137,14 +140,15 @@ class _Timedelta:
     independently. Time units are considered strictly linear: months are
     30 days, years are 365 days, weeks are 7 days, one day is 24 hours.
     """
+
     def __init__(self, t, reference_time):
         # Expect two numeric values. Might raise TypeError for other types.
         seconds_earlier = reference_time - t
         if seconds_earlier < 0:
             raise _TimedeltaError('{} isn\'t earlier than the reference time {}.'.format(t, reference_time))
-        self.hours = int(seconds_earlier // 3600)      # 60 * 60
-        self.days = int(seconds_earlier // 86400)      # 60 * 60 * 24
-        self.weeks = int(seconds_earlier // 604800)    # 60 * 60 * 24 * 7
+        self.hours = int(seconds_earlier // 3600)  # 60 * 60
+        self.days = int(seconds_earlier // 86400)  # 60 * 60 * 24
+        self.weeks = int(seconds_earlier // 604800)  # 60 * 60 * 24 * 7
         self.months = int(seconds_earlier // 2592000)  # 60 * 60 * 24 * 30
         self.years = int(seconds_earlier // 31536000)  # 60 * 60 * 24 * 365
 

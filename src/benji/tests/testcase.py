@@ -15,6 +15,7 @@ from benji.metadata import MetadataBackend
 
 
 class TestCase():
+
     @staticmethod
     def random_string(length):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -28,10 +29,13 @@ class TestCase():
         return hexlify(bytes(random.getrandbits(8) for _ in range(length))).decode('ascii')
 
     class TestPath():
+
         def __init__(self):
             self.path = 'benji-test_' + TestCase.random_string(16)
-            for dir in [self.path, self.path + '/data', self.path + '/lock', self.path + '/nbd-cache',
-                        self.path + '/read-cache']:
+            for dir in [
+                    self.path, self.path + '/data', self.path + '/lock', self.path + '/nbd-cache',
+                    self.path + '/read-cache'
+            ]:
                 os.mkdir(dir)
 
         def close(self):
@@ -46,6 +50,7 @@ class TestCase():
 
     def tearDown(self):
         self.testpath.close()
+
 
 class BackendTestCase(TestCase):
 
@@ -78,6 +83,7 @@ class BackendTestCase(TestCase):
         if hasattr(self, 'metadata_backend'):
             self.metadata_backend.close()
         super().tearDown()
+
 
 class BenjiTestCase(TestCase):
 

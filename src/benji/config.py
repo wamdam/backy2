@@ -64,12 +64,12 @@ class Config:
     # Source: https://stackoverflow.com/questions/823196/yaml-merge-in-python
     @classmethod
     def _merge_dicts(cls, user, default):
-        if isinstance(user,dict) and isinstance(default,dict):
-            for k,v in default.items():
+        if isinstance(user, dict) and isinstance(default, dict):
+            for k, v in default.items():
                 if k not in user:
                     user[k] = v
                 else:
-                    user[k] = cls._merge_dicts(user[k],v)
+                    user[k] = cls._merge_dicts(user[k], v)
         return user
 
     def __init__(self, cfg=None, sources=None, merge_defaults=True):
@@ -92,7 +92,8 @@ class Config:
                     break
 
             if not config:
-                raise ConfigurationError('No configuration file found in the default places ({}).'.format(', '.join(sources)))
+                raise ConfigurationError('No configuration file found in the default places ({}).'.format(
+                    ', '.join(sources)))
         else:
             config = yaml.load(cfg)
             if config is None:
@@ -141,8 +142,7 @@ class Config:
                     raise ConfigurationError('Config option {} has the right type but the supplied value is invalid.'
                                              .format(full_name))
                 else:
-                    raise ConfigurationError('Config option {} is invalid: {}.'
-                                             .format(full_name, check_message))
+                    raise ConfigurationError('Config option {} is invalid: {}.'.format(full_name, check_message))
             if isinstance(value, dict):
                 value['__position'] = name
             return value
@@ -161,4 +161,3 @@ class Config:
     @staticmethod
     def get_from_dict(dict_, name, *args, **kwargs):
         return Config._get(dict_, name, *args, **kwargs)
-

@@ -148,11 +148,11 @@ class DataBackend(ReadCacheDataBackend):
             keys_parts = [islice(keys, i, i + 1000) for i in range(0, len(keys), 1000)]
             for part in keys_parts:
                 response = self._local.resource.meta.client.delete_objects(
-                    Bucket=self._local.bucket.name,
-                    Delete={
-                        'Objects': [{'Key': key} for key in part],
-                        }
-                )
+                    Bucket=self._local.bucket.name, Delete={
+                        'Objects': [{
+                            'Key': key
+                        } for key in part],
+                    })
                 if 'Errors' in response:
                     errors += list(map(lambda object: object['Key'], response['Errors']))
         else:

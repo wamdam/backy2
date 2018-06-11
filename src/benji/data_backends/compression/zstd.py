@@ -11,14 +11,13 @@ class Compression:
     DEFAULT_LEVEL = 3
 
     def __init__(self, *, materials):
-        self.level = Config.get_from_dict(materials,
-                                          'level',
-                                          self.DEFAULT_LEVEL,
-                                          types=int,
-                                          check_func=lambda v: v >= 1 and v <= zstandard.MAX_COMPRESSION_LEVEL,
-                                          check_message='Option level must be between 1 and {} (inclusive)'
-                                                            .format(zstandard.MAX_COMPRESSION_LEVEL)
-                                          )
+        self.level = Config.get_from_dict(
+            materials,
+            'level',
+            self.DEFAULT_LEVEL,
+            types=int,
+            check_func=lambda v: v >= 1 and v <= zstandard.MAX_COMPRESSION_LEVEL,
+            check_message='Option level must be between 1 and {} (inclusive)'.format(zstandard.MAX_COMPRESSION_LEVEL))
 
         self.compressors = {}
         self.decompressors = {}
@@ -29,11 +28,12 @@ class Compression:
         if thread_id in self.compressors:
             return self.compressors[thread_id]
 
-        cctx = zstandard.ZstdCompressor(level=self.level,
-                                        write_checksum=False, # We have our own checksum
-                                        write_content_size=False) # We know the uncompressed size
+        cctx = zstandard.ZstdCompressor(
+            level=self.level,
+            write_checksum=False,  # We have our own checksum
+            write_content_size=False)  # We know the uncompressed size
 
-        self.compressors[thread_id]= cctx
+        self.compressors[thread_id] = cctx
         return cctx
 
     def _get_decompressor(self, dict_id=0):
@@ -44,7 +44,7 @@ class Compression:
 
         dctx = zstandard.ZstdDecompressor()
 
-        self.decompressors[thread_id]= dctx
+        self.decompressors[thread_id] = dctx
         return dctx
 
     def compress(self, *, data):

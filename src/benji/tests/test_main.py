@@ -8,7 +8,8 @@ import benji.benji
 from benji.metadata import BlockUid, VersionUid
 from benji.tests.testcase import BackendTestCase
 
-BLOCK_SIZE = 1024*4096
+BLOCK_SIZE = 1024 * 4096
+
 
 class MiscTestCase(BackendTestCase, TestCase):
     CONFIG = """
@@ -37,7 +38,7 @@ class MiscTestCase(BackendTestCase, TestCase):
             (8657, 885, True),
             (32768, 4500, False),
             (65537, 2000, False)
-        ]
+        ] # yapf: disable
         block_size = 1024
         sparse_blocks, read_blocks = benji.benji.blocks_from_hints(hints, block_size)
         self.assertEqual(sparse_blocks, {32, 33, 34, 35, 36, 64, 65})
@@ -60,7 +61,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         version = backend.get_version(uid)
         self.assertEqual(version.name, name)
         self.assertEqual(version.size, 50000)
-        self.assertEqual (version.block_size, 5000)
+        self.assertEqual(version.block_size, 5000)
         self.assertEqual(version.uid, uid)
         self.assertTrue(version.valid)
 
@@ -77,12 +78,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         size = 5000
         id = 0
         version = backend.set_version(
-            version_name=name,
-            snapshot_name=snapshot_name,
-            size=50000,
-            block_size=5000,
-            valid=True
-        )
+            version_name=name, snapshot_name=snapshot_name, size=50000, block_size=5000, valid=True)
         backend.set_block(id, version.uid, block_uid, checksum, size, True)
 
         block = backend.get_block(block_uid)
@@ -99,12 +95,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         version_name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
         version = backend.set_version(
-            version_name=version_name,
-            snapshot_name=snapshot_name,
-            size=TESTLEN * 5000,
-            block_size=5000,
-            valid=True
-        )
+            version_name=version_name, snapshot_name=snapshot_name, size=TESTLEN * 5000, block_size=5000, valid=True)
         block_uids = [BlockUid(i + 1, i + 2) for i in range(TESTLEN)]
         checksums = [uuid.uuid1().hex for i in range(TESTLEN)]
         size = 5000

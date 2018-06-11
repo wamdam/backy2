@@ -54,15 +54,15 @@ class DataBackend(metaclass=ABCMeta):
                 try:
                     encryption_module = importlib.import_module('{}.{}'.format(self._ENCRYPTION_PACKAGE_PREFIX, type))
                 except ImportError:
-                    raise ConfigurationError('Module file {}.{} not found or related import error.'
-                                             .format(self._ENCRYPTION_PACKAGE_PREFIX, type))
+                    raise ConfigurationError('Module file {}.{} not found or related import error.'.format(
+                        self._ENCRYPTION_PACKAGE_PREFIX, type))
                 else:
                     if type != encryption_module.Encryption.NAME:
-                        raise InternalError('Encryption module type and name don\'t agree ({} != {}).'
-                                         .format(type, encryption_module.Encryption.NAME))
+                        raise InternalError('Encryption module type and name don\'t agree ({} != {}).'.format(
+                            type, encryption_module.Encryption.NAME))
 
-                    self.encryption[identifier] = encryption_module.Encryption(identifier=identifier,
-                                                                               materials=materials)
+                    self.encryption[identifier] = encryption_module.Encryption(
+                        identifier=identifier, materials=materials)
 
         active_encryption = config.get('dataBackend.{}.activeEncryption'.format(self.NAME), None, types=str)
         if active_encryption is not None:
@@ -80,12 +80,12 @@ class DataBackend(metaclass=ABCMeta):
                 try:
                     compression_module = importlib.import_module('{}.{}'.format(self._COMPRESSION_PACKAGE_PREFIX, type))
                 except ImportError:
-                    raise ConfigurationError('Module file {}.{} not found or related import error.'
-                                             .format(self._COMPRESSION_PACKAGE_PREFIX, type))
+                    raise ConfigurationError('Module file {}.{} not found or related import error.'.format(
+                        self._COMPRESSION_PACKAGE_PREFIX, type))
                 else:
                     if type != compression_module.Compression.NAME:
-                        raise InternalError('Compression module type and name don\'t agree ({} != {}).'
-                                           .format(type, compression_module.Compression.NAME))
+                        raise InternalError('Compression module type and name don\'t agree ({} != {}).'.format(
+                            type, compression_module.Compression.NAME))
 
                     self.compression[type] = compression_module.Compression(materials=materials)
 
@@ -102,7 +102,8 @@ class DataBackend(metaclass=ABCMeta):
         bandwidth_read = config.get('dataBackend.bandwidthRead', types=int)
         bandwidth_write = config.get('dataBackend.bandwidthWrite', types=int)
 
-        self._consistency_check_writes = config.get('dataBackend.consistencyCheckWrites'.format(self.NAME), False, types=bool)
+        self._consistency_check_writes = config.get(
+            'dataBackend.consistencyCheckWrites'.format(self.NAME), False, types=bool)
 
         self._compression_statistics = {
             'objects_considered': 0,
@@ -118,11 +119,13 @@ class DataBackend(metaclass=ABCMeta):
         self.write_throttling = TokenBucket()
         self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
 
-        self._read_executor = ThreadPoolExecutor(max_workers=simultaneous_reads, thread_name_prefix='DataBackend-Reader')
+        self._read_executor = ThreadPoolExecutor(
+            max_workers=simultaneous_reads, thread_name_prefix='DataBackend-Reader')
         self._read_futures = []
         self._read_semaphore = BoundedSemaphore(simultaneous_reads + self.READ_QUEUE_LENGTH)
 
-        self._write_executor = ThreadPoolExecutor(max_workers=simultaneous_writes, thread_name_prefix='DataBackend-Writer')
+        self._write_executor = ThreadPoolExecutor(
+            max_workers=simultaneous_writes, thread_name_prefix='DataBackend-Writer')
         self._write_futures = []
         self._write_semaphore = BoundedSemaphore(simultaneous_writes + self.WRITE_QUEUE_LENGTH)
 
@@ -134,7 +137,7 @@ class DataBackend(metaclass=ABCMeta):
             intersect_keys = d1_keys.intersection(d2_keys)
             added = d1_keys - d2_keys
             removed = d2_keys - d1_keys
-            modified = {o : (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
+            modified = {o: (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
             same = set(o for o in intersect_keys if d1[o] == d2[o])
             return added, removed, modified, same
 
@@ -191,7 +194,7 @@ class DataBackend(metaclass=ABCMeta):
             raise
         t2 = time.time()
 
-        logger.debug('{} wrote data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2-t1))
+        logger.debug('{} wrote data of uid {} in {:.2f}s'.format(threading.current_thread().name, block.uid, t2 - t1))
         if self._consistency_check_writes:
             self._check_write(key, metadata_key, data, metadata)
 
@@ -212,7 +215,6 @@ class DataBackend(metaclass=ABCMeta):
                     self._write_semaphore.release()
 
             self._write_futures.append(self._write_executor.submit(write_with_release))
-
 
     def save_get_completed(self, timeout=None):
         """ Returns a generator for all completed read jobs
@@ -235,24 +237,20 @@ class DataBackend(metaclass=ABCMeta):
 
         metadata = json.loads(metadata.decode('utf-8'))
         if self._OBJECT_SIZE_KEY not in metadata:
-            raise KeyError('Required metadata key {} is missing for block {} (UID {}).'
-                           .format(self._OBJECT_SIZE_KEY, block.id, block.uid))
+            raise KeyError('Required metadata key {} is missing for block {} (UID {}).'.format(
+                self._OBJECT_SIZE_KEY, block.id, block.uid))
 
         if data_length != metadata[self._OBJECT_SIZE_KEY]:
             raise ValueError('Mismatch between recorded object size and actual object size for block {} (UID {}). '
-                             'Expected: {}, got: {}.'.format(block.id,
-                                                             block.uid,
-                                                             metadata[self._OBJECT_SIZE_KEY],
+                             'Expected: {}, got: {}.'.format(block.id, block.uid, metadata[self._OBJECT_SIZE_KEY],
                                                              data_length))
 
         if not metadata_only:
             data = self._decrypt(data, metadata)
             data = self._uncompress(data, metadata)
 
-        logger.debug('{} read data of uid {} in {:.2f}s{}'
-                     .format(threading.current_thread().name,
-                             block.uid, t2-t1,
-                             ' (metadata only)' if metadata_only else ''))
+        logger.debug('{} read data of uid {} in {:.2f}s{}'.format(threading.current_thread().name, block.uid, t2 - t1,
+                                                                  ' (metadata only)' if metadata_only else ''))
 
         return block, data, metadata
 
@@ -260,6 +258,7 @@ class DataBackend(metaclass=ABCMeta):
         if sync:
             return self._read(block, metadata_only)[1]
         else:
+
             def read_with_acquire():
                 self._read_semaphore.acquire()
                 return self._read(block, metadata_only)
@@ -274,28 +273,20 @@ class DataBackend(metaclass=ABCMeta):
     def check_block_metadata(self, *, block, data_length, metadata):
         for required_key in [self._SIZE_KEY, self._CHECKSUM_KEY]:
             if required_key not in metadata:
-                raise KeyError('Required metadata key {} is missing for block {} (UID {}).'
-                               .format(required_key, block.id, block.uid))
+                raise KeyError('Required metadata key {} is missing for block {} (UID {}).'.format(
+                    required_key, block.id, block.uid))
 
         if metadata[self._SIZE_KEY] != block.size:
             raise ValueError('Mismatch between recorded block size and data length in metadata for block {} (UID {}). '
-                             'Expected: {}, got: {}.'.format(block.id,
-                                                             block.uid,
-                                                             block.size,
-                                                             metadata[self._SIZE_KEY]))
+                             'Expected: {}, got: {}.'.format(block.id, block.uid, block.size, metadata[self._SIZE_KEY]))
 
         if data_length and data_length != block.size:
             raise ValueError('Mismatch between recorded block size and actual data length for block {} (UID {}). '
-                             'Expected: {}, got: {}.'.format(block.id,
-                                                             block.uid,
-                                                             block.size,
-                                                             data_length))
+                             'Expected: {}, got: {}.'.format(block.id, block.uid, block.size, data_length))
 
         if block.checksum != metadata[self._CHECKSUM_KEY]:
             raise ValueError('Mismatch between recorded block checksum and checksum in metadata for block {} (UID {}). '
-                             'Expected: {}, got: {}.'.format(block.id,
-                                                             block.uid,
-                                                             block.checksum[:16],
+                             'Expected: {}, got: {}.'.format(block.id, block.uid, block.checksum[:16],
                                                              metadata[self._CHECKSUM_KEY][:16]))
 
     def rm(self, uid):
@@ -310,7 +301,7 @@ class DataBackend(metaclass=ABCMeta):
                 pass
 
     def rm_many(self, uids):
-        keys =  [self._block_uid_to_key(uid) for uid in uids]
+        keys = [self._block_uid_to_key(uid) for uid in uids]
         metadata_keys = [key + self._META_SUFFIX for key in keys]
 
         errors = self._rm_many_objects(keys)
@@ -355,15 +346,15 @@ class DataBackend(metaclass=ABCMeta):
                 raise KeyError('Required metadata key {} is missing for object {}.'.format(required_key, key))
 
         if len(data) != metadata[self._OBJECT_SIZE_KEY]:
-            raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'
-                                 .format(key, metadata[self.self._OBJECT_SIZE_KEY], len(data)))
+            raise ValueError('Length mismatch for object {}. Expected: {}, got: {}.'.format(
+                key, metadata[self.self._OBJECT_SIZE_KEY], len(data)))
 
         data = self._decrypt(data, metadata)
         data = self._uncompress(data, metadata)
 
         if len(data) != metadata[self._SIZE_KEY]:
-            raise ValueError('Length mismatch of original data for object {}. Expected: {}, got: {}.'
-                             .format(key, metadata[self.self._SIZE_KEY], len(data)))
+            raise ValueError('Length mismatch of original data for object {}. Expected: {}, got: {}.'.format(
+                key, metadata[self.self._SIZE_KEY], len(data)))
 
         data = data.decode('utf-8')
         return data
@@ -436,8 +427,8 @@ class DataBackend(metaclass=ABCMeta):
             if identifier in self.encryption:
                 encryption = self.encryption[identifier]
                 if type != encryption.NAME:
-                    raise ConfigurationError('Mismatch between object encryption type and configured type for identifier '
-                                             + '{} ({} != {})'.format(identifier, type, encryption.NAME))
+                    raise ConfigurationError('Mismatch between object encryption type and configured type for identifier ' +
+                                             '{} ({} != {})'.format(identifier, type, encryption.NAME))
 
                 return encryption.decrypt(data=data, materials=metadata[self._ENCRYPTION_KEY]['materials'])
             else:
@@ -457,12 +448,7 @@ class DataBackend(metaclass=ABCMeta):
                 self._compression_statistics['data_out_compression'] += len(compressed_data)
                 self._compression_statistics['data_out'] += len(compressed_data)
 
-                metadata = {
-                    self._COMPRESSION_KEY: {
-                        'type': self.active_compression.NAME,
-                        'materials': materials
-                    }
-                }
+                metadata = {self._COMPRESSION_KEY: {'type': self.active_compression.NAME, 'materials': materials}}
                 return compressed_data, metadata
             else:
                 self._compression_statistics['data_out'] += len(data)
@@ -475,9 +461,10 @@ class DataBackend(metaclass=ABCMeta):
         if self._COMPRESSION_KEY in metadata:
             type = metadata[self._COMPRESSION_KEY]['type']
             if type in self.compression:
-                return self.compression[type].uncompress(data=data,
-                                                         materials=metadata[self._COMPRESSION_KEY]['materials'],
-                                                         original_size=metadata[self._SIZE_KEY])
+                return self.compression[type].uncompress(
+                    data=data,
+                    materials=metadata[self._COMPRESSION_KEY]['materials'],
+                    original_size=metadata[self._SIZE_KEY])
             else:
                 raise IOError('Unsupported compression type {} in object metadata.'.format(type))
         else:
@@ -505,9 +492,10 @@ class DataBackend(metaclass=ABCMeta):
                     / self._compression_statistics['data_out_compression']
 
         tbl = PrettyTable()
-        tbl.field_names = ['Objects considered', 'Objects compressed', 'Data in', 'Data out',
-                           'Overall compression ratio', 'Data input to compression', 'Data output from compression',
-                           'Compression ratio']
+        tbl.field_names = [
+            'Objects considered', 'Objects compressed', 'Data in', 'Data out', 'Overall compression ratio',
+            'Data input to compression', 'Data output from compression', 'Compression ratio'
+        ]
         tbl.align['Objects considered'] = 'r'
         tbl.align['Objects compressed'] = 'r'
         tbl.align['Data in'] = 'r'
@@ -517,14 +505,10 @@ class DataBackend(metaclass=ABCMeta):
         tbl.align['Data output from compression'] = 'r'
         tbl.align['Compression ratio'] = 'r'
         tbl.add_row([
-            self._compression_statistics['objects_considered'],
-            self._compression_statistics['objects_compressed'],
-            self._compression_statistics['data_in'],
-            self._compression_statistics['data_out'],
-            '{:.2f}'.format(overall_ratio),
-            self._compression_statistics['data_in_compression'],
-            self._compression_statistics['data_out_compression'],
-            '{:.2f}'.format(ratio)
+            self._compression_statistics['objects_considered'], self._compression_statistics['objects_compressed'],
+            self._compression_statistics['data_in'], self._compression_statistics['data_out'],
+            '{:.2f}'.format(overall_ratio), self._compression_statistics['data_in_compression'],
+            self._compression_statistics['data_out_compression'], '{:.2f}'.format(ratio)
         ])
         logger.debug('Compression statistics:  \n' + textwrap.indent(str(tbl), '          '))
 
@@ -532,8 +516,8 @@ class DataBackend(metaclass=ABCMeta):
         self._log_compression_statistics()
 
         if len(self._read_futures) > 0:
-            logger.warning('Data backend closed with {} outstanding read jobs, cancelling them.'
-                        .format(len(self._read_futures)))
+            logger.warning('Data backend closed with {} outstanding read jobs, cancelling them.'.format(
+                len(self._read_futures)))
             for future in self._read_futures:
                 future.cancel()
             logger.debug('Data backend cancelled all outstanding read jobs.')
@@ -542,8 +526,8 @@ class DataBackend(metaclass=ABCMeta):
                 pass
             logger.debug('Data backend read results from all outstanding read jobs.')
         if len(self._write_futures) > 0:
-            logger.warning('Data backend closed with {} outstanding write jobs, cancelling them.'
-                        .format(len(self._write_futures)))
+            logger.warning('Data backend closed with {} outstanding write jobs, cancelling them.'.format(
+                len(self._write_futures)))
             for future in self._write_futures:
                 future.cancel()
             logger.debug('Data backend cancelled all outstanding write jobs.')
@@ -564,7 +548,8 @@ class DataBackend(metaclass=ABCMeta):
         return BlockUid(int(key[15 + bpl:15 + bpl + 16], 16), int(key[32 + bpl:32 + bpl + 16], 16))
 
     def _version_uid_to_key(self, version_uid):
-        return '{}{}/{}/{}'.format(self._VERSIONS_PREFIX, version_uid.readable[-1:], version_uid.readable[-2:-1], version_uid.readable)
+        return '{}{}/{}/{}'.format(self._VERSIONS_PREFIX, version_uid.readable[-1:], version_uid.readable[-2:-1],
+                                   version_uid.readable)
 
     def _key_to_version_uid(self, key):
         vpl = len(self._VERSIONS_PREFIX)
@@ -603,19 +588,20 @@ class ReadCacheDataBackend(DataBackend):
     def __init__(self, config):
         read_cache_directory = config.get('dataBackend.readCache.directory', None, types=str)
         read_cache_maximum_size = config.get('dataBackend.readCache.maximumSize', None, types=int)
-    
+
         if read_cache_directory and not read_cache_maximum_size or not read_cache_directory and read_cache_maximum_size:
-            raise ConfigurationError('Both dataBackend.readCache.directory and dataBackend.readCache.maximumSize need to be set '
-                                  + 'to enable disk based caching.')
-    
+            raise ConfigurationError('Both dataBackend.readCache.directory and dataBackend.readCache.maximumSize need to be set ' +
+                                     'to enable disk based caching.')
+
         if read_cache_directory and read_cache_maximum_size:
             os.makedirs(read_cache_directory, exist_ok=True)
             try:
-                self._read_cache = Cache(read_cache_directory,
-                                    size_limit=read_cache_maximum_size,
-                                    eviction_policy='least-frequently-used',
-                                    statistics=1,
-                                    )
+                self._read_cache = Cache(
+                    read_cache_directory,
+                    size_limit=read_cache_maximum_size,
+                    eviction_policy='least-frequently-used',
+                    statistics=1,
+                )
             except Exception:
                 logger.warning('Unable to enable disk based read caching. Continuing without it.')
                 self._read_cache = None
@@ -651,13 +637,14 @@ class ReadCacheDataBackend(DataBackend):
         return block, data, metadata
 
     def use_read_cache(self, enable):
-        old_value =  self._use_read_cache
+        old_value = self._use_read_cache
         self._use_read_cache = enable
         return old_value
-        
+
     def close(self):
         super().close()
         if self._read_cache is not None:
             (cache_hits, cache_misses) = self._read_cache.stats()
-            logger.debug('Disk based cache statistics (since cache creation): {} hits, {} misses.'.format(cache_hits, cache_misses))
+            logger.debug('Disk based cache statistics (since cache creation): {} hits, {} misses.'.format(
+                cache_hits, cache_misses))
             self._read_cache.close()

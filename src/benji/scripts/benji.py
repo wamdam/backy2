@@ -40,11 +40,10 @@ class Commands:
                 hints = hints_from_rbd_diff(data)
             backup_version_uid = benji_obj.backup(name, snapshot_name, source, hints, from_version_uid, tags)
             if self.machine_output:
-                benji_obj.export_any('versions',
-                                     [benji_obj.ls(version_uid=backup_version_uid)],
-                                     sys.stdout,
-                                     ignore_relationships=[((Version,), ('blocks',))]
-                                    )
+                benji_obj.export_any(
+                    'versions', [benji_obj.ls(version_uid=backup_version_uid)],
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))])
         finally:
             if benji_obj:
                 benji_obj.close()
@@ -94,9 +93,11 @@ class Commands:
         try:
             benji_obj = Benji(self.config)
             for version_uid in version_uids:
-                benji_obj.rm(version_uid, force=force,
-                        disallow_rm_when_younger_than_days=disallow_rm_when_younger_than_days,
-                        keep_backend_metadata=keep_backend_metadata)
+                benji_obj.rm(
+                    version_uid,
+                    force=force,
+                    disallow_rm_when_younger_than_days=disallow_rm_when_younger_than_days,
+                    keep_backend_metadata=keep_backend_metadata)
         finally:
             if benji_obj:
                 benji_obj.close()
@@ -133,8 +134,7 @@ class Commands:
     def _ls_versions_tbl_output(cls, versions):
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
-        tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
-                           'valid', 'protected', 'tags']
+        tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size', 'valid', 'protected', 'tags']
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
         tbl.align['tags'] = 'l'
@@ -151,15 +151,16 @@ class Commands:
                 version.valid,
                 version.protected,
                 ",".join(sorted([t.name for t in version.tags])),
-                ])
+            ])
         print(tbl)
 
     @classmethod
     def _stats_tbl_output(cls, stats):
         tbl = PrettyTable()
-        tbl.field_names = ['date', 'uid', 'name', 'snapshot_name', 'size', 'block_size',
-                           'bytes read', 'blocks read', 'bytes written', 'blocks written',
-                           'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)']
+        tbl.field_names = [
+            'date', 'uid', 'name', 'snapshot_name', 'size', 'block_size', 'bytes read', 'blocks read', 'bytes written',
+            'blocks written', 'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse', 'duration (s)'
+        ]
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
         tbl.align['size bytes'] = 'r'
@@ -190,7 +191,7 @@ class Commands:
                 stat.bytes_sparse,
                 stat.blocks_sparse,
                 human_readable_duration(stat.duration_seconds),
-                ])
+            ])
         print(tbl)
 
     def ls(self, name, snapshot_name=None, tag=None, include_blocks=False):
@@ -203,11 +204,12 @@ class Commands:
                 versions = [v for v in versions if tag in [t.name for t in v.tags]]
 
             if self.machine_output:
-                benji_obj.export_any('versions',
-                                     versions,
-                                     sys.stdout,
-                                     ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
-                                    )
+                benji_obj.export_any(
+                    'versions',
+                    versions,
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
+                )
             else:
                 self._ls_versions_tbl_output(versions)
         finally:
@@ -272,11 +274,12 @@ class Commands:
             stats = benji_obj.stats(version_uid, limit)
 
             if self.machine_output:
-                stats = list(stats) # resolve iterator, otherwise it's not serializable
-                benji_obj.export_any('stats',
-                                     stats,
-                                     sys.stdout,
-                                    )
+                stats = list(stats)  # resolve iterator, otherwise it's not serializable
+                benji_obj.export_any(
+                    'stats',
+                    stats,
+                    sys.stdout,
+                )
             else:
                 self._stats_tbl_output(stats)
         finally:
@@ -395,35 +398,30 @@ class Commands:
             benji_obj = Benji(self.config)
             dismissed_version_uids = []
             for version_name in version_names:
-                dismissed_version_uids.extend(benji_obj.enforce_retention_policy(version_name=version_name,
-                                                                        rules_spec=rules_spec,
-                                                                        dry_run=dry_run,
-                                                                        keep_backend_metadata=keep_backend_metadata))
+                dismissed_version_uids.extend(
+                    benji_obj.enforce_retention_policy(
+                        version_name=version_name,
+                        rules_spec=rules_spec,
+                        dry_run=dry_run,
+                        keep_backend_metadata=keep_backend_metadata))
             if self.machine_output:
-                benji_obj.export_any('versions',
-                                     [benji_obj.ls(version_uid=version_uid)[0]
-                                            for version_uid in dismissed_version_uids],
-                                     sys.stdout,
-                                     ignore_relationships=[((Version,), ('blocks',))]
-                                    )
+                benji_obj.export_any(
+                    'versions', [benji_obj.ls(version_uid=version_uid)[0] for version_uid in dismissed_version_uids],
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))])
         finally:
-                if benji_obj:
-                    benji_obj.close()
+            if benji_obj:
+                benji_obj.close()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Backup and restore for block devices.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        description='Backup and restore for block devices.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        '-v', '--verbose', action='store_true', help='Verbose output')
-    parser.add_argument(
-        '-m', '--machine-output', action='store_true', default=False)
-    parser.add_argument(
-        '-V', '--version', action='store_true', help='Show version')
-    parser.add_argument(
-        '-c', '--configfile', default=None, type=str)
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
+    parser.add_argument('-m', '--machine-output', action='store_true', default=False)
+    parser.add_argument('-V', '--version', action='store_true', help='Show version')
+    parser.add_argument('-c', '--configfile', default=None, type=str)
 
     subparsers = parser.add_subparsers()
 
@@ -434,46 +432,42 @@ def main():
     p.set_defaults(func='initdb')
 
     # BACKUP
-    p = subparsers.add_parser(
-        'backup',
-        help="Perform a backup.")
-    p.add_argument(
-        'source',
-        help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename@snapshot)')
-    p.add_argument(
-        'name',
-        help='Backup name (e.g. the hostname)')
+    p = subparsers.add_parser('backup', help="Perform a backup.")
+    p.add_argument('source', help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename@snapshot)')
+    p.add_argument('name', help='Backup name (e.g. the hostname)')
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the RBD snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as RBD JSON format')
     p.add_argument('-f', '--from-version', dest='from_version_uid', default=None, help='Use this version as base')
-    p.add_argument('-t', '--tag', nargs='*',  dest='tags', metavar='tag', default=None,
-                   help='Tag this verion with the specified tag(s)')
+    p.add_argument(
+        '-t',
+        '--tag',
+        nargs='*',
+        dest='tags',
+        metavar='tag',
+        default=None,
+        help='Tag this verion with the specified tag(s)')
     p.add_argument('-b', '--block-size', type=int, help='Block size to use for this backup in bytes')
     p.set_defaults(func='backup')
 
     # RESTORE
-    p = subparsers.add_parser(
-        'restore',
-        help="Restore a given backup to a given target.")
-    p.add_argument('-s', '--sparse', action='store_true', help='Restore only existing blocks. Works only with file '
-                                                               + 'and RBD targets, not with LVM. Faster.')
+    p = subparsers.add_parser('restore', help="Restore a given backup to a given target.")
+    p.add_argument(
+        '-s',
+        '--sparse',
+        action='store_true',
+        help='Restore only existing blocks. Works only with file ' + 'and RBD targets, not with LVM. Faster.')
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
     p.add_argument('version_uid')
-    p.add_argument('target',
-        help='Source (URL like, e.g. file:///dev/sda or rbd://pool/imagename)')
+    p.add_argument('target', help='Source (URL like, e.g. file:///dev/sda or rbd://pool/imagename)')
     p.set_defaults(func='restore')
 
     # PROTECT
-    p = subparsers.add_parser(
-        'protect',
-        help="Protect a backup version. Protected versions cannot be removed.")
+    p = subparsers.add_parser('protect', help="Protect a backup version. Protected versions cannot be removed.")
     p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.set_defaults(func='protect')
 
     # UNPROTECT
-    p = subparsers.add_parser(
-        'unprotect',
-        help="Unprotect a backup version. Unprotected versions can be removed.")
+    p = subparsers.add_parser('unprotect', help="Unprotect a backup version. Unprotected versions can be removed.")
     p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.set_defaults(func='unprotect')
 
@@ -481,138 +475,128 @@ def main():
     p = subparsers.add_parser(
         'rm',
         help="Remove the given backup versions. This will only remove meta data and you will have to cleanup after this.")
-    p.add_argument('-f', '--force', action='store_true', help="Force removal of version, even if it's younger than the configured disallow_rm_when_younger_than_days.")
-    p.add_argument('-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
+    p.add_argument(
+        '-f',
+        '--force',
+        action='store_true',
+        help="Force removal of version, even if it's younger than the configured disallow_rm_when_younger_than_days.")
+    p.add_argument(
+        '-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
     p.add_argument('version_uids', metavar='version_uid', nargs='+')
     p.set_defaults(func='rm')
 
     # ENFORCE
-    p = subparsers.add_parser(
-        'enforce',
-        help="Enforce the given retenion policy on each listed version.")
+    p = subparsers.add_parser('enforce', help="Enforce the given retenion policy on each listed version.")
     p.add_argument('--dry-run', action='store_true', help='Dry run: Only show which versions would be removed.')
-    p.add_argument('-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
+    p.add_argument(
+        '-K', '--keep-backend-metadata', action='store_true', help='Don\'t delete version\'s metadata in data backend.')
     p.add_argument('rules_spec', help='Retention rules specification')
     p.add_argument('version_names', metavar='version_name', nargs='+')
     p.set_defaults(func='enforce_retention_policy')
 
     # SCRUB
-    p = subparsers.add_parser(
-        'scrub',
-        help="Scrub a given backup and check for consistency.")
-    p.add_argument('-p', '--percentile', default=100,
+    p = subparsers.add_parser('scrub', help="Scrub a given backup and check for consistency.")
+    p.add_argument(
+        '-p',
+        '--percentile',
+        default=100,
         help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='scrub')
 
     # DEEP-SCRUB
-    p = subparsers.add_parser(
-        'deep-scrub',
-        help="Deep scrub a given backup and check for consistency.")
-    p.add_argument('-s', '--source', default=None,
-                   help='Source, optional. If given, check if source matches backup in addition to checksum tests. URL-like format as in backup.')
-    p.add_argument('-p', '--percentile', default=100,
-                   help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
+    p = subparsers.add_parser('deep-scrub', help="Deep scrub a given backup and check for consistency.")
+    p.add_argument(
+        '-s',
+        '--source',
+        default=None,
+        help='Source, optional. If given, check if source matches backup in addition to checksum tests. URL-like format as in backup.')
+    p.add_argument(
+        '-p',
+        '--percentile',
+        default=100,
+        help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
     p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='deep_scrub')
 
     # Export
-    p = subparsers.add_parser(
-        'export',
-        help='Export the metadata of one or more versions to a file or standard out.')
+    p = subparsers.add_parser('export', help='Export the metadata of one or more versions to a file or standard out.')
     p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing output file')
-    p.add_argument('-o', '--output-file', help='Write export into this file (stdout is used if this option isn\'t specified)')
+    p.add_argument(
+        '-o', '--output-file', help='Write export into this file (stdout is used if this option isn\'t specified)')
     p.set_defaults(func='export')
 
     # Import
     p = subparsers.add_parser(
-        'import',
-        help='Import the metadata of one or more versions from a file or standard input.')
+        'import', help='Import the metadata of one or more versions from a file or standard input.')
     p.add_argument('-i', '--input-file', help='Read from this file (stdin is used if this option isn\'t specified)')
     p.set_defaults(func='import_')
 
     # Export to data backend
-    p = subparsers.add_parser(
-        'export-to-backend',
-        help='Export metadata of one or more versions to the data backend')
+    p = subparsers.add_parser('export-to-backend', help='Export metadata of one or more versions to the data backend')
     p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing metadata in data backend')
     p.set_defaults(func='export_to_backend')
 
     # Import from data backend
     p = subparsers.add_parser(
-        'import-from-backend',
-        help="Import metadata of one ore more versions from the data backend")
+        'import-from-backend', help="Import metadata of one ore more versions from the data backend")
     p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
     p.set_defaults(func='import_from_backend')
 
     # CLEANUP
-    p = subparsers.add_parser(
-        'cleanup',
-        help="Clean unreferenced blobs.")
+    p = subparsers.add_parser('cleanup', help="Clean unreferenced blobs.")
     p.add_argument(
-        '-f', '--full', action='store_true', default=False,
+        '-f',
+        '--full',
+        action='store_true',
+        default=False,
         help='Do a full cleanup. This will read the full metadata from the data backend (i.e. backup storage) '
-             'and compare it to the metadata in the metadata backend. Unused data will then be deleted. '
-             'This is a slow, but complete process. A full cleanup must not run in parallel to ANY other jobs.')
+        'and compare it to the metadata in the metadata backend. Unused data will then be deleted. '
+        'This is a slow, but complete process. A full cleanup must not run in parallel to ANY other jobs.')
     p.set_defaults(func='cleanup')
 
     # LS
-    p = subparsers.add_parser(
-        'ls',
-        help="List existing backups.")
+    p = subparsers.add_parser('ls', help="List existing backups.")
     p.add_argument('name', nargs='?', default=None, help='Show versions for this name only')
-    p.add_argument('-s', '--snapshot-name', default=None,
-            help="Limit output to this snapshot name")
-    p.add_argument('-t', '--tag', default=None,
-            help="Limit output to this tag")
-    p.add_argument('--include-blocks', default=False, action='store_true',
-            help='Include blocks in output')
+    p.add_argument('-s', '--snapshot-name', default=None, help="Limit output to this snapshot name")
+    p.add_argument('-t', '--tag', default=None, help="Limit output to this tag")
+    p.add_argument('--include-blocks', default=False, action='store_true', help='Include blocks in output')
     p.set_defaults(func='ls')
 
     # STATS
-    p = subparsers.add_parser(
-        'stats',
-        help="Show statistics")
+    p = subparsers.add_parser('stats', help="Show statistics")
     p.add_argument('version_uid', nargs='?', default=None, help='Show statistics for this version')
-    p.add_argument('-l', '--limit', default=None,
-            help="Limit output to this number (default: unlimited)")
+    p.add_argument('-l', '--limit', default=None, help="Limit output to this number (default: unlimited)")
     p.set_defaults(func='stats')
 
     # diff-meta
-    p = subparsers.add_parser(
-        'diff-meta',
-        help="Output a diff between two versions")
+    p = subparsers.add_parser('diff-meta', help="Output a diff between two versions")
     p.add_argument('version_uid1', help='Left version')
     p.add_argument('version_uid2', help='Right version')
     p.set_defaults(func='diff_meta')
 
     # NBD
-    p = subparsers.add_parser(
-        'nbd',
-        help="Start an nbd server")
-    p.add_argument('-a', '--bind-address', default='127.0.0.1',
-            help="Bind to this ip address (default: 127.0.0.1)")
-    p.add_argument('-p', '--bind-port', default=10809,
-            help="Bind to this port (default: 10809)")
+    p = subparsers.add_parser('nbd', help="Start an nbd server")
+    p.add_argument('-a', '--bind-address', default='127.0.0.1', help="Bind to this ip address (default: 127.0.0.1)")
+    p.add_argument('-p', '--bind-port', default=10809, help="Bind to this port (default: 10809)")
     p.add_argument(
-        '-r', '--read-only', action='store_true', default=False,
+        '-r',
+        '--read-only',
+        action='store_true',
+        default=False,
         help='Read only if set, otherwise a copy on write backup is created.')
     p.set_defaults(func='nbd')
 
     # ADD TAG
-    p = subparsers.add_parser(
-        'add-tag',
-        help="Add a named tag to a backup version.")
+    p = subparsers.add_parser('add-tag', help="Add a named tag to a backup version.")
     p.add_argument('version_uid')
     p.add_argument('names', metavar='name', nargs='+')
     p.set_defaults(func='add_tag')
 
     # REMOVE TAG
-    p = subparsers.add_parser(
-        'rm-tag',
-        help="Remove a named tag from a backup version.")
+    p = subparsers.add_parser('rm-tag', help="Remove a named tag from a backup version.")
     p.add_argument('version_uid')
     p.add_argument('names', metavar='name', nargs='+')
     p.set_defaults(func='rm_tag')
@@ -661,20 +645,76 @@ def main():
 
     # From most specific to least specific
     exit_code_list = [
-        {'exception': benji.exception.UsageError, 'msg': 'Usage error', 'exit_code': os.EX_USAGE},
-        {'exception': benji.exception.AlreadyLocked, 'msg': 'Already locked error', 'exit_code': os.EX_NOPERM},
-        {'exception': benji.exception.InternalError, 'msg': 'Internal error', 'exit_code': os.EX_SOFTWARE},
-        {'exception': benji.exception.ConfigurationError, 'msg': 'Configuration error', 'exit_code': os.EX_CONFIG},
-        {'exception': benji.exception.InputDataError, 'msg': 'Input data error', 'exit_code': os.EX_DATAERR},
-        {'exception': PermissionError, 'msg': 'Already locked error', 'exit_code': os.EX_NOPERM},
-        {'exception': FileExistsError, 'msg': 'Already exists', 'exit_code': os.EX_CANTCREAT},
-        {'exception': FileNotFoundError, 'msg': 'Not found', 'exit_code': os.EX_NOINPUT},
-        {'exception': EOFError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
-        {'exception': IOError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
-        {'exception': OSError, 'msg': 'Not found', 'exit_code': os.EX_OSERR},
-        {'exception': ConnectionError, 'msg': 'I/O error', 'exit_code': os.EX_IOERR},
-        {'exception': LookupError, 'msg': 'Not found', 'exit_code': os.EX_NOINPUT},
-        {'exception': BaseException, 'msg': 'Other exception', 'exit_code': os.EX_SOFTWARE},
+        {
+            'exception': benji.exception.UsageError,
+            'msg': 'Usage error',
+            'exit_code': os.EX_USAGE
+        },
+        {
+            'exception': benji.exception.AlreadyLocked,
+            'msg': 'Already locked error',
+            'exit_code': os.EX_NOPERM
+        },
+        {
+            'exception': benji.exception.InternalError,
+            'msg': 'Internal error',
+            'exit_code': os.EX_SOFTWARE
+        },
+        {
+            'exception': benji.exception.ConfigurationError,
+            'msg': 'Configuration error',
+            'exit_code': os.EX_CONFIG
+        },
+        {
+            'exception': benji.exception.InputDataError,
+            'msg': 'Input data error',
+            'exit_code': os.EX_DATAERR
+        },
+        {
+            'exception': PermissionError,
+            'msg': 'Already locked error',
+            'exit_code': os.EX_NOPERM
+        },
+        {
+            'exception': FileExistsError,
+            'msg': 'Already exists',
+            'exit_code': os.EX_CANTCREAT
+        },
+        {
+            'exception': FileNotFoundError,
+            'msg': 'Not found',
+            'exit_code': os.EX_NOINPUT
+        },
+        {
+            'exception': EOFError,
+            'msg': 'I/O error',
+            'exit_code': os.EX_IOERR
+        },
+        {
+            'exception': IOError,
+            'msg': 'I/O error',
+            'exit_code': os.EX_IOERR
+        },
+        {
+            'exception': OSError,
+            'msg': 'Not found',
+            'exit_code': os.EX_OSERR
+        },
+        {
+            'exception': ConnectionError,
+            'msg': 'I/O error',
+            'exit_code': os.EX_IOERR
+        },
+        {
+            'exception': LookupError,
+            'msg': 'Not found',
+            'exit_code': os.EX_NOINPUT
+        },
+        {
+            'exception': BaseException,
+            'msg': 'Other exception',
+            'exit_code': os.EX_SOFTWARE
+        },
     ]
 
     try:
@@ -689,6 +729,7 @@ def main():
                 logger.debug(case['msg'], exc_info=True)
                 logger.error(str(exception))
                 exit(case['exit_code'])
+
 
 if __name__ == '__main__':
     main()

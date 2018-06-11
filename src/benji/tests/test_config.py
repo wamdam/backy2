@@ -51,13 +51,16 @@ class ConfigTestCase(TestCase, unittest.TestCase):
         self.assertEqual('RBD_FEATURE_EXCLUSIVE_LOCK', config.get('io.rbd.newImageFeatures')[1])
 
     def test_correct_version(self):
-        self.assertTrue(isinstance(Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=False), Config))
+        self.assertTrue(
+            isinstance(
+                Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=False), Config))
 
     def test_wrong_version(self):
-        self.assertRaises(ConfigurationError, lambda : Config(cfg='configurationVersion: \'234242.2343242\'', merge_defaults=False))
+        self.assertRaises(ConfigurationError,
+                          lambda: Config(cfg='configurationVersion: \'234242.2343242\'', merge_defaults=False))
 
     def test_missing_version(self):
-        self.assertRaises(ConfigurationError, lambda : Config(cfg='a: {b: 1, c: 2}', merge_defaults=False))
+        self.assertRaises(ConfigurationError, lambda: Config(cfg='a: {b: 1, c: 2}', merge_defaults=False))
 
     def test_defaults(self):
         config = Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=True)
@@ -65,24 +68,26 @@ class ConfigTestCase(TestCase, unittest.TestCase):
         self.assertEqual(1, config.get('io.rbd.simultaneousReads'))
 
     def test_default_overwrite(self):
-        config = Config(cfg="""
+        config = Config(
+            cfg="""
         configurationVersion: '{}'
         dataBackend:
           simultaneousReads: 12345678
-        """.format(Config.CONFIG_VERSION), merge_defaults=True)
+        """.format(Config.CONFIG_VERSION),
+            merge_defaults=True)
         self.assertEqual(12345678, config.get('dataBackend.simultaneousReads'))
         self.assertEqual(1, config.get('io.rbd.simultaneousReads'))
 
     def test_missing(self):
         config = Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=False)
-        self.assertRaises(KeyError, lambda : config.get('missing.option'))
+        self.assertRaises(KeyError, lambda: config.get('missing.option'))
 
     def test_with_default(self):
         config = Config(cfg='configurationVersion: \'{}\''.format(Config.CONFIG_VERSION), merge_defaults=False)
         self.assertEqual('test', config.get('missing.option', 'test'))
 
     def test_get_with_dict(self):
-        self.assertEqual('Hi there!', Config.get_from_dict({'a': { 'b': 'Hi there!' } }, 'a.b', types=str))
+        self.assertEqual('Hi there!', Config.get_from_dict({'a': {'b': 'Hi there!'}}, 'a.b', types=str))
 
     def test_load_from_file(self):
         cfile = os.path.join(self.testpath.path, 'test-config.yaml')

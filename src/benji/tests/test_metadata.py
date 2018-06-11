@@ -8,65 +8,62 @@ from benji.tests.testcase import BackendTestCase
 class SQLTestCase:
 
     def test_version(self):
+        version = self.metadata_backend.set_version(
+            version_name='backup-name',
+            snapshot_name='snapshot-name',
+            size=16 * 1024 * 4096,
+            block_size=4 * 1024 * 4096,
+            valid=False)
+        self.metadata_backend.commit()
+
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertEqual('backup-name', version.name)
+        self.assertEqual('snapshot-name', version.snapshot_name)
+        self.assertEqual(16 * 1024 * 4096, version.size)
+        self.assertEqual(4 * 1024 * 4096, version.block_size)
+        self.assertFalse(version.valid)
+        self.assertFalse(version.protected)
+
+        self.metadata_backend.set_version_valid(version.uid)
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertTrue(version.valid)
+
+        self.metadata_backend.set_version_invalid(version.uid)
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertFalse(version.valid)
+
+        self.metadata_backend.protect_version(version.uid)
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertTrue(version.protected)
+
+        self.metadata_backend.unprotect_version(version.uid)
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertFalse(version.protected)
+
+        self.metadata_backend.add_tag(version.uid, 'tag-123')
+        self.assertRaises(NoChange, lambda: self.metadata_backend.add_tag(version.uid, 'tag-123'))
+
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertEqual(1, len(version.tags))
+        self.assertIn(version.uid, map(lambda tag: tag.version_uid, version.tags))
+        self.assertIn('tag-123', map(lambda tag: tag.name, version.tags))
+
+        self.metadata_backend.rm_tag(version.uid, 'tag-123')
+        self.assertRaises(NoChange, lambda: self.metadata_backend.rm_tag(version.uid, 'tag-123'))
+        version = self.metadata_backend.get_version(version.uid)
+        self.assertEqual(0, len(version.tags))
+
+        version_uids = {}
+        for _ in range(256):
             version = self.metadata_backend.set_version(
                 version_name='backup-name',
                 snapshot_name='snapshot-name',
                 size=16 * 1024 * 4096,
                 block_size=4 * 1024 * 4096,
-                valid=False
-            )
-            self.metadata_backend.commit()
-
+                valid=False)
             version = self.metadata_backend.get_version(version.uid)
-            self.assertEqual('backup-name', version.name)
-            self.assertEqual('snapshot-name', version.snapshot_name)
-            self.assertEqual(16 * 1024 * 4096, version.size)
-            self.assertEqual(4 * 1024 * 4096, version.block_size)
-            self.assertFalse(version.valid)
-            self.assertFalse(version.protected)
-
-            self.metadata_backend.set_version_valid(version.uid)
-            version = self.metadata_backend.get_version(version.uid)
-            self.assertTrue(version.valid)
-
-            self.metadata_backend.set_version_invalid(version.uid)
-            version = self.metadata_backend.get_version(version.uid)
-            self.assertFalse(version.valid)
-
-            self.metadata_backend.protect_version(version.uid)
-            version = self.metadata_backend.get_version(version.uid)
-            self.assertTrue(version.protected)
-
-            self.metadata_backend.unprotect_version(version.uid)
-            version = self.metadata_backend.get_version(version.uid)
-            self.assertFalse(version.protected)
-
-            self.metadata_backend.add_tag(version.uid, 'tag-123')
-            self.assertRaises(NoChange, lambda: self.metadata_backend.add_tag(version.uid, 'tag-123'))
-
-            version = self.metadata_backend.get_version(version.uid)
-            self.assertEqual(1, len(version.tags))
-            self.assertIn(version.uid, map(lambda tag: tag.version_uid, version.tags))
-            self.assertIn('tag-123', map(lambda tag: tag.name, version.tags))
-
-            self.metadata_backend.rm_tag(version.uid, 'tag-123')
-            self.assertRaises(NoChange, lambda: self.metadata_backend.rm_tag(version.uid, 'tag-123'))
-            version = self.metadata_backend.get_version(version.uid)
-            self.assertEqual(0, len(version.tags))
-
-            version_uids = {}
-            for _ in range(256):
-                version = self.metadata_backend.set_version(
-                    version_name='backup-name',
-                    snapshot_name='snapshot-name',
-                    size=16 * 1024 * 4096,
-                    block_size=4 * 1024 * 4096,
-                    valid=False
-                )
-                version = self.metadata_backend.get_version(version.uid)
-                self.assertNotIn(version.uid, version_uids)
-                version_uids[version.uid] = True
-
+            self.assertNotIn(version.uid, version_uids)
+            version_uids[version.uid] = True
 
     def test_block(self):
         version = self.metadata_backend.set_version(
@@ -74,8 +71,7 @@ class SQLTestCase:
             snapshot_name='snapshot-name-' + self.random_string(12),
             size=256 * 1024 * 4096,
             block_size=1024 * 4096,
-            valid=False
-        )
+            valid=False)
         self.metadata_backend.commit()
 
         checksums = []
@@ -84,13 +80,7 @@ class SQLTestCase:
         for id in range(num_blocks):
             checksums.append(self.random_hex(64))
             uids.append(BlockUid(1, id))
-            self.metadata_backend.set_block(
-                id,
-                version.uid,
-                uids[id],
-                checksums[id],
-                1024 * 4096,
-                True)
+            self.metadata_backend.set_block(id, version.uid, uids[id], checksums[id], 1024 * 4096, True)
         self.metadata_backend.commit()
 
         for id, checksum in enumerate(checksums):
@@ -209,6 +199,7 @@ class SQLTestCase:
         self.assertEqual(VersionUid(2), uids[1])
         self.assertEqual(VersionUid(3), uids[2])
 
+
 class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
 
     CONFIG = """
@@ -218,6 +209,7 @@ class SQLTestCaseSQLLite(SQLTestCase, BackendTestCase, TestCase):
         metadataBackend: 
           engine: sqlite:///{testpath}/benji.sqlite
         """
+
 
 class SQLTestCasePostgreSQL(SQLTestCase, BackendTestCase, TestCase):
 

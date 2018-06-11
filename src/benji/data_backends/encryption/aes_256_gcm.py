@@ -25,12 +25,7 @@ class Encryption:
             kdfIterations = Config.get_from_dict(materials, 'kdfIterations', types=int)
             password = Config.get_from_dict(materials, 'password', types=str)
 
-            self._master_key = derive_key(
-                salt=kdfSalt,
-                iterations=kdfIterations,
-                key_length=32,
-                password=password
-            )
+            self._master_key = derive_key(salt=kdfSalt, iterations=kdfIterations, key_length=32, password=password)
 
         self._identifier = identifier
 
@@ -65,14 +60,13 @@ class Encryption:
         iv = base64.b64decode(iv)
 
         if len(iv) != 16:
-            raise ValueError('Encryption materials IV iv has wrong length of {}. It must be 16 bytes long.'
-                             .format(len(iv)))
+            raise ValueError('Encryption materials IV iv has wrong length of {}. It must be 16 bytes long.'.format(
+                len(iv)))
 
         envelope_key = aes_unwrap_key(self._master_key, envelope_key)
         if len(envelope_key) != 32:
             raise ValueError('Encryption materials key envelope_key has wrong length of {}. It must be 32 bytes long.'
-                     .format(len(envelope_key)))
+                             .format(len(envelope_key)))
 
         decryptor = AES.new(envelope_key, AES.MODE_GCM, nonce=iv)
         return decryptor.decrypt(data)
-

@@ -40,8 +40,9 @@ class IO(_IO):
                                       .format(self.io_name))
             else:
                 if size < self.size():
-                    raise IOError('Restore target {} is too small. Its size is {} bytes, but we need {} bytes for the restore.'
-                                  .format(self.io_name, self.size(), size))
+                    raise IOError(
+                        'Restore target {} is too small. Its size is {} bytes, but we need {} bytes for the restore.'
+                        .format(self.io_name, self.size(), size))
         else:
             # create the file
             with open(self.io_name, 'wb') as f:
@@ -73,7 +74,7 @@ class IO(_IO):
             threading.current_thread().name,
             block.id,
             data_checksum[:16],
-            t2-t1,
+            t2 - t1,
         ))
 
         return block, data, data_checksum

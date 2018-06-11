@@ -30,8 +30,7 @@ class IO(_IO):
             try:
                 self._new_image_features = self._new_image_features | getattr(rbd, feature)
             except AttributeError:
-                raise ConfigurationError('io.{}.newImageFeatures: Unknown image feature {}.'
-                                         .format(self.NAME, feature))
+                raise ConfigurationError('io.{}.newImageFeatures: Unknown image feature {}.'.format(self.NAME, feature))
 
         self._writer = None
 
@@ -42,7 +41,8 @@ class IO(_IO):
         self.io_name = io_name
         img_name = re.match('^rbd://([^/]+)/([^@]+)@?(.+)?$', io_name)
         if not img_name:
-            raise UsageError('Not a valid io name: {} . Need pool/imagename or pool/imagename@snapshotname.'.format(io_name))
+            raise UsageError(
+                'Not a valid io name: {} . Need pool/imagename or pool/imagename@snapshotname.'.format(io_name))
         self.pool_name, self.image_name, self.snapshot_name = img_name.groups()
         # try opening it and quit if that's not possible.
         try:
@@ -78,8 +78,9 @@ class IO(_IO):
                                       .format(self.io_name))
             else:
                 if size < self.size():
-                    raise IOError('Restore target {} is too small. Its size is {} bytes, but we need {} bytes for the restore.'
-                                  .format(self.io_name, self.size(), size))
+                    raise IOError(
+                        'Restore target {} is too small. Its size is {} bytes, but we need {} bytes for the restore.'
+                        .format(self.io_name, self.size(), size))
 
     def size(self):
         ioctx = self._cluster.open_ioctx(self.pool_name)
@@ -100,11 +101,11 @@ class IO(_IO):
 
         data_checksum = data_hexdigest(self._hash_function, data)
         logger.debug('{} read block {} (checksum {}...) in {:.2f}s'.format(
-                threading.current_thread().name,
-                block.id,
-                data_checksum[:16],
-                t2-t1,
-                ))
+            threading.current_thread().name,
+            block.id,
+            data_checksum[:16],
+            t2 - t1,
+        ))
 
         return block, data, data_checksum
 
@@ -121,4 +122,3 @@ class IO(_IO):
         super().close()
         if self._writer:
             self._writer.close()
-

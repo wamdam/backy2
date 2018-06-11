@@ -151,7 +151,8 @@ class Benji:
                     valid = False
 
                 self._metadata_backend.set_block(id, version.uid, uid, checksum, block_size, valid, upsert=False)
-                notify(self._process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable, (id + 1) / num_blocks * 100))
+                notify(self._process_name, 'Preparing version {} ({:.1f}%)'.format(version.uid.readable,
+                                                                                   (id + 1) / num_blocks * 100))
 
             self._metadata_backend.commit()
         except:
@@ -167,8 +168,8 @@ class Benji:
         return version
 
     def ls(self, version_uid=None, version_name=None, version_snapshot_name=None):
-        return self._metadata_backend.get_versions(version_uid=version_uid, version_name=version_name,
-                                               version_snapshot_name=version_snapshot_name)
+        return self._metadata_backend.get_versions(
+            version_uid=version_uid, version_name=version_name, version_snapshot_name=version_snapshot_name)
 
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.
@@ -185,8 +186,7 @@ class Benji:
 
         scheme = res.scheme
         if not scheme:
-            raise UsageError('The supplied URL {} is invalid. You must provide a scheme (e.g. file://).'
-                             .format(source))
+            raise UsageError('The supplied URL {} is invalid. You must provide a scheme (e.g. file://).'.format(source))
 
         try:
             from benji.io import IO
@@ -195,10 +195,10 @@ class Benji:
             raise UsageError('IO scheme {} not supported.'.format(scheme))
 
         return IOLib.IO(
-                config=self.config,
-                block_size=block_size,
-                hash_function=self._hash_function,
-                )
+            config=self.config,
+            block_size=block_size,
+            hash_function=self._hash_function,
+        )
 
     def scrub(self, version_uid, percentile=100):
         self._locking.lock_version(version_uid, reason='Scrubbing version')
@@ -217,15 +217,16 @@ class Benji:
             for i, block in enumerate(blocks):
                 if block.uid:
                     if percentile < 100 and random.randint(1, 100) > percentile:
-                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'
-                                     .format(block.id, block.uid, percentile))
+                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
+                            block.id, block.uid, percentile))
                     else:
                         self._data_backend.read(block.deref(), metadata_only=True)  # async queue
                         read_jobs += 1
                 else:
                     logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(block.id, block.uid))
-                notify(self._process_name, 'Preparing scrub of version {} ({:.1f}%)'
-                       .format(version.uid.readable, (i + 1) / len(blocks) * 100))
+                notify(
+                    self._process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(
+                        version.uid.readable, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -253,10 +254,11 @@ class Benji:
                     raise
 
                 logger.debug('Scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
-                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable, done_read_jobs / read_jobs * 100))
+                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable,
+                                                                                   done_read_jobs / read_jobs * 100))
                 if i % log_every_jobs == 0 or done_read_jobs == read_jobs:
-                    logger.info('Scrubbed {}/{} blocks ({:.1f}%)'
-                                .format(done_read_jobs, read_jobs, done_read_jobs / read_jobs * 100))
+                    logger.info('Scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,
+                                                                         done_read_jobs / read_jobs * 100))
         except:
             raise
         finally:
@@ -296,14 +298,16 @@ class Benji:
             for i, block in enumerate(blocks):
                 if block.uid:
                     if percentile < 100 and random.randint(1, 100) > percentile:
-                        logger.debug('Deep scrub of block {} (UID {}) skipped (percentile is {}).'
-                            .format(block.id, block.uid, percentile))
+                        logger.debug('Deep scrub of block {} (UID {}) skipped (percentile is {}).'.format(
+                            block.id, block.uid, percentile))
                     else:
                         self._data_backend.read(block.deref())  # async queue
                         read_jobs += 1
                 else:
                     logger.debug('Deep scrub of block {} (UID {}) skipped (sparse).'.format(block.id, block.uid))
-                notify(self._process_name, 'Preparing deep scrub of version {} ({:.1f}%)'.format(version.uid.readable, (i + 1) / len(blocks) * 100))
+                notify(
+                    self._process_name, 'Preparing deep scrub of version {} ({:.1f}%)'.format(
+                        version.uid.readable, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -343,21 +347,20 @@ class Benji:
                     source_data = io.read(block, sync=True)
                     if source_data != data:
                         logger.error('Source data has changed for block {} (UID {}) (is: {}... should-be: {}...). '
-                                     'Won\'t set this block to invalid, because the source looks wrong.'
-                                     .format(block,
-                                             block.uid,
-                                             data_hexdigest(self._hash_function, source_data)[:16],
-                                             data_checksum[:16]))
+                                     'Won\'t set this block to invalid, because the source looks wrong.'.format(
+                                         block, block.uid,
+                                         data_hexdigest(self._hash_function, source_data)[:16], data_checksum[:16]))
                         valid = False
                         # We are not setting the block invalid here because
                         # when the block is there AND the checksum is good,
                         # then the source is invalid.
 
                 logger.debug('Deep scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
-                notify(self._process_name, 'Deep scrubbing version {} ({:.1f}%)'
-                       .format(version_uid.readable, (i + 1) / read_jobs * 100))
+                notify(self._process_name, 'Deep scrubbing version {} ({:.1f}%)'.format(
+                    version_uid.readable, (i + 1) / read_jobs * 100))
                 if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
-                    logger.info('Deep scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,  done_read_jobs / read_jobs * 100))
+                    logger.info('Deep scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,
+                                                                              done_read_jobs / read_jobs * 100))
         except:
             self._locking.unlock_version(version_uid)
             raise
@@ -393,7 +396,8 @@ class Benji:
         self._locking.lock_version(version_uid, reason='Restoring version')
         try:
             version = self._metadata_backend.get_version(version_uid)  # raise if version not exists
-            notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(version_uid.readable, target))
+            notify(self._process_name, 'Restoring version {} to {}: Getting blocks'.format(
+                version_uid.readable, target))
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
 
             io = self._get_io_by_source(target, version.block_size)
@@ -409,16 +413,18 @@ class Benji:
                     self._data_backend.read(block.deref())
                     read_jobs += 1
                 elif not sparse:
-                    io.write(block, b'\0'*block.size)
+                    io.write(block, b'\0' * block.size)
                     logger.debug('Restored sparse block {} successfully ({} bytes).'.format(block.id, block.size))
                 else:
                     logger.debug('Ignored sparse block {}.'.format(block.id))
                 if sparse:
-                    notify(self._process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'
-                           .format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
+                    notify(
+                        self._process_name, 'Restoring version {} to {}: Queueing blocks to read ({:.1f}%)'.format(
+                            version_uid.readable, target, (i + 1) / len(blocks) * 100))
                 else:
-                    notify(self._process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'
-                           .format(version_uid.readable, target, (i + 1) / len(blocks) * 100))
+                    notify(
+                        self._process_name, 'Restoring version {} to {}: Sparse writing ({:.1f}%)'.format(
+                            version_uid.readable, target, (i + 1) / len(blocks) * 100))
 
             done_read_jobs = 0
             log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -450,17 +456,18 @@ class Benji:
                 data_checksum = data_hexdigest(self._hash_function, data)
                 if data_checksum != block.checksum:
                     logger.error('Checksum mismatch during restore for block {} (UID {}) (is: {}... should-be: {}..., '
-                                 'block.valid: {}). Block restored is invalid.'
-                                 .format(block.id, block.uid, data_checksum[:16], block.checksum[:16], block.valid))
+                                 'block.valid: {}). Block restored is invalid.'.format(
+                                     block.id, block.uid, data_checksum[:16], block.checksum[:16], block.valid))
                     self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
                 else:
                     logger.debug('Restored block {} successfully ({} bytes).'.format(block.id, block.size))
 
-                notify(self._process_name, 'Restoring version {} to {} ({:.1f}%)'
-                                .format(version_uid.readable, target, done_read_jobs / read_jobs * 100))
+                notify(
+                    self._process_name, 'Restoring version {} to {} ({:.1f}%)'.format(
+                        version_uid.readable, target, done_read_jobs / read_jobs * 100))
                 if i % log_every_jobs == 0 or done_read_jobs == read_jobs:
-                    logger.info('Restored {}/{} blocks ({:.1f}%)'
-                                .format(done_read_jobs, read_jobs, done_read_jobs / read_jobs * 100))
+                    logger.info('Restored {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,
+                                                                         done_read_jobs / read_jobs * 100))
         except:
             raise
         finally:
@@ -505,7 +512,7 @@ class Benji:
                     logger.info('Removed version {} metadata from backend storage.'.format(version_uid.readable))
                 except FileNotFoundError:
                     logger.warning('Unable to remove version {} metadata from backend storage, the object wasn\'t found.'
-                                .format(version_uid.readable))
+                                   .format(version_uid.readable))
                     pass
 
             logger.info('Removed backup version {} with {} blocks.'.format(version_uid.readable, num_blocks))
@@ -524,16 +531,16 @@ class Benji:
         the target.
         """
         stats = {
-                'bytes_read': 0,
-                'blocks_read': 0,
-                'bytes_written': 0,
-                'blocks_written': 0,
-                'bytes_found_dedup': 0,
-                'blocks_found_dedup': 0,
-                'bytes_sparse': 0,
-                'blocks_sparse': 0,
-                'start_time': time.time(),
-            }
+            'bytes_read': 0,
+            'blocks_read': 0,
+            'bytes_written': 0,
+            'blocks_written': 0,
+            'bytes_found_dedup': 0,
+            'blocks_found_dedup': 0,
+            'bytes_sparse': 0,
+            'blocks_sparse': 0,
+            'start_time': time.time(),
+        }
         io = self._get_io_by_source(source, self._block_size)
         io.open_r(source)
         source_size = io.size()
@@ -543,7 +550,7 @@ class Benji:
         if hints is not None:
             if len(hints) > 0:
                 # Sanity check: check hints for validity, i.e. too high offsets, ...
-                max_offset = max([h[0]+h[1] for h in hints])
+                max_offset = max([h[0] + h[1] for h in hints])
                 if max_offset > source_size:
                     raise InputDataError('Hints have higher offsets than source file.')
 
@@ -592,10 +599,7 @@ class Benji:
                     logger.error("Source and backup don't match in regions outside of the ones indicated by the hints.")
                     logger.error("Looks like the hints don't match or the source is different.")
                     logger.error("Found wrong source data at block {}: offset {} with max. length {}".format(
-                        source_block.id,
-                        source_block.id * self._block_size,
-                        self._block_size
-                        ))
+                        source_block.id, source_block.id * self._block_size, self._block_size))
                     # remove version
                     self._metadata_backend.rm_version(version.uid)
                     raise InputDataError('Source changed in regions outside of ones indicated by the hints.')
@@ -617,7 +621,9 @@ class Benji:
                 else:
                     # Block is already in database, no need to update it
                     logger.debug('Keeping block {}'.format(block.id))
-                notify(self._process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(version.uid.readable, source, (i + 1) / len(blocks) * 100))
+                notify(
+                    self._process_name, 'Backup version {} from {}: Queueing blocks to read ({:.1f}%)'.format(
+                        version.uid.readable, source, (i + 1) / len(blocks) * 100))
 
             # precompute checksum of a sparse block
             sparse_block_checksum = data_hexdigest(self._hash_function, b'\0' * self._block_size)
@@ -651,7 +657,13 @@ class Benji:
                 #    logger.debug('Skipping block (detected sparse) {}'.format(block.id))
                 #    self.metadata_backend.set_block(block.id, version_uid, None, None, block.size, valid=True)
                 elif existing_block:
-                    self._metadata_backend.set_block(block.id, version.uid, existing_block.uid, existing_block.checksum, existing_block.size, valid=True)
+                    self._metadata_backend.set_block(
+                        block.id,
+                        version.uid,
+                        existing_block.uid,
+                        existing_block.checksum,
+                        existing_block.size,
+                        valid=True)
                     stats['blocks_found_dedup'] += 1
                     stats['bytes_found_dedup'] += len(data)
                     logger.debug('Found existing block for id {} with UID {}'.format(block.id, existing_block.uid))
@@ -669,25 +681,38 @@ class Benji:
                         if isinstance(saved_block, Exception):
                             raise saved_block
 
-                        self._metadata_backend.set_block(saved_block.id, saved_block.version_uid, saved_block.uid,
-                                                     saved_block.checksum, saved_block.size, valid=True)
+                        self._metadata_backend.set_block(
+                            saved_block.id,
+                            saved_block.version_uid,
+                            saved_block.uid,
+                            saved_block.checksum,
+                            saved_block.size,
+                            valid=True)
                         done_write_jobs += 1
                         stats['blocks_written'] += 1
                         stats['bytes_written'] += saved_block.size
                 except (TimeoutError, CancelledError):
                     pass
 
-                notify(self._process_name, 'Backup version {} from {} ({:.1f}%)'.format(version.uid.readable, source, done_read_jobs / read_jobs * 100))
+                notify(
+                    self._process_name, 'Backup version {} from {} ({:.1f}%)'.format(
+                        version.uid.readable, source, done_read_jobs / read_jobs * 100))
                 if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
-                    logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,  done_read_jobs / read_jobs * 100))
+                    logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,
+                                                                          done_read_jobs / read_jobs * 100))
 
             try:
                 for saved_block in self._data_backend.save_get_completed():
                     if isinstance(saved_block, Exception):
                         raise saved_block
 
-                    self._metadata_backend.set_block(saved_block.id, saved_block.version_uid, saved_block.uid,
-                                                 saved_block.checksum, saved_block.size, valid=True)
+                    self._metadata_backend.set_block(
+                        saved_block.id,
+                        saved_block.version_uid,
+                        saved_block.uid,
+                        saved_block.checksum,
+                        saved_block.size,
+                        valid=True)
                     done_write_jobs += 1
                     stats['blocks_written'] += 1
                     stats['bytes_written'] += saved_block.size
@@ -705,9 +730,10 @@ class Benji:
             raise InternalError('Number of submitted and completed read jobs inconsistent (submitted: {}, completed {}).'
                                 .format(read_jobs, done_read_jobs))
 
-        if  write_jobs != done_write_jobs:
-            raise InternalError('Number of submitted and completed write jobs inconsistent (submitted: {}, completed {}).'
-                                .format(write_jobs, done_write_jobs))
+        if write_jobs != done_write_jobs:
+            raise InternalError(
+                'Number of submitted and completed write jobs inconsistent (submitted: {}, completed {}).'.format(
+                    write_jobs, done_write_jobs))
 
         self._metadata_backend.set_version_valid(version.uid)
 
@@ -733,18 +759,17 @@ class Benji:
             bytes_sparse=stats['bytes_sparse'],
             blocks_sparse=stats['blocks_sparse'],
             duration_seconds=int(time.time() - stats['start_time']),
-            )
+        )
 
         logger.info('New version: {} (Tags: [{}])'.format(version.uid, ','.join(tags if tags else [])))
         self._locking.unlock_version(version.uid)
         # It might be tempting to return a Version object here but this will only lead to SQLAlchemy errors
         return version.uid
 
-
     def cleanup_fast(self, dt=3600):
-        with self._locking.with_lock(lock_name='cleanup-fast',
-                                reason='Cleanup (fast)',
-                                locked_msg='Another fast cleanup is already running.'):
+        with self._locking.with_lock(
+                lock_name='cleanup-fast', reason='Cleanup (fast)',
+                locked_msg='Another fast cleanup is already running.'):
             for uid_list in self._metadata_backend.get_delete_candidates(dt):
                 logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
                 no_del_uids = self._data_backend.rm_many(uid_list)
@@ -752,8 +777,8 @@ class Benji:
                     logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
 
     def cleanup_full(self):
-        with self._locking.with_lock(reason='Cleanup (full)',
-                                locked_msg='Another instance has already taken the global lock.'):
+        with self._locking.with_lock(
+                reason='Cleanup (full)', locked_msg='Another instance has already taken the global lock.'):
             active_blob_uids = set(self._data_backend.list_blocks())
             active_block_uids = set(self._metadata_backend.get_all_block_uids())
             delete_candidates = active_blob_uids.difference(active_block_uids)
@@ -839,7 +864,8 @@ class Benji:
         dismissed_versions = RetentionFilter(rules_spec).filter(versions)
 
         if dismissed_versions:
-            logger.info('Removing versions: {}.'.format(', '.join(map(lambda version: version.uid.readable, dismissed_versions))))
+            logger.info('Removing versions: {}.'.format(', '.join(
+                map(lambda version: version.uid.readable, dismissed_versions))))
         else:
             logger.info('All versions are conforming to the retention policy.')
 
@@ -855,12 +881,14 @@ class Benji:
 
         return map(lambda version: version.uid, dismissed_versions)
 
+
 # The reason for this class being here is that it accesses private attributes of class Benji
 # and I don't want to make them all generally publicly available.
 # Maybe they could inherit from the same base class in the future, but currently their
 # functionality seems very different. So we just define that BenjiStore objects may access
 # private attributes of Benji objects.
 class BenjiStore:
+
     def __init__(self, benji_obj):
         self._benji_obj = benji_obj
         self._cachedir = self._benji_obj.config.get('nbd.cacheDirectory', types=str)
@@ -875,15 +903,16 @@ class BenjiStore:
         self._benji_obj._locking.unlock_version(version.uid)
 
     def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None):
-        return self._benji_obj._metadata_backend.get_versions(version_uid=version_uid, version_name=version_name,
-                                                   version_snapshot_name=version_snapshot_name)
+        return self._benji_obj._metadata_backend.get_versions(
+            version_uid=version_uid, version_name=version_name, version_snapshot_name=version_snapshot_name)
 
     def _block_list(self, version, offset, length):
         # get cached blocks data
         if not self._blocks.get(version.uid):
             # Only work with dereferenced blocks
-            self._blocks[version.uid] = [block.deref()
-                                        for block in self._benji_obj._metadata_backend.get_blocks_by_version(version.uid)]
+            self._blocks[version.uid] = [
+                block.deref() for block in self._benji_obj._metadata_backend.get_blocks_by_version(version.uid)
+            ]
         blocks = self._blocks[version.uid]
 
         block_number = offset // version.block_size
@@ -900,11 +929,11 @@ class BenjiStore:
                     # Don't throw one of our own exceptions here as we need an exception with an errno value
                     # to communicate it back in the NBD response.
                     raise OSError(errno.EIO)
-                read_length = min(block.size-block_offset, length)
+                read_length = min(block.size - block_offset, length)
                 chunks.append((None, 0, read_length))  # hint: return \0s
             else:
                 assert block.id == block_number
-                read_length = min(block.size-block_offset, length)
+                read_length = min(block.size - block_offset, length)
                 chunks.append((block, block_offset, read_length))
             block_number += 1
             block_offset = 0
@@ -958,7 +987,7 @@ class BenjiStore:
             if block is None:
                 logger.warning('Tried to read data beyond device (offset {}).'.format(offset))
                 data.append(b'\0' * length)
-            elif not block.uid:    # sparse block
+            elif not block.uid:  # sparse block
                 data.append(b'\0' * length)
             else:
                 data.append(self._read(block, offset, length))
@@ -966,11 +995,11 @@ class BenjiStore:
 
     def get_cow_version(self, from_version):
         #_clone_version(self, name, snapshot_name, size=None, from_version_uid=None):
-        cow_version = self._benji_obj._clone_version(name=from_version.name,
-                                                     snapshot_name='nbd-cow-{}-{}'
-                                                        .format(from_version.uid.readable,
-                                                                datetime.datetime.now().isoformat(timespec='seconds')),
-                                                     from_version_uid=from_version.uid)
+        cow_version = self._benji_obj._clone_version(
+            name=from_version.name,
+            snapshot_name='nbd-cow-{}-{}'.format(
+                from_version.uid.readable, datetime.datetime.now().isoformat(timespec='seconds')),
+            from_version_uid=from_version.uid)
         self._benji_obj._locking.update_version_lock(cow_version.uid, reason='NBD COW')
         self._cow[cow_version.uid.int] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version
@@ -1011,7 +1040,7 @@ class BenjiStore:
                     write_data.seek(_offset)
                     write_data.write(dataio.read(length))
                     write_data.seek(0)
-                else: # was a sparse block
+                else:  # was a sparse block
                     write_data = BytesIO(data)
                 # Save a copy of the changed data and record the changed block UID
                 block.uid = BlockUid(cow_version.uid.int, block.id + 1)
@@ -1027,9 +1056,7 @@ class BenjiStore:
     def fixate(self, cow_version):
         # save blocks into version
         logger.info('Fixating version {} with {} blocks, please wait!'.format(
-            cow_version.uid,
-            len(self._cow[cow_version.uid.int].items())
-        ))
+            cow_version.uid, len(self._cow[cow_version.uid.int].items())))
 
         for block in self._cow[cow_version.uid.int].values():
             logger.debug('Fixating block {} uid {}'.format(block.id, block.uid))
@@ -1041,7 +1068,8 @@ class BenjiStore:
 
             # TODO: Add deduplication (maybe share code with backup?), detect sparse blocks?
             checksum = data_hexdigest(self._benji_obj._hash_function, data)
-            self._benji_obj._metadata_backend.set_block(block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
+            self._benji_obj._metadata_backend.set_block(
+                block.id, cow_version.uid, block.uid, checksum, len(data), valid=True)
 
         self._benji_obj._metadata_backend.commit()
         self._benji_obj._metadata_backend.set_version_valid(cow_version.uid)
@@ -1056,6 +1084,6 @@ class BenjiStore:
             pass
         for block_id, block in self._cow[cow_version.uid.int].items():
             pass
-        del(self._cow[cow_version.uid.int])
+        del (self._cow[cow_version.uid.int])
         self._benji_obj._locking.unlock_version(cow_version)
         logger.info('Finished.')

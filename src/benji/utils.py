@@ -21,7 +21,7 @@ def hints_from_rbd_diff(rbd_diff):
     """ Return the required offset:length tuples from a rbd json diff
     """
     data = json.loads(rbd_diff)
-    return [(l['offset'], l['length'], False if l['exists']=='false' or not l['exists'] else True) for l in data]
+    return [(l['offset'], l['length'], False if l['exists'] == 'false' or not l['exists'] else True) for l in data]
 
 
 def parametrized_hash_function(config_hash_function):
@@ -55,15 +55,12 @@ def data_hexdigest(hash_function, data):
 
 
 # old_msg is used as a stateful storage between calls
-def notify(process_name, msg='', old_msg = ''):
+def notify(process_name, msg='', old_msg=''):
     """ This method can receive notifications and append them in '[]' to the
     process name seen in ps, top, ...
     """
     if msg:
-        new_msg = '{} [{}]'.format(
-            process_name,
-            msg.replace('\n', ' ')
-        )
+        new_msg = '{} [{}]'.format(process_name, msg.replace('\n', ' '))
     else:
         new_msg = process_name
 
@@ -75,9 +72,8 @@ def notify(process_name, msg='', old_msg = ''):
 # This is tricky to implement as we need to make sure that we don't hold a reference to the completed Future anymore.
 # Indeed it's so tricky that older Python versions had the same problem. See https://bugs.python.org/issue27144.
 def future_results_as_completed(futures, semaphore=None, timeout=None):
-    if sys.version_info < (3,6,4):
-        logger.warning('Large backup jobs are likely to fail because of excessive memory usage. '
-                    + 'Upgrade your Python to at least 3.6.4.')
+    if sys.version_info < (3, 6, 4):
+        logger.warning('Large backup jobs are likely to fail because of excessive memory usage. ' + 'Upgrade your Python to at least 3.6.4.')
 
     for future in concurrent.futures.as_completed(futures, timeout=timeout):
         futures.remove(future)
@@ -90,8 +86,10 @@ def future_results_as_completed(futures, semaphore=None, timeout=None):
         del future
         yield result
 
+
 def derive_key(*, password, salt, iterations, key_length):
     return PBKDF2(password=password, salt=salt, dkLen=key_length, count=iterations, hmac_hash_module=SHA512)
+
 
 # Based on https://code.activestate.com/recipes/578113-human-readable-format-for-a-given-time-delta/
 def human_readable_duration(duration):
@@ -103,23 +101,23 @@ def human_readable_duration(duration):
             readable.append('{}{}'.format(getattr(delta, attr), attr[:1]))
     return ' '.join(readable)
 
+
 # token_bucket.py
 class TokenBucket:
     """
     An implementation of the token bucket algorithm.
     """
+
     def __init__(self):
         self.tokens = 0
         self.rate = 0
         self.last = time()
         self.lock = Lock()
 
-
     def set_rate(self, rate):
         with self.lock:
             self.rate = rate
             self.tokens = self.rate
-
 
     def consume(self, tokens):
         with self.lock:

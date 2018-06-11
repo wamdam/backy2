@@ -43,6 +43,7 @@ class IO:
         if sync:
             return self._read(block)[1]
         else:
+
             def read_with_acquire():
                 self._read_semaphore.acquire()
                 return self._read(block)
@@ -64,7 +65,8 @@ class IO:
         """
         if self._read_executor:
             if len(self._read_futures) > 0:
-                logger.warning('IO backend closed with {} outstanding read jobs, cancelling them.'.format(len(self._read_futures)))
+                logger.warning('IO backend closed with {} outstanding read jobs, cancelling them.'.format(
+                    len(self._read_futures)))
                 for future in self._read_futures:
                     future.cancel()
                 logger.debug('IO backend cancelled all outstanding read jobs.')
