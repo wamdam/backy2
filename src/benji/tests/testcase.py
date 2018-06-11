@@ -93,6 +93,7 @@ class BenjiTestCase(TestCase):
     def tearDown(self):
         super().tearDown()
 
-    def benjiOpen(self, initdb=False, block_size=None):
-        self.benji = Benji(self.config, initdb=initdb, _destroydb=initdb, _migratedb=False, block_size=block_size)
+    def benjiOpen(self, initdb=False, block_size=None, in_memory=False):
+        self.benji = Benji(
+            self.config, initdb=initdb, _destroydb=initdb, _migratedb=False, block_size=block_size, in_memory=in_memory)
         return self.benji
