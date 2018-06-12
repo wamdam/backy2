@@ -533,7 +533,7 @@ class MetadataBackend:
             version = self.get_version(version_uid)
             version.valid = False
             self._session.commit()
-            logger.info('Marked version invalid (UID {})'.format(version_uid.readable))
+            logger.error('Marked version {} as invalid.'.format(version_uid.readable))
         except:
             self._session.rollback()
             raise
@@ -543,7 +543,7 @@ class MetadataBackend:
             version = self.get_version(version_uid)
             version.valid = True
             self._session.commit()
-            logger.debug('Marked version valid (UID {})'.format(version_uid.readable))
+            logger.info('Marked version {} as valid.'.format(version_uid.readable))
         except:
             self._session.rollback()
             raise
@@ -580,7 +580,7 @@ class MetadataBackend:
             self._session.rollback()
             raise
 
-    def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None):
+    def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None, version_tags=None):
         try:
             query = self._session.query(Version)
             if version_uid:
@@ -589,6 +589,8 @@ class MetadataBackend:
                 query = query.filter_by(name=version_name)
             if version_snapshot_name:
                 query = query.filter_by(snapshot_name=version_snapshot_name)
+            if version_tags:
+                query = query.join(Version.tags).filter(Tag.name.in_(version_tags))
             versions = query.order_by(Version.name, Version.date).all()
         except:
             self._session.rollback()
@@ -658,20 +660,15 @@ class MetadataBackend:
             self._session.rollback()
             raise
 
-    def set_blocks_invalid(self, block_uid, checksum):
+    def set_blocks_invalid(self, block_uid):
         try:
-            _affected_version_uids = self._session.query(distinct(Block.version_uid)).filter_by(
-                uid=block_uid, checksum=checksum).all()
-            affected_version_uids = [v[0] for v in _affected_version_uids]
-            self._session.query(Block).filter_by(
-                uid=block_uid, checksum=checksum).update(
-                    {
-                        'valid': False
-                    }, synchronize_session='fetch')
+            affected_version_uids = self._session.query(distinct(Block.version_uid)).filter_by(uid=block_uid).all()
+            affected_version_uids = [version_uid[0] for version_uid in affected_version_uids]
+            self._session.query(Block).filter_by(uid=block_uid).update({'valid': False}, synchronize_session='fetch')
             self._session.commit()
 
-            logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
-                block_uid, checksum[:16], ', '.join([version_uid.readable for version_uid in affected_version_uids])))
+            logger.error('Marked block with UID {} as invalid. Affected versions: {}.'.format(
+                block_uid, ', '.join([version_uid.readable for version_uid in affected_version_uids])))
 
             for version_uid in affected_version_uids:
                 self.set_version_invalid(version_uid)

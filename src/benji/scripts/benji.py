@@ -5,6 +5,7 @@ import argparse
 import fileinput
 import logging
 import os
+import random
 import sys
 
 import pkg_resources
@@ -127,6 +128,46 @@ class Commands:
             if benji_obj:
                 benji_obj.close()
 
+    def _bulk_scrub(self, method, names, tags, percentile):
+        if percentile:
+            percentile = int(percentile)
+        benji_obj = None
+        try:
+            benji_obj = Benji(self.config)
+            versions = []
+            if names:
+                for name in names:
+                    versions.extend(benji_obj.ls(version_name=name, version_tags=tags))
+            else:
+                versions.extend(benji_obj.ls(version_tags=tags))
+            errors = []
+            if percentile and versions:
+                # Will always scrub at least one matching version
+                versions = random.sample(versions, max(1, int(len(versions) * percentile / 100)))
+            if not versions:
+                logger.info('No matching versions found.')
+            for version in versions:
+                try:
+                    logging.info('Scrubbing version {} with name {}.'.format(version.uid.readable, version.name))
+                    getattr(benji_obj, method)(version.uid)
+                except benji.exception.ScrubbingError as exception:
+                    logger.error(exception)
+                    errors.append(version)
+                except:
+                    raise
+            if errors:
+                raise benji.exception.ScrubbingError('One or more version had scrubbing errors: {}.'.format(', '.join(
+                    [version.uid.readable for version in errors])))
+        finally:
+            if benji_obj:
+                benji_obj.close()
+
+    def bulk_scrub(self, names, tags, percentile):
+        self._bulk_scrub('scrub', names, tags, percentile)
+
+    def bulk_deep_scrub(self, names, tags, percentile):
+        self._bulk_scrub('deep_scrub', names, tags, percentile)
+
     @classmethod
     def _ls_versions_tbl_output(cls, versions):
         tbl = PrettyTable()
@@ -187,14 +228,11 @@ class Commands:
             ])
         print(tbl)
 
-    def ls(self, name, snapshot_name=None, tag=None, include_blocks=False):
+    def ls(self, name, snapshot_name=None, tags=None, include_blocks=False):
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
-            versions = benji_obj.ls(version_name=name, version_snapshot_name=snapshot_name)
-
-            if tag:
-                versions = [v for v in versions if tag in [t.name for t in v.tags]]
+            versions = benji_obj.ls(version_name=name, version_snapshot_name=snapshot_name, version_tags=tags)
 
             if self.machine_output:
                 benji_obj.export_any(
@@ -434,7 +472,7 @@ def main():
     p.add_argument(
         '-t',
         '--tag',
-        nargs='*',
+        action='append',
         dest='tags',
         metavar='tag',
         default=None,
@@ -517,9 +555,45 @@ def main():
     p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='deep_scrub')
 
+    # BULK-SCRUB
+    p = subparsers.add_parser('bulk-scrub', help="Bulk deep scrub all matching versions.")
+    p.add_argument(
+        '-p',
+        '--percentile',
+        default=100,
+        help="Only check PERCENTILE percent of the matching versions (value 0..100). Default: 100")
+    p.add_argument(
+        '-t',
+        '--tag',
+        action='append',
+        dest='tags',
+        metavar='TAG',
+        default=None,
+        help='Scrub only versions matching this tag.')
+    p.add_argument('names', metavar='NAME', nargs='*', help="Version names")
+    p.set_defaults(func='bulk_scrub')
+
+    # BULK-DEEP-SCRUB
+    p = subparsers.add_parser('bulk-deep-scrub', help="Bulk deep scrub all matching versions.")
+    p.add_argument(
+        '-t',
+        '--tag',
+        action='append',
+        dest='tags',
+        metavar='TAG',
+        default=None,
+        help='Scrub only versions matching this tag. Multiple use of this option constitutes an OR operation. ')
+    p.add_argument(
+        '-p',
+        '--percentile',
+        default=100,
+        help="Only check PERCENTILE percent of the matching versions (value 0..100). Default: 100")
+    p.add_argument('names', metavar='NAME', nargs='*', help="Version names")
+    p.set_defaults(func='bulk_deep_scrub')
+
     # Export
     p = subparsers.add_parser('export', help='Export the metadata of one or more versions to a file or standard out.')
-    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
+    p.add_argument('version_uids', metavar='VERSION_UID', nargs='+', help="Version UID")
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing output file')
     p.add_argument(
         '-o', '--output-file', help='Write export into this file (stdout is used if this option isn\'t specified)')
@@ -533,14 +607,14 @@ def main():
 
     # Export to data backend
     p = subparsers.add_parser('export-to-backend', help='Export metadata of one or more versions to the data backend')
-    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
+    p.add_argument('version_uids', metavar='VERSION_UID', nargs='+', help="Version UID")
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing metadata in data backend')
     p.set_defaults(func='export_to_backend')
 
     # Import from data backend
     p = subparsers.add_parser(
         'import-from-backend', help="Import metadata of one ore more versions from the data backend")
-    p.add_argument('version_uids', metavar='version_uid', nargs='+', help="Version UID")
+    p.add_argument('version_uids', metavar='VERSION_UID', nargs='+', help="Version UID")
     p.set_defaults(func='import_from_backend')
 
     # CLEANUP
@@ -558,8 +632,15 @@ def main():
     # LS
     p = subparsers.add_parser('ls', help="List existing backups.")
     p.add_argument('name', nargs='?', default=None, help='Show versions for this name only')
-    p.add_argument('-s', '--snapshot-name', default=None, help="Limit output to this snapshot name")
-    p.add_argument('-t', '--tag', default=None, help="Limit output to this tag")
+    p.add_argument('-s', '--snapshot-name', default=None, help="Limit output to this SNAPSHOT_NAME")
+    p.add_argument(
+        '-t',
+        '--tag',
+        action='append',
+        dest='tags',
+        metavar='TAG',
+        default=None,
+        help='Limit output to this TAG. Multiple use constitutes an OR operation.')
     p.add_argument('--include-blocks', default=False, action='store_true', help='Include blocks in output')
     p.set_defaults(func='ls')
 
@@ -590,13 +671,13 @@ def main():
     # ADD TAG
     p = subparsers.add_parser('add-tag', help="Add a named tag to a backup version.")
     p.add_argument('version_uid')
-    p.add_argument('names', metavar='name', nargs='+')
+    p.add_argument('names', metavar='NAME', nargs='+')
     p.set_defaults(func='add_tag')
 
     # REMOVE TAG
     p = subparsers.add_parser('rm-tag', help="Remove a named tag from a backup version.")
     p.add_argument('version_uid')
-    p.add_argument('names', metavar='name', nargs='+')
+    p.add_argument('names', metavar='NAME', nargs='+')
     p.set_defaults(func='rm_tag')
 
     args = parser.parse_args()
@@ -666,6 +747,11 @@ def main():
         {
             'exception': benji.exception.InputDataError,
             'msg': 'Input data error',
+            'exit_code': os.EX_DATAERR
+        },
+        {
+            'exception': benji.exception.ScrubbingError,
+            'msg': 'Scrubbing error',
             'exit_code': os.EX_DATAERR
         },
         {

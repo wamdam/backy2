@@ -30,3 +30,7 @@ class NoChange(BenjiException, RuntimeError):
 
 class NbdServerAbortedNegotiationError(BenjiException, IOError):
     pass
+
+
+class ScrubbingError(BenjiException, IOError):
+    pass

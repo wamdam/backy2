@@ -12,7 +12,8 @@ from concurrent.futures import CancelledError, TimeoutError
 from io import StringIO, BytesIO
 from urllib import parse
 
-from benji.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError
+from benji.exception import InputDataError, InternalError, AlreadyLocked, UsageError, NoChange, ConfigurationError, \
+    ScrubbingError
 from benji.logging import logger
 from benji.metadata import BlockUid, MetadataBackend
 from benji.retentionfilter import RetentionFilter
@@ -167,9 +168,12 @@ class Benji:
 
         return version
 
-    def ls(self, version_uid=None, version_name=None, version_snapshot_name=None):
+    def ls(self, version_uid=None, version_name=None, version_snapshot_name=None, version_tags=None):
         return self._metadata_backend.get_versions(
-            version_uid=version_uid, version_name=version_name, version_snapshot_name=version_snapshot_name)
+            version_uid=version_uid,
+            version_name=version_name,
+            version_snapshot_name=version_snapshot_name,
+            version_tags=version_tags)
 
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.
@@ -205,7 +209,7 @@ class Benji:
         try:
             version = self._metadata_backend.get_version(version_uid)
             if not version.valid:
-                raise IOError('Version {} is already marked as invalid.'.format(version_uid.readable))
+                raise ScrubbingError('Version {} is already marked as invalid.'.format(version_uid.readable))
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
         except:
             self._locking.unlock_version(version_uid)
@@ -235,7 +239,7 @@ class Benji:
                 if isinstance(entry, Exception):
                     logger.error('Data backend read failed: {}'.format(entry))
                     if isinstance(entry, (KeyError, ValueError)):
-                        self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                        self._metadata_backend.set_blocks_invalid(block.uid)
                         valid = False
                         continue
                     else:
@@ -247,7 +251,7 @@ class Benji:
                     self._data_backend.check_block_metadata(block=block, data_length=None, metadata=metadata)
                 except (KeyError, ValueError) as exception:
                     logger.error('Metadata check failed, block is invalid: {}'.format(exception))
-                    self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                    self._metadata_backend.set_blocks_invalid(block.uid)
                     valid = False
                     continue
                 except:
@@ -273,10 +277,10 @@ class Benji:
         # there is not enough information.
         if not valid:
             # version is set invalid by set_blocks_invalid.
-            logger.error('Marked version {} invalid because it has errors.'.format(version_uid.readable))
+            logger.error('Marked version {} as invalid because it has errors.'.format(version_uid.readable))
 
         if not valid:
-            raise IOError('Scrub of version {} failed.'.format(version_uid.readable))
+            raise ScrubbingError('Scrub of version {} failed.'.format(version_uid.readable))
 
     def deep_scrub(self, version_uid, source=None, percentile=100):
         self._locking.lock_version(version_uid, reason='Deep scrubbing')
@@ -317,7 +321,7 @@ class Benji:
                     logger.error('Data backend read failed: {}'.format(entry))
                     # If it really is a data inconsistency mark blocks invalid
                     if isinstance(entry, (KeyError, ValueError)):
-                        self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                        self._metadata_backend.set_blocks_invalid(block.uid)
                         valid = False
                         continue
                     else:
@@ -329,7 +333,7 @@ class Benji:
                     self._data_backend.check_block_metadata(block=block, data_length=len(data), metadata=metadata)
                 except (KeyError, ValueError) as exception:
                     logger.error('Metadata check failed, block is invalid: {}'.format(exception))
-                    self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                    self._metadata_backend.set_blocks_invalid(block.uid)
                     valid = False
                     continue
                 except:
@@ -339,7 +343,7 @@ class Benji:
                 if data_checksum != block.checksum:
                     logger.error('Checksum mismatch during deep scrub of block {} (UID {}) (is: {}... should-be: {}...).'
                                  .format(block.id, block.uid, data_checksum[:16], block.checksum[:16]))
-                    self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                    self._metadata_backend.set_blocks_invalid(block.uid)
                     valid = False
                     continue
 
@@ -390,7 +394,7 @@ class Benji:
         self._locking.unlock_version(version_uid)
 
         if not valid:
-            raise IOError('Deep scrub of version {} failed.'.format(version_uid.readable))
+            raise ScrubbingError('Deep scrub of version {} failed.'.format(version_uid.readable))
 
     def restore(self, version_uid, target, sparse=False, force=False):
         self._locking.lock_version(version_uid, reason='Restoring version')
@@ -434,7 +438,7 @@ class Benji:
                     logger.error('Data backend read failed: {}'.format(entry))
                     # If it really is a data inconsistency mark blocks invalid
                     if isinstance(entry, (KeyError, ValueError)):
-                        self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                        self._metadata_backend.set_blocks_invalid(block.uid)
                         continue
                     else:
                         raise entry
@@ -448,7 +452,7 @@ class Benji:
                     self._data_backend.check_block_metadata(block=block, data_length=len(data), metadata=metadata)
                 except (KeyError, ValueError) as exception:
                     logger.error('Metadata check failed, block is invalid: {}'.format(exception))
-                    self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                    self._metadata_backend.set_blocks_invalid(block.uid)
                     continue
                 except:
                     raise
@@ -458,7 +462,7 @@ class Benji:
                     logger.error('Checksum mismatch during restore for block {} (UID {}) (is: {}... should-be: {}..., '
                                  'block.valid: {}). Block restored is invalid.'.format(
                                      block.id, block.uid, data_checksum[:16], block.checksum[:16], block.valid))
-                    self._metadata_backend.set_blocks_invalid(block.uid, block.checksum)
+                    self._metadata_backend.set_blocks_invalid(block.uid)
                 else:
                     logger.debug('Restored block {} successfully ({} bytes).'.format(block.id, block.size))
 
