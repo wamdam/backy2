@@ -1,4 +1,7 @@
 .. include:: global.rst.inc
+.. meta::
+    :description: Benji Backup Documentation:  A block based deduplicating backup software for Ceph RBD, image files and devices
+    :keywords: backup,deduplication,ceph,lvm,block-based,s3,b2
 
 Benji Backup Documentation
 ==========================
