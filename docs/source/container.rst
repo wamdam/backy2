@@ -38,7 +38,7 @@ an existing label or you can augment your PVCs with a new one. If you
 specify an empty string as the BACKUP_SELECTOR all PVCs will be backed up.
 
 .. TIP:: See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors
-for possible ways to construct your selector.
+    for possible ways to construct your selector.
 
 After each volume backup ``benji enforce`` is called for the volume with
 the retention policy specified in BACKUP_RETENTION. Currently the same

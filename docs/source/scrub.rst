@@ -5,9 +5,11 @@
 Scrub
 =====
 
-Scrubbing backups is needed to ensure data consistency.
+Scrubbing backups is needed to ensure data consistency over time.
 
-.. command-output:: benji scrub --help
+
+
+
 
 Reasons for Scrubbing
 ---------------------
@@ -15,7 +17,7 @@ Reasons for Scrubbing
 Benji backs up data in blocks. These blocks are referenced from the metadata
 store. When restoring images, these blocks are read and restored in the order
 the metadata store says. As Benji also does deduplication, an invalid block
-could potentially create invalid restore data on multiple places.
+could potentially create invalid restore data in multiple places.
 
 Invalid blocks can happen in these cases (probably incomplete):
 
@@ -33,9 +35,7 @@ Benji implements three different scrubbing methods:
 Consistency and Checksum
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-::
-
-    benji deep-scrub <version_uid>
+.. command-output:: benji deep-scrub --help
 
 Benji reads block-metadata (UID and checksum) from the metadata store, reads
 the block by its UID from the *data backend*, calculates its checksum and
@@ -61,10 +61,7 @@ storage.
 Consistency Only
 ~~~~~~~~~~~~~~~~
 
-::
-
-    benji scrub <version_uid>
-
+.. command-output:: benji scrub --help
 
 Benji only checks the metadata consistency between the metadata saved in the
 database and the metadata accompanying each block. It also checks if the
@@ -84,6 +81,54 @@ This means it
 - doesn't fix filesystem errors on backed up images
 - doesn't check for any structure within blocks
 - and doesn't replay database journals or execute similar repair operations.
+
+Bulk scrubbing
+--------------
+
+Benji also supports two commands to facilitate bulk scrubbing of versions:
+``benji bulk-scrub`` and ``benji bulk-deep-scrub``:
+
+.. command-output:: benji bulk-scrub --help
+.. command-output:: benji bulk-deep-scrub --help
+
+Both can take a list of *version* names. All *versions* matching these
+names will be scrubbed. If you don't specify any names all *versions*
+will be checked.
+
+If the ``-t`` or ``--tag`` is given too, the above  selection is limited
+to  *versions* also matching the given tag.  If  multiple ``--tag`` options
+are given, then they constitute an OR  operation.
+
+By default all matching *versions* will be scrubbed then. But you can also
+randomly select a certain sample of these *versions* with ``--percentile``
+or ``-p``. A *version's* size isn't taken into account when selecting the
+sample, every *version* is equally eligible.
+
+``benji bulk-deep-scrub`` doesn't support the ``--source`` option like
+``benji deep-scrub`` because multiple *versions* could be scrubbed with a
+single command.
+
+This is a good use cause for tags: You could mark your *versions* with a list of
+different tags denoting the importance of the backed up data. Then you could scrub
+each class of *versions* differently::
+
+    # 14% of the versions are deep scrubbed for data of high importance
+    $ benji bulk-deep-scrub --tag high --percentile 14
+
+    # 7% of the versions are deep scrubbed for data of medium importance
+    $ benji bulk-deep-scrub --tag medium --percentile 7
+
+    # 3% of the versions are deep scrubbed for data of low importance
+    $ benji bulk-deep-scrub --tag low --percentile 3
+
+    # 3% of the versions are scrubbed when they contain reproducible bulk data
+    $ benji bulk-scrub --tag bulk --percentile 3
+
+If you'd call this schedule every day, you'd scrub the important data completely
+about every seven days (statistically), data of medium importance completely every
+fourteen days and low priority data completely every month. Bulk data would also
+be scrubbed completely every month, but only metadata consistency and block
+existence is checked.
 
 Scrubbing Failures
 ------------------
