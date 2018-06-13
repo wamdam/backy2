@@ -841,7 +841,7 @@ class MetadataBackend:
 
         return BenjiEncoder
 
-    def export_any(self, root_key, root_value, f, ignore_fields=None, ignore_relationships=None):
+    def export_any(self, root_dict, f, ignore_fields=None, ignore_relationships=None):
         ignore_fields = list(ignore_fields) if ignore_fields is not None else []
         ignore_relationships = list(ignore_relationships) if ignore_relationships is not None else []
 
@@ -851,11 +851,11 @@ class MetadataBackend:
         # Ignore these as we favor the composite attribute
         ignore_fields.append(((Block,), ('uid_left', 'uid_right')))
 
+        root_dict = root_dict.copy()
+        root_dict['metadataVersion'] = self.METADATA_VERSION
+
         json.dump(
-            {
-                'metadataVersion': self.METADATA_VERSION,
-                root_key: root_value
-            },
+            root_dict,
             f,
             cls=self.new_benji_encoder(ignore_fields, ignore_relationships),
             check_circular=True,
@@ -863,7 +863,7 @@ class MetadataBackend:
         )
 
     def export(self, version_uids, f):
-        self.export_any('versions', [self.get_version(version_uid) for version_uid in version_uids], f)
+        self.export_any({'versions': [self.get_version(version_uid) for version_uid in version_uids]}, f)
 
     def import_(self, f):
         try:

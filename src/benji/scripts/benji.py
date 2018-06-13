@@ -41,7 +41,9 @@ class Commands:
             backup_version_uid = benji_obj.backup(name, snapshot_name, source, hints, base_version_uid, tags)
             if self.machine_output:
                 benji_obj.export_any(
-                    'versions', [benji_obj.ls(version_uid=backup_version_uid)],
+                    {
+                        'versions': benji_obj.ls(version_uid=backup_version_uid)
+                    },
                     sys.stdout,
                     ignore_relationships=[((Version,), ('blocks',))])
         finally:
@@ -104,33 +106,73 @@ class Commands:
             if benji_obj:
                 benji_obj.close()
 
-    def scrub(self, version_uid, percentile):
+    def scrub(self, version_uid, block_percentage):
         version_uid = VersionUid.create_from_readables(version_uid)
-        if percentile:
-            percentile = int(percentile)
+        if block_percentage:
+            block_percentage = int(block_percentage)
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
-            benji_obj.scrub(version_uid, percentile)
+            benji_obj.scrub(version_uid, block_percentage=block_percentage)
+        except benji.exception.ScrubbingError:
+            if self.machine_output:
+                benji_obj.export_any(
+                    {
+                        'versions': benji_obj.ls(version_uid=version_uid),
+                        'errors': benji_obj.ls(version_uid=version_uid)
+                    },
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))])
+            raise
+        else:
+            if self.machine_output:
+                benji_obj.export_any(
+                    {
+                        'versions': benji_obj.ls(version_uid=version_uid),
+                        'errors': []
+                    },
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))])
         finally:
             if benji_obj:
                 benji_obj.close()
 
-    def deep_scrub(self, version_uid, source, percentile):
+    def deep_scrub(self, version_uid, source, block_percentage):
         version_uid = VersionUid.create_from_readables(version_uid)
-        if percentile:
-            percentile = int(percentile)
+        if block_percentage:
+            block_percentage = int(block_percentage)
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
-            benji_obj.deep_scrub(version_uid, source, percentile)
+            benji_obj.deep_scrub(version_uid, source=source, block_percentage=block_percentage)
+        except benji.exception.ScrubbingError:
+            if self.machine_output:
+                benji_obj.export_any(
+                    {
+                        'versions': benji_obj.ls(version_uid=version_uid),
+                        'errors': benji_obj.ls(version_uid=version_uid)
+                    },
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))])
+            raise
+        else:
+            if self.machine_output:
+                benji_obj.export_any(
+                    {
+                        'versions': benji_obj.ls(version_uid=version_uid),
+                        'errors': []
+                    },
+                    sys.stdout,
+                    ignore_relationships=[((Version,), ('blocks',))])
         finally:
             if benji_obj:
                 benji_obj.close()
 
-    def _bulk_scrub(self, method, names, tags, percentile):
-        if percentile:
-            percentile = int(percentile)
+    def _bulk_scrub(self, method, names, tags, version_percentage, block_percentage):
+        if version_percentage:
+            version_percentage = int(version_percentage)
+        if block_percentage:
+            block_percentage = int(block_percentage)
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
@@ -141,32 +183,49 @@ class Commands:
             else:
                 versions.extend(benji_obj.ls(version_tags=tags))
             errors = []
-            if percentile and versions:
+            if version_percentage and versions:
                 # Will always scrub at least one matching version
-                versions = random.sample(versions, max(1, int(len(versions) * percentile / 100)))
+                versions = random.sample(versions, max(1, int(len(versions) * version_percentage / 100)))
             if not versions:
                 logger.info('No matching versions found.')
             for version in versions:
                 try:
                     logging.info('Scrubbing version {} with name {}.'.format(version.uid.readable, version.name))
-                    getattr(benji_obj, method)(version.uid)
+                    getattr(benji_obj, method)(version.uid, block_percentage=block_percentage)
                 except benji.exception.ScrubbingError as exception:
                     logger.error(exception)
                     errors.append(version)
                 except:
                     raise
             if errors:
+                if self.machine_output:
+                    benji_obj.export_any(
+                        {
+                            'versions': [benji_obj.ls(version_uid=version.uid)[0] for version in versions],
+                            'errors': [benji_obj.ls(version_uid=version.uid)[0] for version in errors]
+                        },
+                        sys.stdout,
+                        ignore_relationships=[((Version,), ('blocks',))])
                 raise benji.exception.ScrubbingError('One or more version had scrubbing errors: {}.'.format(', '.join(
                     [version.uid.readable for version in errors])))
+            else:
+                if self.machine_output:
+                    benji_obj.export_any(
+                        {
+                            'versions': [benji_obj.ls(version_uid=version.uid)[0] for version in versions],
+                            'errors': []
+                        },
+                        sys.stdout,
+                        ignore_relationships=[((Version,), ('blocks',))])
         finally:
             if benji_obj:
                 benji_obj.close()
 
-    def bulk_scrub(self, names, tags, percentile):
-        self._bulk_scrub('scrub', names, tags, percentile)
+    def bulk_scrub(self, names, tags, version_percentage, block_percentage):
+        self._bulk_scrub('scrub', names, tags, version_percentage, block_percentage)
 
-    def bulk_deep_scrub(self, names, tags, percentile):
-        self._bulk_scrub('deep_scrub', names, tags, percentile)
+    def bulk_deep_scrub(self, names, tags, version_percentage, block_percentage):
+        self._bulk_scrub('deep_scrub', names, tags, version_percentage, block_percentage)
 
     @classmethod
     def _ls_versions_tbl_output(cls, versions):
@@ -236,8 +295,9 @@ class Commands:
 
             if self.machine_output:
                 benji_obj.export_any(
-                    'versions',
-                    versions,
+                    {
+                        'versions': versions
+                    },
                     sys.stdout,
                     ignore_relationships=[((Version,), ('blocks',))] if not include_blocks else [],
                 )
@@ -307,8 +367,9 @@ class Commands:
             if self.machine_output:
                 stats = list(stats)  # resolve iterator, otherwise it's not serializable
                 benji_obj.export_any(
-                    'stats',
-                    stats,
+                    {
+                        'stats': stats
+                    },
                     sys.stdout,
                 )
             else:
@@ -437,7 +498,10 @@ class Commands:
                         keep_backend_metadata=keep_backend_metadata))
             if self.machine_output:
                 benji_obj.export_any(
-                    'versions', [benji_obj.ls(version_uid=version_uid)[0] for version_uid in dismissed_version_uids],
+                    {
+                        'versions':
+                        [benji_obj.ls(version_uid=version_uid)[0] for version_uid in dismissed_version_uids]
+                    },
                     sys.stdout,
                     ignore_relationships=[((Version,), ('blocks',))])
         finally:
@@ -534,9 +598,9 @@ def main():
     p = subparsers.add_parser('scrub', help="Scrub a given backup and check for consistency.")
     p.add_argument(
         '-p',
-        '--percentile',
+        '--block-percentage',
         default=100,
-        help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
+        help="Only check BLOCK-PERCENTAGE percent of the blocks (value 1..100). Default: 100")
     p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='scrub')
 
@@ -549,9 +613,9 @@ def main():
         help='Source, optional. If given, check if source matches backup in addition to checksum tests. URL-like format as in backup.')
     p.add_argument(
         '-p',
-        '--percentile',
+        '--block-percentage',
         default=100,
-        help="Only check PERCENTILE percent of the blocks (value 0..100). Default: 100")
+        help="Only check BLOCK-PERCENTAGE percent of the blocks (value 1..100). Default: 100")
     p.add_argument('version_uid', help='Version UID')
     p.set_defaults(func='deep_scrub')
 
@@ -559,9 +623,14 @@ def main():
     p = subparsers.add_parser('bulk-scrub', help="Bulk deep scrub all matching versions.")
     p.add_argument(
         '-p',
-        '--percentile',
+        '--block-percentage',
         default=100,
-        help="Only check PERCENTILE percent of the matching versions (value 0..100). Default: 100")
+        help="Only check BLOCK-PERCENTAGE percent of the blocks (value 1..100). Default: 100")
+    p.add_argument(
+        '-P',
+        '--version-percentage',
+        default=100,
+        help="Only check VERSION-PERCENTAGE of matching versions(value 1..100). Default: 100")
     p.add_argument(
         '-t',
         '--tag',
@@ -576,18 +645,23 @@ def main():
     # BULK-DEEP-SCRUB
     p = subparsers.add_parser('bulk-deep-scrub', help="Bulk deep scrub all matching versions.")
     p.add_argument(
+        '-p',
+        '--block-percentage',
+        default=100,
+        help="Only check BLOCK-PERCENTAGE percent of the blocks (value 1..100). Default: 100")
+    p.add_argument(
+        '-P',
+        '--version-percentage',
+        default=100,
+        help="Only check VERSION-PERCENTAGE of matching versions(value 1..100). Default: 100")
+    p.add_argument(
         '-t',
         '--tag',
         action='append',
         dest='tags',
         metavar='TAG',
         default=None,
-        help='Scrub only versions matching this tag. Multiple use of this option constitutes an OR operation. ')
-    p.add_argument(
-        '-p',
-        '--percentile',
-        default=100,
-        help="Only check PERCENTILE percent of the matching versions (value 0..100). Default: 100")
+        help='Scrub only versions matching this tag. Multiple use of this option constitutes an OR operation.')
     p.add_argument('names', metavar='NAME', nargs='*', help="Version names")
     p.set_defaults(func='bulk_deep_scrub')
 

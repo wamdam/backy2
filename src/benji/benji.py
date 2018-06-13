@@ -204,7 +204,7 @@ class Benji:
             hash_function=self._hash_function,
         )
 
-    def scrub(self, version_uid, percentile=100):
+    def scrub(self, version_uid, block_percentage=100):
         self._locking.lock_version(version_uid, reason='Scrubbing version')
         try:
             version = self._metadata_backend.get_version(version_uid)
@@ -220,9 +220,9 @@ class Benji:
             read_jobs = 0
             for i, block in enumerate(blocks):
                 if block.uid:
-                    if percentile < 100 and random.randint(1, 100) > percentile:
+                    if block_percentage < 100 and random.randint(1, 100) > block_percentage:
                         logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                            block.id, block.uid, percentile))
+                            block.id, block.uid, block_percentage))
                     else:
                         self._data_backend.read(block.deref(), metadata_only=True)  # async queue
                         read_jobs += 1
@@ -282,10 +282,12 @@ class Benji:
         if not valid:
             raise ScrubbingError('Scrub of version {} failed.'.format(version_uid.readable))
 
-    def deep_scrub(self, version_uid, source=None, percentile=100):
+    def deep_scrub(self, version_uid, source=None, block_percentage=100):
         self._locking.lock_version(version_uid, reason='Deep scrubbing')
         try:
             version = self._metadata_backend.get_version(version_uid)
+            if not version.valid and block_percentage < 100:
+                raise ScrubbingError('Version {} is already marked as invalid.'.format(version_uid.readable))
             blocks = self._metadata_backend.get_blocks_by_version(version_uid)
 
             if source:
@@ -301,9 +303,9 @@ class Benji:
             read_jobs = 0
             for i, block in enumerate(blocks):
                 if block.uid:
-                    if percentile < 100 and random.randint(1, 100) > percentile:
+                    if block_percentage < 100 and random.randint(1, 100) > block_percentage:
                         logger.debug('Deep scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                            block.id, block.uid, percentile))
+                            block.id, block.uid, block_percentage))
                     else:
                         self._data_backend.read(block.deref())  # async queue
                         read_jobs += 1
