@@ -22,7 +22,7 @@ Backup target
 Backup Metadata
     A SQL database containing information on how to reassemble the stored blocks
     to get the original data back. Also referred to as the *metadata backend*.
-    For restores the metadata backend is not compulsory. See :ref:`metadata_backend_less`.
+    For restores the *metadata backend* is not compulsory. See :ref:`metadata_backend_less`.
 
 Version
     A *version* is a backup of a specific backup source at a specific point in time.
@@ -77,8 +77,7 @@ Backup
     | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 |  True |   False   |      |
     +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
 
-Some commands (like ``ls``, ``stats``, ``backup`` and ``enforce``) can also produce
-machine readable JSON output for usage in scripts::
+Some commands can also produce machine readable JSON output for usage in scripts::
 
     $ benji -m ls
     {
@@ -98,15 +97,15 @@ machine readable JSON output for usage in scripts::
       ]
     }
 
-Specifying ``-m`` automatically turns down the verbosity level to only output
-errors.
+Specifying ``-m`` also automatically turns down the verbosity level to only output
+errors. Please see section :ref:`machine_output` for details.
 
 Deep Scrub and Scrub
 --------------------
 
-Deep scrubbing reads all the blocks of a particular *version* from the data backend
+Deep scrubbing reads all the blocks of a particular *version* from the *data backend*
 (or some of them if you use the ``-p`` option) and compares the checksums of these
-blocks to the checksums recorded in the metadata backend. If you pass the
+blocks to the checksums recorded in the *metadata backend*. If you pass the
 source option (``-s``) the blocks will also be compared to the original source data.
 ::
 

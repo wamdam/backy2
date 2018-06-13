@@ -72,8 +72,8 @@ Differential Backup
 Benji only backups changed blocks. It can do this in two different ways:
 
 1. **It can read the whole image**: Checksum each block and look the checksum up
-   in the metadata backend. If it is found, only a reference to the existing
-   block will be stored, thus there's no write action on the data backend.
+   in the *metadata backend*. If it is found, only a reference to the existing
+   block will be stored, thus there's no write action on the *data backend*.
 
 2. **It can receive a hints file**: The hints file is a JSON formatted list of
    (offset, size) tuples (see :ref:`hints_file` for an example) which indicate
@@ -81,9 +81,9 @@ Benji only backups changed blocks. It can do this in two different ways:
    Fortunately the format matches exactly the output of
    ``rbd diff … --format=json``.  In this case it will only read blocks hinted
    at by the *hints file*, checksum each block and look the checksum up in the
-   metadata backend. If it is found (which may rarely happen for file copies
+   *metadata backend*. If it is found (which may rarely happen for file copies
    or when blocks are all zeros), only a reference to the existing block will
-   be stored. Otherwise the block is written to the data backend.
+   be stored. Otherwise the block is written to the *data backend*.
    The hints file is passed via the  ``-r`` or ``--rbd`` option to
    ``benji backup``.
 

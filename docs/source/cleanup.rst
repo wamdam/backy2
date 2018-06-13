@@ -33,7 +33,7 @@ You can force the removal of a version by using ``--force``.
 ``benji rm`` removes the version metadata and corresponding blocks from the
 *metadata backend*. It also adds the removed block entries into a deletion
 candidate list. By default it also removes the backup of the metadata on
-the data backend. If you want to keep this data, you can use the ``-k``
+the *data backend*. If you want to keep this data, you can use the ``-k``
 or ``--keep-backend-metadata`` option.
 
 In order to really delete blocks from the *data backend*, you'll need ``benji

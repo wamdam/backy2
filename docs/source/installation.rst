@@ -63,8 +63,8 @@ Benji and its dependencies::
 If you want to use certain features of Benji in the future you might
 want to install additional dependencies:
 
-- ``boto3``: AWS S3 data backend support
-- ``b2``: Backblaze's B2 Cloud data backend support
+- ``boto3``: AWS S3 *data backend* support
+- ``b2``: Backblaze's B2 Cloud *data backend* support
 - ``pycryptodome``: Encryption support
 - ``diskcache``: Disk caching support
 - ``zstandard``: Compression support

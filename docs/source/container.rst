@@ -42,7 +42,8 @@ specify an empty string as the BACKUP_SELECTOR all PVCs will be backed up.
 
 After each volume backup ``benji enforce`` is called for the volume with
 the retention policy specified in BACKUP_RETENTION. Currently the same
-retention policy is applied to all PVCs.
+retention policy is applied to all PVCs. BACKUP_RETENTION and BACKUP_SCHEDULE
+have to be considered together.
 
 The last step is to call ``benji cleanup`` to remove blocks on the
 data backend and free the space of deleted *versions*.

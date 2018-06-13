@@ -50,7 +50,7 @@ All timestamps in the database are in UTC and without timezone information.
 Data Backend
 ------------
 
-As mentioned above there are three data backend implementations. Please
+As mentioned above there are three *data backend* implementations. Please
 refer to section :ref:`configuration`.
 
 .. todo:: Document information about the actual data layout, encryption,

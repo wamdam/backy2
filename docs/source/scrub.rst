@@ -30,7 +30,14 @@ Invalid blocks can happen in these cases (probably incomplete):
 Scrubbing Methods
 -----------------
 
-Benji implements three different scrubbing methods:
+Benji implements three different scrubbing methods. Each of these methods
+accepts the ``--block-percentage`` (short form ``-p``) option. With it you
+can limit the scrubbing to a randomly selected percentage of the blocks.
+
+.. ATTENTION:: When using the ``--block-percentage`` option with a value of
+    less than 100 percent with any of the deep scrubbing commands, an invalid
+    *version* won't be marked as valid again, when it has been marked as
+    invalid in the past. Only a full successful deep-scrub will do that.
 
 Consistency and Checksum
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,7 +53,7 @@ Using the Backup Source
 
 ::
 
-    benji deep-scrub -s <snapshot> <version_uid>
+    benji deep-scrub --source <snapshot> <version_uid>
 
 Benji also reads the backup source for this version. This means that
 Benji reads the block metadata (UID, position and checksum), reads the
@@ -95,34 +102,36 @@ Both can take a list of *version* names. All *versions* matching these
 names will be scrubbed. If you don't specify any names all *versions*
 will be checked.
 
-If the ``-t`` or ``--tag`` is given too, the above  selection is limited
-to  *versions* also matching the given tag.  If  multiple ``--tag`` options
-are given, then they constitute an OR  operation.
+If the ``--tag`` (short form ``-t``) is given too, the above  selection is
+limited to  *versions* also matching the given tag.  If  multiple ``--tag``
+options are given, then they constitute an OR  operation.
 
-By default all matching *versions* will be scrubbed then. But you can also
-randomly select a certain sample of these *versions* with ``--percentile``
-or ``-p``. A *version's* size isn't taken into account when selecting the
+By default all matching *versions* will be scrubbed. But you can also
+randomly select a certain sample of these *versions* with ``--version-percentage``
+(short form``-P``). A *version's* size isn't taken into account when selecting the
 sample, every *version* is equally eligible.
 
+The bulk scrubbing commands also accepts the ``--block-percentage`` (short
+form ``-p``) option.
+
 ``benji bulk-deep-scrub`` doesn't support the ``--source`` option like
-``benji deep-scrub`` because multiple *versions* could be scrubbed with a
-single command.
+``benji deep-scrub``.
 
 This is a good use cause for tags: You could mark your *versions* with a list of
 different tags denoting the importance of the backed up data. Then you could scrub
 each class of *versions* differently::
 
     # 14% of the versions are deep scrubbed for data of high importance
-    $ benji bulk-deep-scrub --tag high --percentile 14
+    $ benji bulk-deep-scrub --tag high --version-percentage 14
 
     # 7% of the versions are deep scrubbed for data of medium importance
-    $ benji bulk-deep-scrub --tag medium --percentile 7
+    $ benji bulk-deep-scrub --tag medium --version-percentage 7
 
     # 3% of the versions are deep scrubbed for data of low importance
-    $ benji bulk-deep-scrub --tag low --percentile 3
+    $ benji bulk-deep-scrub --tag low --version-percentage 3
 
     # 3% of the versions are scrubbed when they contain reproducible bulk data
-    $ benji bulk-scrub --tag bulk --percentile 3
+    $ benji bulk-scrub --tag bulk --version-percentage 3
 
 If you'd call this schedule every day, you'd scrub the important data completely
 about every seven days (statistically), data of medium importance completely every
@@ -161,17 +170,4 @@ You can find invalid versions by looking at the output of ``benji ls``::
     different images.
 
 
-Partial Scrubbing
------------------
 
-If scrubbing all your backups creates too much load or takes too long, you can
-use the ``-p`` parameter. With this parameter, Benji performs a
-*partial scrub*. It will statistically (i.e. by random) choose the given
-percentage of existing blocks in the version and scrub only these.
-
-So if you call::
-
-    benji deep-scrub -p 15 <version_uid>
-
-each day for each version, you'll have statistically scrubbed 105% of all blocks
-after seven days.

@@ -26,7 +26,7 @@ can restore this information with ``benji import-from-backend``:
 
 .. command-output::benji import-from-backend --help
 
-The metadata-backend-less uses this import from the data backend to
+The metadata-backend-less uses this import from the *data backend* to
 populate an in-memory database to enable restores when the metadata
 backend is unavailable, please see section :ref:`metadata_backend_less`.
 
@@ -40,7 +40,7 @@ You can import these exports again with:
 
 .. command-output::benji import --help
 
-If the imported *version* already exists in the metadata backend Benji
+If the imported *version* already exists in the *metadata backend* Benji
 terminates with an error and doesn't proceed with the import.
 
 So now, even if your backup database server crashes, you'll still be able
@@ -130,8 +130,8 @@ Machine output
 ~~~~~~~~~~~~~~
 
 
-Some commands (like ``ls``, ``stats``, ``backup`` and ``enforce``) can also produce
-machine readable JSON output for usage in scripts::
+Some commands can also produce machine readable JSON output for usage in
+scripts::
 
     $ benji -m ls
     {
@@ -153,19 +153,50 @@ machine readable JSON output for usage in scripts::
 
 .. NOTE:: Take care to put the ``-m`` between ``benji`` and ``ls``.
 
-``jq`` is an excellent tool for parsing this data and filtering out the bits you
-want. Here's a short example, but see the ``scripts/`` and ``images/benji-rook/scripts``
-directories for more ones::
+All messages emitted by Benji are written to STDERR. In contrast
+the machine readable output is written to STDOUT. Also, when using ``-m`` the
+logging level is adjusted to only output errors. The Benji logfile still gets
+the whole output.
+
+Here's a table of commands supporting machine readable output and their
+output:
+
++-----------------+-----------------------------------------------------------+
+| Command         | Description of output                                     |
++=================+===========================================================+
+| ls              | List of matching *versions*                               |
++-----------------+-----------------------------------------------------------+
+| stats           | List of matching statistics                               |
++-----------------+-----------------------------------------------------------+
+| backup          | List of newly create *version*                            |
++-----------------+-----------------------------------------------------------+
+| enforce         | List of removed *versions*                                |
++-----------------+-----------------------------------------------------------+
+| scrub           | List of scrubbed *versions* and of *versions* with errors |
++-----------------+-----------------------------------------------------------+
+| deep-scrub      | List of scrubbed *versions* and of *versions* with errors |
++-----------------+-----------------------------------------------------------+
+| bulk-scrub      | List of scrubbed *versions* and of *versions* with errors |
++-----------------+-----------------------------------------------------------+
+| bulk-deep-scrub | List of scrubbed *versions* and of *versions* with errors |
++-----------------+-----------------------------------------------------------+
+
+All other commands also accept the ``-m`` switch. But for them only the logging
+level is turned down.
+
+`jq <https://stedolan.github.io/jq/>`_ is an excellent tool for parsing this data
+and filtering out the bits you want. Here's a short example, but see the ``scripts/``
+and ``images/benji-rook/scripts/`` directories for more::
 
     $ benji -m ls | jq -r '.versions[0].date'
     2018-06-07T12:51:19
 
 With machine readable output you can use the option ``--include-blocks``
-to ``ls`` which also includes all blocks of this version in the output.
+to ``ls`` which includes all blocks of this version in the output.
 
-Version UIDs will be represented as simple integers without V prefix
+Version UIDs will be represented as simple integers without the V prefix
 and being zero-filled. All Benji commands are able to take this
-representation as well, so you can use it in further commands as-is.
+representation as well, so you can use such UIDs in further commands as-is.
 
 All timestamps are in UTC and without timezone information.
 
