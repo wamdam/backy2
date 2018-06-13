@@ -5,19 +5,19 @@
 For Backy² Users
 ================
 
-There is no direct migration path from Backy² to Benji. If you
+There is no direct migration path from backy² to Benji. If you
 want to migrate to Benji you'd have to start with a new installation.
 
 The concepts and most of the command names and options stayed the same
-so Benji should feel familiar to Backy² users. If you currently have
-any scripts deployed together with Backy² they should require only a
+so Benji should feel familiar to backy² users. If you currently have
+any scripts deployed together with backy² they should require only a
 few changes to work with Benji. But if your scripts check for specific
-exit codes from Backy² you'd have to adapt those because they have
-all changed with Benji. Also if you used Backy²'s machine readable
+exit codes from backy² you'd have to adapt those because they have
+all changed with Benji. Also if you used backy²'s machine readable
 output, there'd be changes required as Benji uses JSON instead of CSV.
 
 Here's a list of the new features that differentiate Benji
-from Backy²:
+from backy²:
 
 - Encryption support (AES-256, GCM mode)
 - Compression support (zstandard)

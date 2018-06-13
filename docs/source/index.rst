@@ -3,16 +3,14 @@
     :description: Benji Backup Documentation:  A block based deduplicating backup software for Ceph RBD, image files and devices
     :keywords: backup,deduplication,ceph,lvm,block-based,s3,b2,rook,kubernetes
 
-Benji Backup Documentation
-==========================
+Benji, backup me!
+=================
 
 Source Code
 -----------
 
 The source code is hosted on GitHub at `https://github.com/elemental-lf/benji <https://github.com/elemental-lf/benji>`_.
-
-Overview
---------
+See section :ref:`installation` for installation instructions.
 
 .. include:: ../../README.rst
 

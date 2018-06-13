@@ -5,7 +5,7 @@ Installation
 ============
 
 Currently there are no pre-built packages but you can easily install Benji
-via ``pip``.
+with ``pip``.
 
 Ubuntu 16.04
 ------------
