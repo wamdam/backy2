@@ -47,7 +47,7 @@ So now, even if your backup database server crashes, you'll still be able
 to reimport all existing versions again!
 
 .. ATTENTION:: When you remove (``benji rm``) versions from the database and
-    then call ``benji cleanup``, the blocks containing the backed up *data* will
+    then call ``benji cleanup``, the blocks containing the backed up data will
     be removed. No ``benji import`` can bring them back, because Benji's export
     format *only* contains metadata information.
 
@@ -60,25 +60,25 @@ backup in place.
 
 .. CAUTION:: DBMS replication only helps when one server crashes or has a
     failure. It does not help against software-bug related data loss, human
-    error and more. So ``benji export`` is the only reliable option for long-term
-    data-safety.
+    error and more. So the automatic metadata export and ``benji export`` are
+    the only reliable options for long-term data safety.
 
 Secure your block data
 ----------------------
 
 Your *data backend* should be redundant in some way, too. Most cloud
-providers have an SLA which guarantees a certain level of redundancy
-and high-availability. If you manage your *data backend* yourself, then
-you should look into redundancy technologies like:
+providers have an SLA which guarantees a certain level of availability.
+If you manage your *data backend* yourself, then you should look into
+redundancy and high-availability technologies like:
 
 - RAID 1, 5 and 6
 - Redundancy provided by a distributed objected store like Ceph or Minio
 - DRBD
-- Filesystem specific data redundancy and replication mechanisms in filesystem
-    like Btrs or ZFS
+- Filesystem specific data redundancy and replication mechanisms in filesystems
+  like Btrs or ZFS
 
 If your *data backend* fails or has corruptions, at best corrupted restores will
-be possible. Benji does not store any redundant data and it cannot  restore
+be possible. Benji doesn't store any redundant data and it cannot  restore
 data from stored checksums alone.
 
 Monitoring
@@ -87,18 +87,19 @@ Monitoring
 Tips & tricks
 ~~~~~~~~~~~~~
 
-You should monitor exit codes of Benji closely. Anything != 0 means: There was
-a problem.
+You should monitor exit codes of Benji closely. Anything != 0 means that there
+was a problem.
 
 Benji writes all output including possible tracebacks and command lines to
 the configured logfile (see :ref:`configuration`).
 If anything goes wrong, you'll be able to visit this logfile and get
-enough information to troubleshoot the problem, even if this Benji call
-came from an automated script.
+enough information to troubleshoot the problem, even if Benji was called
+from an automated script.
 
 You should also monitor the success of the backups. In addition to checking the
 exit code, you can do this with ``benji ls`` and see if the column ``valid``
-is True. This will be True as soon as the backup has finished successfully.
+is True. For a currently running backup this column is False but it will change
+to True on successful completion of the backup.
 
 You can also monitor the progress of the backups either by looking at the
 logfile or by checking your process-tree::
@@ -115,20 +116,19 @@ Example::
 
     $ benji stats
         INFO: $ benji stats
-    +---------------------+-------------+------+---------------+----------+------------+------------+-------------+---------------+----------------+-------------+--------------+--------------+---------------+--------------+
-    |         date        |     uid     | name | snapshot_name |   size   | block_size | bytes read | blocks read | bytes written | blocks written | bytes dedup | blocks dedup | bytes sparse | blocks sparse | duration (s) |
-    +---------------------+-------------+------+---------------+----------+------------+------------+-------------+---------------+----------------+-------------+--------------+--------------+---------------+--------------+
-    | 2018-06-07T12:51:20 | V0000000001 | test |               | 41943040 |  4194304   |   41943040 |          10 |      41943040 |             10 |           0 |            0 |            0 |             0 |           0s |
-    | 2018-06-08T12:26:53 | V0000000002 | test |               | 41943040 |  4194304   |   41943040 |          10 |      41943040 |             10 |           0 |            0 |            0 |             0 |           0s |
-    | 2018-06-08T12:26:56 | V0000000003 | test |               | 41943040 |  4194304   |   41943040 |          10 |             0 |              0 |    41943040 |           10 |            0 |             0 |           0s |
-    | 2018-06-08T12:26:58 | V0000000004 | test |               | 41943040 |  4194304   |   41943040 |          10 |             0 |              0 |    41943040 |           10 |            0 |             0 |           0s |
-    +---------------------+-------------+------+---------------+----------+------------+------------+-------------+---------------+----------------+-------------+--------------+--------------+---------------+--------------+
+    +---------------------+-------------+------+---------------+---------+------------+---------+---------+---------+--------+--------------+
+    |         date        | uid         | name | snapshot_name |   size  | block_size |    read | written |   dedup | sparse | duration (s) |
+    +---------------------+-------------+------+---------------+---------+------------+---------+---------+---------+--------+--------------+
+    | 2018-06-13T15:21:55 | V0000000001 | test |               | 40.0MiB |   4.0MiB   | 40.0MiB | 40.0MiB |    0.0B |   0.0B |          00s |
+    | 2018-06-13T15:21:57 | V0000000002 | test |               | 40.0MiB |   4.0MiB   | 40.0MiB |    0.0B | 40.0MiB |   0.0B |          00s |
+    | 2018-06-13T15:21:58 | V0000000003 | test |               | 40.0MiB |   4.0MiB   | 40.0MiB |    0.0B | 40.0MiB |   0.0B |          00s |
+    | 2018-06-13T15:21:59 | V0000000004 | test |               | 40.0MiB |   4.0MiB   | 40.0MiB |    0.0B | 40.0MiB |   0.0B |          00s |
+    +---------------------+-------------+------+---------------+---------+------------+---------+---------+---------+--------+--------------+
 
 .. _machine_output:
 
 Machine output
 ~~~~~~~~~~~~~~
-
 
 Some commands can also produce machine readable JSON output for usage in
 scripts::

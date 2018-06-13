@@ -77,6 +77,10 @@ Backup
     | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 |  True |   False   |      |
     +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
 
+``benji ls`` supports various options to filter the output:
+
+.. command-output:: benji ls --help
+
 Some commands can also produce machine readable JSON output for usage in scripts::
 
     $ benji -m ls
@@ -150,11 +154,11 @@ Also, the version is marked invalid as you can see here::
 
     $ benji ls
         INFO: $ benji ls
-    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
-    |         date        |     uid     | name              | snapshot_name |     size | block_size | valid | protected | tags |
-    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
-    | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 | False |   False   |      |
-    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    +---------------------+-------------+---------------+---------------+---------+------------+-------+-----------+------+
+    |         date        |     uid     | name          | snapshot_name |    size | block_size | valid | protected | tags |
+    +---------------------+-------------+---------------+---------------+---------+------------+-------+-----------+------+
+    | 2018-06-13T15:23:00 | V0000000001 | myfirstbackup |               | 40.0MiB |     4.0MiB |  True |   False   |      |
+
 
 Just in case you are able to fix the error, just scrub again and Benji will mark the version as valid again.
 

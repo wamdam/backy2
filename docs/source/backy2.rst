@@ -10,9 +10,9 @@ want to migrate to Benji you'd have to start with a new installation.
 
 The concepts and most of the command names and options stayed the same
 so Benji should feel familiar to Backy² users. If you currently have
-any scripts deployed together with Backy² they should require only
+any scripts deployed together with Backy² they should require only a
 few changes to work with Benji. But if your scripts check for specific
-exit codes from Backy² you'd have to adapt those because the have
+exit codes from Backy² you'd have to adapt those because they have
 all changed with Benji. Also if you used Backy²'s machine readable
 output, there'd be changes required as Benji uses JSON instead of CSV.
 
@@ -25,7 +25,7 @@ from Backy²:
 - Support for Backblaze's B2 Cloud Storage as a *data backend*
 - Variable block size for efficient support of LVM and Ceph in
   one installation of Benji
-- More compact metadata storage, the metadata backend now uses
+- More compact metadata storage, the *metadata backend* now uses
   significantly less disk space
 - Database based locking to make it possible to have multiple instances
   on different hosts or in different containers
@@ -38,7 +38,8 @@ from Backy²:
 - blake2b with 32 byte digest as default hash function
 - Optional read caching of blocks
 - Configuration file format changed to YAML
-- Machine output is JSON instead of CSV
+- Machine readable output is JSON instead of CSV
+- More commands support machine readable output
 - Import/export format is JSON instead of CSV
 
 There also have been quite a few changes under the hood:
