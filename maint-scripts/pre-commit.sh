@@ -1,5 +1,7 @@
 #!/bin/bash
 
+. ../venv/bin/activate
+
 # Git pre-commit hook to check staged Python files for formatting issues with
 # yapf.
 #
