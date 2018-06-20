@@ -1,0 +1,7 @@
+configurationVersion: '1.0.0'
+dataBackend:
+  type: file
+  file:
+    path: /tmp
+metadataBackend:
+  engine: sqlite:///tmp/benji.sqlite

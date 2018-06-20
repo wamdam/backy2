@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+. /benji/bin/activate
+exec /benji/bin/benji "$@"

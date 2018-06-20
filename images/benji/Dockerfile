@@ -1,4 +1,4 @@
-FROM rook/toolbox:v0.7.1 AS build
+FROM python:3.6-stretch AS build
 
 ENV CEPH_VERSION 12.2.5
 
@@ -7,10 +7,11 @@ ENV VENV_PATH /benji
 
 RUN apt-get update && \
 	apt-get upgrade -y -q && \
-	apt-get install -y -q --force-yes --no-install-recommends software-properties-common python-software-properties && \
-	add-apt-repository -y ppa:deadsnakes/ppa && \
+	apt-get install -y -q --force-yes --no-install-recommends software-properties-common apt-transport-https && \
+	curl -sSL https://download.ceph.com/keys/release.asc -o- | apt-key add - && \
+	apt-add-repository 'deb https://download.ceph.com/debian-luminous/ stretch main' && \
 	apt-get update && \
-	apt-get install  -y -q --force-yes --no-install-recommends python3.6 python3.6-venv python3.6-dev git gcc && \
+	apt-get install  -y -q --force-yes --no-install-recommends git gcc && \
 	apt-get install -y -q --force-yes --no-install-recommends librados2 librbd1 librados-dev librbd-dev
 
 RUN python3.6 -m venv $VENV_PATH && \
@@ -29,34 +30,28 @@ ADD . /benji-source/
 RUN . $VENV_PATH/bin/activate && \
 	pip install /benji-source/
 
-FROM rook/toolbox:v0.7.1 AS runtime
-
-ENV GO_CRON_VERSION 0.0.7
+FROM python:3.6-slim-stretch AS runtime
 
 ENV SCRIPTS_PATH /scripts
 
 RUN apt-get update && \
 	apt-get upgrade -y -q && \
-	apt-get install -y -q --force-yes --no-install-recommends software-properties-common python-software-properties && \
-	add-apt-repository -y ppa:deadsnakes/ppa && \
+	apt-get install -y -q --force-yes --no-install-recommends software-properties-common apt-transport-https curl gnupg2 && \
+	curl -sSL https://download.ceph.com/keys/release.asc -o- | apt-key add - && \
+	apt-add-repository 'deb https://download.ceph.com/debian-luminous/ stretch main' && \
 	apt-get update && \
-	apt-get install -y -q --force-yes --no-install-recommends python3.6 python3.6-dev && \
-	apt-get install -y -q --force-yes --no-install-recommends librados2 librbd1 && \
+	apt-get install -y -q --force-yes --no-install-recommends librados2 librbd1 ceph-base && \
 	apt-get install -y -q --force-yes --no-install-recommends bash-completion joe && \
 	rm -rf /var/lib/apt/lists/*
 
 COPY --from=build $VENV_PATH/ $VENV_PATH/
 COPY scripts/ $SCRIPTS_PATH/
-COPY images/benji-rook/scripts/backup.sh $SCRIPTS_PATH/backup.sh
-COPY images/benji-rook/docker-entrypoint.sh /docker-entrypoint.sh
 COPY etc/benji-minimal.yaml /etc/benji/benji.yaml
 COPY images/common/benji-wrapper /usr/bin/benji
 COPY images/common/bashrc /root/.bashrc
 
-RUN curl -sSL -o /go-cron-linux.gz https://github.com/odise/go-cron/releases/download/v$GO_CRON_VERSION/go-cron-linux.gz && \
-	ls -al go-cron-linux.gz && \
-	gunzip /go-cron-linux.gz && \
-	curl -o /usr/bin/kubectl -sSL https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && \
-	chmod a+x $SCRIPTS_PATH/backup.sh /docker-entrypoint.sh /go-cron-linux /usr/bin/kubectl
+RUN curl -o /usr/bin/kubectl -sSL https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && \
+	chmod a+x /usr/bin/kubectl /usr/bin/benji
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["/bin/bash"]
+CMD ["-i"]
