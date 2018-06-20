@@ -37,7 +37,7 @@ run() {
     git_push --force
   else
     _ cd "$tmpdir"
-    _ git clone "$repo" . -b "$branch" || ( \
+    _ git clone --depth 1 "$repo" . -b "$branch" || ( \
       _ git init && \
       _ git checkout -b "$branch")
     if [[ "$keep" == "0" ]]; then _ rm -rf ./*; fi
@@ -131,7 +131,7 @@ dryrun=0
 repospec=
 source=
 branch=
-message="Update"
+message="Documentation update"
 useenv=0
 author=""
 keep=0
