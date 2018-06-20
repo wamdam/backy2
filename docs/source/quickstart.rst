@@ -33,6 +33,24 @@ Version
 Backup
 ------
 
+0. Minimal configuration:
+
+This represents a minimal configuration mit SQLite3 backend and file-based block storage::
+
+    configurationVersion: '1.0.0'
+    dataBackend:
+      type: file
+      file:
+        path: /tmp
+    metadataBackend:
+      engine: sqlite:///tmp/benji.sqlite
+
+You might want to change the above paths. Benji will run as a normal user
+without problems, but it will probably need root privileges to access most
+backup sources.
+
+Please see :ref:`configuration` for a full list of configuration options.
+
 1. Initialize the database::
 
     $ benji initdb
