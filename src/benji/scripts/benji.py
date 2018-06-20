@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+# PYTHON_ARGCOMPLETE_OK
 
 import argparse
 import fileinput
@@ -8,6 +9,8 @@ import os
 import random
 import sys
 
+import argcomplete
+from argcomplete.completers import ChoicesCompleter
 import pkg_resources
 from prettytable import PrettyTable
 
@@ -528,7 +531,8 @@ def main():
 
     # BACKUP
     p = subparsers.add_parser('backup', help="Perform a backup.")
-    p.add_argument('source', help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename@snapshot)')
+    p.add_argument('source', help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename@snapshot)')\
+        .completer=ChoicesCompleter(('file://', 'rbd://'))
     p.add_argument('name', help='Backup name (e.g. the hostname)')
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the RBD snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as RBD JSON format')
@@ -558,7 +562,8 @@ def main():
         action='store_true',
         help='Restore directly from data backend without requiring the metadata backend.')
     p.add_argument('version_uid')
-    p.add_argument('target', help='Source (URL like, e.g. file:///dev/sda or rbd://pool/imagename)')
+    p.add_argument('target', help='Source (URL like, e.g. file:///dev/sda or rbd://pool/imagename)')\
+        .completer=ChoicesCompleter(('file://', 'rbd://'))
     p.set_defaults(func='restore')
 
     # PROTECT
@@ -754,6 +759,7 @@ def main():
     p.add_argument('names', metavar='NAME', nargs='+')
     p.set_defaults(func='rm_tag')
 
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     if args.version:

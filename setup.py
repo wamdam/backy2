@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 
 version = '0.1.0'
 
-setup(name='benji',
+setup(
+    name='benji',
     version=version,
     description="A block / disk based backup and restore solution",
     long_description=open('README.rst', 'r', encoding='utf-8').read(),
@@ -15,7 +16,7 @@ Operating System :: POSIX
 Programming Language :: Python :: 3
 Programming Language :: Python :: 3.6
 Topic :: System :: Archiving :: Backup
-"""[:-1].split('\n'),
+""" [:-1].split('\n'),
     keywords='backup',
     author='Daniel Kraft <daniel.kraft@d9t.de>, Lars Fenneberg <lf@elemental.net>',
     author_email='daniel.kraft@d9t.de, lf@elemental.net',
@@ -38,7 +39,8 @@ Topic :: System :: Archiving :: Backup
         'alembic>=0.9.9',
         'ruamel.yaml>=0.15.37',
         'psycopg2-binary>=2.7.4',
-        ],
+        'argcomplete>=1.9.4',
+    ],
     extras_require={
         's3_boto3 data backend': ['boto3>=1.7.28'],
         'encryption': ['pycryptodome>=3.6.1', 'aes-keywrap>17.12.1'],
@@ -53,4 +55,4 @@ Topic :: System :: Archiving :: Backup
         [console_scripts]
             benji = benji.scripts.benji:main
     """,
-    )
+)
