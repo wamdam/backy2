@@ -21,10 +21,10 @@ class Config:
     CONFIG_FILE = 'benji.yaml'
 
     DEFAULT_CONFIG = """
-    logFile: /tmp/benji.log
+    logFile: null
     blockSize: 4194304
     hashFunction: blake2b,digest_size=32
-    process_name: benji
+    processName: benji
     disallowRemoveWhenYounger: 6
     dataBackend:
       simultaneousWrites: 1
