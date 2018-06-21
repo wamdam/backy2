@@ -2,7 +2,8 @@ FROM rook/toolbox:v0.7.1 AS build
 
 ENV CEPH_VERSION 12.2.5
 
-# If you change VENV_PATH you also need to change the path to activate in scripts/backup.sh.
+# If you change VENV_PATH you also need to change the paths in 
+# images/common/benji-wrapper and images/common/bashrc
 ENV VENV_PATH /benji
 
 RUN apt-get update && \
