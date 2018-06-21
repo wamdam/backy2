@@ -3,6 +3,12 @@
 : ${BACKUP_SELECTOR:=nomatch==matchnot}
 : ${BACKUP_RETENION:=latest3,hours24,days30,months3}
 : ${PROM_PUSH_GATEWAY:=:9091}
+: ${DEEP_SCRUBBING_ENABLED:=1}
+: ${DEEP_SCRUBBING_VERSIONS_PERCENTAGE:=6}
+: ${DEEP_SCRUBBING_BLOCKS_PERCENTAGE:=50}
+: ${SCRUBBING_ENABLED:=0}
+: ${SCRUBBING_VERSIONS_PERCENTAGE:=6}
+: ${SCRUBBING_BLOCKS_PERCENTAGE:=50}
 
 cd "$(dirname "${BASH_SOURCE[0]}")" 
 
@@ -37,5 +43,20 @@ benji_job_start_time -action=cleanup -type= -version_name= set $(date +'%s.%N')
 benji cleanup
 benji_job_completion_time -action=cleanup -type= -version_name= set $(date +'%s.%N')
 
+if [[ $DEEP_SCRUBBING_ENABLED == 1 ]]
+then
+    benji_job_start_time -action=bulk-deep-scrub -type= -version_name= set $(date +'%s.%N')
+    benji bulk-deep-scrub -P "$DEEP_SCRUBBING_VERSIONS_PERCENTAGE" -p "$DEEP_SCRUBBING_BLOCKS_PERCENTAGE"
+    benji_job_completion_time -action=bulk-deep-scrub -type= -version_name= set $(date +'%s.%N')
+fi
+
+if [[ $SCRUBBING_ENABLED == 1 ]]
+then
+    benji_job_start_time -action=bulk-scrub -type= -version_name= set $(date +'%s.%N')
+    benji bulk-scrub -P "$SCRUBBING_VERSIONS_PERCENTAGE" -p "$SCRUBBING_BLOCKS_PERCENTAGE"
+    benji_job_completion_time -action=bulk-scrub -type= -version_name= set $(date +'%s.%N')
+fi
+
+echo
 io::prometheus::ExportAsText
 io::prometheus::Push job=benji gateway="$PROM_PUSH_GATEWAY"

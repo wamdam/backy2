@@ -9,10 +9,21 @@ benji:
 
   resources: {}
 
-  backupSchedule: '0 3 1/6 * * *'
-  backupRetention: 'latest3,hours24,days30,months3'
-  # Set to empty string to backup all PVCs
-  backupSelector: ''
+  backup:
+    schedule: '0 3 1/6 * * *'
+    retention: 'latest3,hours24,days30,months3'
+    # Set to empty string to backup all PVCs
+    selector: ''
+
+  deepScrubbing:
+    enabled: true
+    versionsPercentage: 4
+    blocksPercentage: 50
+
+  scrubbing:
+    enabled: false
+    versionsPercentage: 4
+    blocksPercentage: 50
 
   # Configuration for Benji
   # This needs to be provided by the user.

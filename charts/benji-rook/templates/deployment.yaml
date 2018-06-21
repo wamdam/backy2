@@ -30,11 +30,23 @@ spec:
                   name: rook-ceph-mon
                   key: admin-secret
             - name: BACKUP_SCHEDULE
-              value: {{ .Values.benji.backupSchedule }}
+              value: {{ .Values.benji.backup.schedule }}
             - name: BACKUP_RETENTION
-              value: {{ .Values.benji.backupRetention }}
+              value: {{ .Values.benji.backup.retention }}
             - name: BACKUP_SELECTOR
-              value: {{ .Values.benji.backupSelector }}
+              value: {{ .Values.benji.backup.selector }}
+            - name: SCRUBBING_ENABLED
+              value: {{ .Values.benji.scrubbing.enabled | ternary "1" "0" }}
+            - name: SCRUBBING_VERSIONS_PERCENTAGE
+              value: {{ .Values.benji.scrubbing.versionsPercentage }}
+            - name: SCRUBBING_BLOCKS_PERCENTAGE
+              value: {{ .Values.benji.scrubbing.blocksPercentage }}
+            - name: DEEP_SCRUBBING_ENABLED
+              value: {{ .Values.benji.deepScrubbing.enabled | ternary "1" "0" }}
+            - name: DEEP_SCRUBBING_VERSIONS_PERCENTAGE
+              value: {{ .Values.benji.deepScrubbing.versionsPercentage }}
+            - name: DEEP_SCRUBBING_BLOCKS_PERCENTAGE
+              value: {{ .Values.benji.deepScrubbing.blocksPercentage }}
           securityContext:
             privileged: true
           volumeMounts:
