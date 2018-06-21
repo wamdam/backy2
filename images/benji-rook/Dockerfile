@@ -57,6 +57,6 @@ RUN curl -sSL -o /go-cron-linux.gz https://github.com/odise/go-cron/releases/dow
 	ls -al go-cron-linux.gz && \
 	gunzip /go-cron-linux.gz && \
 	curl -o /usr/bin/kubectl -sSL https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && \
-	chmod a+x $SCRIPTS_PATH/backup.sh /docker-entrypoint.sh /go-cron-linux /usr/bin/kubectl
+	chmod a+x $SCRIPTS_PATH/backup.sh /docker-entrypoint.sh /go-cron-linux /usr/bin/kubectl /usr/bin/benji
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
