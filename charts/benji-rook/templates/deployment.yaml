@@ -33,23 +33,23 @@ spec:
                   name: rook-ceph-mon
                   key: admin-secret
             - name: BACKUP_SCHEDULE
-              value: {{ .Values.benji.backup.schedule }}
+              value: "{{ .Values.benji.backup.schedule }}"
             - name: BACKUP_RETENTION
-              value: {{ .Values.benji.backup.retention }}
+              value: "{{ .Values.benji.backup.retention }}"
             - name: BACKUP_SELECTOR
-              value: {{ .Values.benji.backup.selector }}
+              value: "{{ .Values.benji.backup.selector }}"
             - name: SCRUBBING_ENABLED
-              value: {{ .Values.benji.scrubbing.enabled | ternary "1" "0" }}
+              value: "{{ .Values.benji.scrubbing.enabled | ternary "1" "0" }}"
             - name: SCRUBBING_VERSIONS_PERCENTAGE
-              value: {{ .Values.benji.scrubbing.versionsPercentage }}
+              value: "{{ .Values.benji.scrubbing.versionsPercentage }}"
             - name: SCRUBBING_BLOCKS_PERCENTAGE
-              value: {{ .Values.benji.scrubbing.blocksPercentage }}
+              value: "{{ .Values.benji.scrubbing.blocksPercentage }}"
             - name: DEEP_SCRUBBING_ENABLED
-              value: {{ .Values.benji.deepScrubbing.enabled | ternary "1" "0" }}
+              value: "{{ .Values.benji.deepScrubbing.enabled | ternary "1" "0" }}"
             - name: DEEP_SCRUBBING_VERSIONS_PERCENTAGE
-              value: {{ .Values.benji.deepScrubbing.versionsPercentage }}
+              value: "{{ .Values.benji.deepScrubbing.versionsPercentage }}"
             - name: DEEP_SCRUBBING_BLOCKS_PERCENTAGE
-              value: {{ .Values.benji.deepScrubbing.blocksPercentage }}
+              value: "{{ .Values.benji.deepScrubbing.blocksPercentage }}"
           securityContext:
             privileged: true
           volumeMounts:
