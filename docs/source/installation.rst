@@ -5,7 +5,10 @@ Installation
 ============
 
 Currently there are no pre-built packages but you can easily install Benji
-with ``pip``.
+with ``pip``. Furthermore there are two Docker images which each contain
+a complete Benji installation. The ``benji`` image is the easiest and fastest
+way to test Benji but can also be used in production. See section :ref:`container`
+for more information about the images.
 
 Ubuntu 16.04
 ------------
