@@ -1,24 +1,22 @@
 #!/usr/bin/env bash
 
-: ${BACKUP_SELECTOR:=nomatch==matchnot}
-: ${BACKUP_RETENION:=latest3,hours24,days30,months3}
-: ${PROM_PUSH_GATEWAY:=:9091}
-: ${DEEP_SCRUBBING_ENABLED:=1}
-: ${DEEP_SCRUBBING_VERSIONS_PERCENTAGE:=6}
-: ${DEEP_SCRUBBING_BLOCKS_PERCENTAGE:=50}
-: ${SCRUBBING_ENABLED:=0}
-: ${SCRUBBING_VERSIONS_PERCENTAGE:=6}
-: ${SCRUBBING_BLOCKS_PERCENTAGE:=50}
+: "${BACKUP_SELECTOR:=nomatch==matchnot}"
+: "${BACKUP_RETENION:=latest3,hours24,days30,months3}"
+: "${PROM_PUSH_GATEWAY:=:9091}"
+: "${DEEP_SCRUBBING_ENABLED:=1}"
+: "${DEEP_SCRUBBING_VERSIONS_PERCENTAGE:=6}"
+: "${DEEP_SCRUBBING_BLOCKS_PERCENTAGE:=50}"
+: "${SCRUBBING_ENABLED:=0}"
+: "${SCRUBBING_VERSIONS_PERCENTAGE:=6}"
+: "${SCRUBBING_BLOCKS_PERCENTAGE:=50}"
 
-cd "$(dirname "${BASH_SOURCE[0]}")" 
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
-. /benji/bin/activate
 . prometheus.sh
 . metrics.sh
+. tryCatch.sh
+. common.sh
 . ceph.sh
-
-# Can't use "u" because prometheus.bash fails when using it
-set -eo pipefail
 
 # Get a list of persistent volumes (this will also filter out volumes not provisioned by Rook)
 PVS=$(kubectl get pvc --all-namespaces -l "$BACKUP_SELECTOR" -o json | jq -r '.items | map(select(.metadata.annotations."volume.beta.kubernetes.io/storage-provisioner"=="rook.io/block") | .spec.volumeName) | .[]')
@@ -33,28 +31,20 @@ do
 	CEPH_IMAGE="$4"
 	NAME="$PV_NAMESPACE/$PV_NAME"
 	
-	backup::ceph "$NAME" "$CEPH_POOL" "$CEPH_IMAGE"
-	benji_job_start_time -action=enforce -type= -version_name="$NAME" set $(date +'%s.%N')
-	benji enforce "$BACKUP_RETENION" "$NAME"
-	benji_job_completion_time -action=enforce -type= -version_name="$NAME" set $(date +'%s.%N')
+	benji::backup::ceph "$NAME" "$CEPH_POOL" "$CEPH_IMAGE"
+	benji::enforce "$BACKUP_RETENION" "$NAME"
 done
 
-benji_job_start_time -action=cleanup -type= -version_name= set $(date +'%s.%N')
-benji cleanup
-benji_job_completion_time -action=cleanup -type= -version_name= set $(date +'%s.%N')
+benji::cleanup
 
 if [[ $DEEP_SCRUBBING_ENABLED == 1 ]]
 then
-    benji_job_start_time -action=bulk-deep-scrub -type= -version_name= set $(date +'%s.%N')
-    benji bulk-deep-scrub -P "$DEEP_SCRUBBING_VERSIONS_PERCENTAGE" -p "$DEEP_SCRUBBING_BLOCKS_PERCENTAGE"
-    benji_job_completion_time -action=bulk-deep-scrub -type= -version_name= set $(date +'%s.%N')
+    benji::bulk_deep_scrub "$DEEP_SCRUBBING_VERSIONS_PERCENTAGE" "$DEEP_SCRUBBING_BLOCKS_PERCENTAGE"
 fi
 
 if [[ $SCRUBBING_ENABLED == 1 ]]
 then
-    benji_job_start_time -action=bulk-scrub -type= -version_name= set $(date +'%s.%N')
-    benji bulk-scrub -P "$SCRUBBING_VERSIONS_PERCENTAGE" -p "$SCRUBBING_BLOCKS_PERCENTAGE"
-    benji_job_completion_time -action=bulk-scrub -type= -version_name= set $(date +'%s.%N')
+    benji::bulk_scrub "$DEEP_SCRUBBING_VERSIONS_PERCENTAGE" "$DEEP_SCRUBBING_BLOCKS_PERCENTAGE"
 fi
 
 echo
