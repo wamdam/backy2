@@ -1079,5 +1079,5 @@ class BenjiStore:
         for block_id, block in self._cow[cow_version.uid.int].items():
             pass
         del (self._cow[cow_version.uid.int])
-        self._benji_obj._locking.unlock_version(cow_version)
+        self._benji_obj._locking.unlock_version(cow_version.uid)
         logger.info('Finished.')
