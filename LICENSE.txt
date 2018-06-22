@@ -38,6 +38,12 @@ Copyrigt:
     2015 Adrian Colley <aecolley@gmail.com>
 License: Apache 2.0
 
+Files: scripts/tryCatch.sh
+Copyright:
+    2015 Bazyli Brzóska @ https://invent.life/
+    Modified work: 2018 Lars Fenneberg
+License: MIT
+
 Files: *
 Copyright:
     2015-2017: Daniel Kraft
