@@ -41,7 +41,7 @@ RUN apt-get update && \
 	apt-add-repository 'deb https://download.ceph.com/debian-luminous/ stretch main' && \
 	apt-get update && \
 	apt-get install -y -q --force-yes --no-install-recommends librados2 librbd1 ceph-base && \
-	apt-get install -y -q --force-yes --no-install-recommends bash-completion joe && \
+	apt-get install -y -q --force-yes --no-install-recommends bash-completion joe jq && \
 	rm -rf /var/lib/apt/lists/*
 
 COPY --from=build $VENV_PATH/ $VENV_PATH/
