@@ -55,7 +55,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.metadata_backend
         name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        version = backend.set_version(name, snapshot_name, 50000, 5000, True)
+        version = backend.create_version(name, snapshot_name, 50000, 5000, True)
         uid = version.uid
         self.assertIsNotNone(version)
         version = backend.get_version(uid)
@@ -77,7 +77,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         checksum = '1234567890'
         size = 5000
         id = 0
-        version = backend.set_version(
+        version = backend.create_version(
             version_name=name, snapshot_name=snapshot_name, size=50000, block_size=5000, valid=True)
         backend.set_block(id, version.uid, block_uid, checksum, size, True)
 
@@ -94,7 +94,7 @@ class MiscTestCase(BackendTestCase, TestCase):
         backend = self.metadata_backend
         version_name = 'backup-mysystem1-20150110140015'
         snapshot_name = 'snapname'
-        version = backend.set_version(
+        version = backend.create_version(
             version_name=version_name, snapshot_name=snapshot_name, size=TESTLEN * 5000, block_size=5000, valid=True)
         block_uids = [BlockUid(i + 1, i + 2) for i in range(TESTLEN)]
         checksums = [uuid.uuid1().hex for i in range(TESTLEN)]

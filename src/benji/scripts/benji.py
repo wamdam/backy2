@@ -10,8 +10,8 @@ import random
 import sys
 
 import argcomplete
-from argcomplete.completers import ChoicesCompleter
 import pkg_resources
+from argcomplete.completers import ChoicesCompleter
 from prettytable import PrettyTable
 
 import benji.exception
@@ -264,8 +264,8 @@ class Commands:
         tbl.align['uid'] = 'l'
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
-        tbl.align['size bytes'] = 'r'
-        tbl.align['size blocks'] = 'r'
+        tbl.align['size'] = 'r'
+        tbl.align['block_size'] = 'r'
         tbl.align['read'] = 'r'
         tbl.align['written'] = 'r'
         tbl.align['dedup'] = 'r'
@@ -276,7 +276,7 @@ class Commands:
                 stat.version_uid.readable, ',\nbase {}'.format(stat.base_version_uid.readable)
                 if stat.base_version_uid else '', ', hints' if stat.hints_supplied else '')
             tbl.add_row([
-                PrettyPrint.local_time(stat.date),
+                PrettyPrint.local_time(stat.version_date),
                 augmented_version_uid,
                 stat.version_name,
                 stat.version_snapshot_name,
@@ -284,7 +284,7 @@ class Commands:
                 PrettyPrint.bytes(stat.version_block_size),
                 PrettyPrint.bytes(stat.bytes_read),
                 PrettyPrint.bytes(stat.bytes_written),
-                PrettyPrint.bytes(stat.bytes_found_dedup),
+                PrettyPrint.bytes(stat.bytes_dedup),
                 PrettyPrint.bytes(stat.bytes_sparse),
                 PrettyPrint.duration(stat.duration_seconds),
             ])

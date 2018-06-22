@@ -8,7 +8,7 @@ from benji.tests.testcase import BackendTestCase
 class SQLTestCase:
 
     def test_version(self):
-        version = self.metadata_backend.set_version(
+        version = self.metadata_backend.create_version(
             version_name='backup-name',
             snapshot_name='snapshot-name',
             size=16 * 1024 * 4096,
@@ -24,19 +24,19 @@ class SQLTestCase:
         self.assertFalse(version.valid)
         self.assertFalse(version.protected)
 
-        self.metadata_backend.set_version_valid(version.uid)
+        self.metadata_backend.set_version(version.uid, valid=True)
         version = self.metadata_backend.get_version(version.uid)
         self.assertTrue(version.valid)
 
-        self.metadata_backend.set_version_invalid(version.uid)
+        self.metadata_backend.set_version(version.uid, valid=False)
         version = self.metadata_backend.get_version(version.uid)
         self.assertFalse(version.valid)
 
-        self.metadata_backend.protect_version(version.uid)
+        self.metadata_backend.set_version(version.uid, protected=True)
         version = self.metadata_backend.get_version(version.uid)
         self.assertTrue(version.protected)
 
-        self.metadata_backend.unprotect_version(version.uid)
+        self.metadata_backend.set_version(version.uid, protected=False)
         version = self.metadata_backend.get_version(version.uid)
         self.assertFalse(version.protected)
 
@@ -55,7 +55,7 @@ class SQLTestCase:
 
         version_uids = {}
         for _ in range(256):
-            version = self.metadata_backend.set_version(
+            version = self.metadata_backend.create_version(
                 version_name='backup-name',
                 snapshot_name='snapshot-name',
                 size=16 * 1024 * 4096,
@@ -66,7 +66,7 @@ class SQLTestCase:
             version_uids[version.uid] = True
 
     def test_block(self):
-        version = self.metadata_backend.set_version(
+        version = self.metadata_backend.create_version(
             version_name='name-' + self.random_string(12),
             snapshot_name='snapshot-name-' + self.random_string(12),
             size=256 * 1024 * 4096,

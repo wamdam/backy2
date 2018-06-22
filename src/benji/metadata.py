@@ -213,23 +213,19 @@ Base = declarative_base()
 
 class Stats(Base):
     __tablename__ = 'stats'
-    date = Column("date", DateTime, nullable=False)
     # No foreign key references here, so that we can keep the stats around even when the version is deleted
     version_uid = Column(VersionUidType, primary_key=True)
     base_version_uid = Column(VersionUidType, nullable=True)
     hints_supplied = Column(Boolean, nullable=False)
     version_name = Column(String, nullable=False)
+    version_date = Column("date", DateTime, nullable=False)
     version_snapshot_name = Column(String, nullable=False)
     version_size = Column(BigInteger, nullable=False)
     version_block_size = Column(BigInteger, nullable=False)
     bytes_read = Column(BigInteger, nullable=False)
-    blocks_read = Column(BigInteger, nullable=False)
     bytes_written = Column(BigInteger, nullable=False)
-    blocks_written = Column(BigInteger, nullable=False)
-    bytes_found_dedup = Column(BigInteger, nullable=False)
-    blocks_found_dedup = Column(BigInteger, nullable=False)
+    bytes_dedup = Column(BigInteger, nullable=False)
     bytes_sparse = Column(BigInteger, nullable=False)
-    blocks_sparse = Column(BigInteger, nullable=False)
     duration_seconds = Column(BigInteger, nullable=False)
 
 
@@ -455,7 +451,7 @@ class MetadataBackend:
     def commit(self):
         self._session.commit()
 
-    def set_version(self, version_name, snapshot_name, size, block_size, valid=False, protected=False):
+    def create_version(self, version_name, snapshot_name, size, block_size, valid=False, protected=False):
         version = Version(
             name=version_name,
             snapshot_name=snapshot_name,
@@ -474,27 +470,23 @@ class MetadataBackend:
 
         return version
 
-    def set_stats(self, *, version_uid, base_version_uid, hints_supplied, version_name, version_snapshot_name,
-                  version_size, version_block_size, bytes_read, blocks_read, bytes_written, blocks_written,
-                  bytes_found_dedup, blocks_found_dedup, bytes_sparse, blocks_sparse, duration_seconds):
+    def set_stats(self, *, version_uid, base_version_uid, hints_supplied, version_date, version_name,
+                  version_snapshot_name, version_size, version_block_size, bytes_read, bytes_written, bytes_dedup,
+                  bytes_sparse, duration_seconds):
         stats = Stats(
             version_uid=version_uid,
             base_version_uid=base_version_uid,
             hints_supplied=hints_supplied,
+            version_date=version_date,
             version_name=version_name,
             version_snapshot_name=version_snapshot_name,
             version_size=version_size,
             version_block_size=version_block_size,
             bytes_read=bytes_read,
-            blocks_read=blocks_read,
             bytes_written=bytes_written,
-            blocks_written=blocks_written,
-            bytes_found_dedup=bytes_found_dedup,
-            blocks_found_dedup=blocks_found_dedup,
+            bytes_dedup=bytes_dedup,
             bytes_sparse=bytes_sparse,
-            blocks_sparse=blocks_sparse,
             duration_seconds=duration_seconds,
-            date=datetime.datetime.utcnow(),
         )
         try:
             self._session.add(stats)
@@ -518,7 +510,7 @@ class MetadataBackend:
             return stats
         else:
             try:
-                stats = self._session.query(Stats).order_by(desc(Stats.date))
+                stats = self._session.query(Stats).order_by(desc(Stats.version_date))
                 if limit:
                     stats = stats.limit(limit)
                 stats = stats.all()
@@ -528,22 +520,20 @@ class MetadataBackend:
 
             return reversed(stats)
 
-    def set_version_invalid(self, version_uid):
+    def set_version(self, version_uid, *, valid=None, protected=None):
         try:
             version = self.get_version(version_uid)
-            version.valid = False
+            if valid is not None:
+                version.valid = valid
+            if protected is not None:
+                version.protected = protected
             self._session.commit()
-            logger.error('Marked version {} as invalid.'.format(version_uid.readable))
-        except:
-            self._session.rollback()
-            raise
-
-    def set_version_valid(self, version_uid):
-        try:
-            version = self.get_version(version_uid)
-            version.valid = True
-            self._session.commit()
-            logger.info('Marked version {} as valid.'.format(version_uid.readable))
+            if valid is not None:
+                logger_func = logger.info if valid else logger.error
+                logger_func('Marked version {} as {}.'.format(version_uid.readable, 'valid' if valid else 'invalid'))
+            if protected is not None:
+                logger.info('Marked version {} as {}.'.format(version_uid.readable, 'protected'
+                                                              if protected else 'unprotected'))
         except:
             self._session.rollback()
             raise
@@ -559,26 +549,6 @@ class MetadataBackend:
             raise KeyError('Version {} not found.'.format(version_uid))
 
         return version
-
-    def protect_version(self, version_uid):
-        try:
-            version = self.get_version(version_uid)
-            version.protected = True
-            self._session.commit()
-            logger.debug('Marked version protected (UID {})'.format(version_uid.readable))
-        except:
-            self._session.rollback()
-            raise
-
-    def unprotect_version(self, version_uid):
-        try:
-            version = self.get_version(version_uid)
-            version.protected = False
-            self._session.commit()
-            logger.debug('Marked version unprotected (UID {})'.format(version_uid.readable))
-        except:
-            self._session.rollback()
-            raise
 
     def get_versions(self, version_uid=None, version_name=None, version_snapshot_name=None, version_tags=None):
         try:
@@ -671,7 +641,7 @@ class MetadataBackend:
                 block_uid, ', '.join([version_uid.readable for version_uid in affected_version_uids])))
 
             for version_uid in affected_version_uids:
-                self.set_version_invalid(version_uid)
+                self.set_version(version_uid, valid=False)
             self._session.commit()
         except:
             self._session.rollback()
