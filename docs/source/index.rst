@@ -6,6 +6,14 @@
 Benji, backup me!
 =================
 
+.. raw:: html
+
+    <asciinema-player src="_static/quickstart.cast" 
+        cols="160" rows="20" 
+        autoplay="yes" preload="yes"
+        loop="yes" speed="1.2" idle-time-limit="0.5">
+    </asciinema-player>
+
 Source Code
 -----------
 

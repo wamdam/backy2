@@ -44,6 +44,9 @@ Copyright:
     Modified work: 2018 Lars Fenneberg
 License: MIT
 
+Files: docs/source/_static/asciinema/asciinema-player.css, docs/source/_static/asciinema/asciinema-player.js
+License: Apache 2.0
+
 Files: *
 Copyright:
     2015-2017: Daniel Kraft
