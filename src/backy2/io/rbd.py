@@ -23,12 +23,13 @@ class IO(_IO):
     def __init__(self, config, block_size, hash_function):
         self.simultaneous_reads = config.getint('simultaneous_reads')
         ceph_conffile = config.get('ceph_conffile')
+        ceph_client_id = config.get('ceph_client_id')
         self.block_size = block_size
         self.hash_function = hash_function
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
-        self.cluster = rados.Rados(conffile=ceph_conffile)
+        self.cluster = rados.Rados(conffile=ceph_conffile, rados_id=ceph_client_id)
         self.cluster.connect()
         # create a bitwise or'd list of the configured features
         self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.getlist('new_image_features')])
