@@ -4,16 +4,13 @@ TODOs
 Probably soonish
 ----------------
 
-* Work an Benji for Rook image
-* Standalone Docker image
 * Document retention policy enforcement
-* Document Docker image(s)
 * Update website
 * Make it possible to import all version metadata from the data backend at once
-* Redo animated GIFs ("CLI videos")
 * Add script to generate hints from LVM usage bitmaps for classic and thin snapshots
 * Finish key rotation support
 * Reimplement partial full cleanup
+* Implement duplicate backend object detection for bulk scrubbing (Bloomfilter?)
 
 Unsorted collection
 -------------------
@@ -35,3 +32,4 @@ Unsorted collection
 * alembic and database migrations probably need some work
 * Better NBD server performance (if possible)
 * Deduplication and sparse detection in NBD fixate()?
+* Make some more ASCIInema casts for the documentation
