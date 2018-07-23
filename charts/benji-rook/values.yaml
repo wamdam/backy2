@@ -34,7 +34,7 @@ benji:
   #  hashFunction: blake2b,digest_size=32
   #  blockSize: 4194304
   #  metadataBackend:
-  #    engine: postgresql://benji:secret@db-host:5432/benji
+  #    engine: postgresql://benji:secret@benji-postgresql:5432/benji
   #  dataBackend:
   #    type: s3
   #    s3:
@@ -45,6 +45,14 @@ benji:
   #      multiDelete: false
   #      addressingStyle: path
   #      disableEncodingType: true
+
+# Experimental feature: Running the metadata backend on the same cluster is
+# dangerous! Please consider the implications.
+postgresql:
+  enabled: false
+  postgresUser: benji
+  postgresDatabase: benji
+  postgresPassword: secret
 
 pushgateway:
   image:
