@@ -22,7 +22,8 @@ class IO(_IO):
 
         our_config = config.get('io.{}'.format(self.NAME), types=dict)
         ceph_conffile = config.get_from_dict(our_config, 'cephConfigFile', types=str)
-        self._cluster = rados.Rados(conffile=ceph_conffile)
+        client_identifier = config.get_from_dict(our_config, 'clientIdentifier', types=str)
+        self._cluster = rados.Rados(conffile=ceph_conffile, rados_id=client_identifier)
         self._cluster.connect()
         # create a bitwise or'd list of the configured features
         self._new_image_features = 0

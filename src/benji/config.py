@@ -48,6 +48,7 @@ class Config:
       rbd:
         cephConfigFile: /etc/ceph/ceph.conf
         simultaneousReads: 1
+        clientIdentifier: admin
     """
 
     REDACT = """
