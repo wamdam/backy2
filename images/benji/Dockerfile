@@ -22,6 +22,7 @@ RUN python3.6 -m venv $VENV_PATH && \
 
 RUN . $VENV_PATH/bin/activate && \
 	pip install git+https://github.com/kurtbrose/aes_keywrap && \
+	pip install git+https://github.com/elemental-lf/sparsebitfield && \
 	pip install boto3 b2 pycryptodome diskcache cython zstandard && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rados" && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rbd"

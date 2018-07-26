@@ -57,6 +57,7 @@ Benji and its dependencies::
     pip install --upgrade pip
     # And now install Benji and its dependencies
     pip install git+https://github.com/elemental-lf/benji
+    pip install git+https://github.com/elemental-lf/sparsebitfield
     pip install git+https://github.com/kurtbrose/aes_keywrap
 
 .. NOTE:: aes_keywrap is available on PyPI, but the version there isn't

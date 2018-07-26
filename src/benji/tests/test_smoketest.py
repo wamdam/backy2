@@ -7,6 +7,7 @@ from operator import and_
 from shutil import copyfile
 from unittest import TestCase
 
+from benji.blockuidhistory import BlockUidHistory
 from benji.scripts.benji import hints_from_rbd_diff
 from benji.tests.testcase import BenjiTestCase
 
@@ -53,6 +54,8 @@ class SmokeTestCase:
         initdb = True
         image_filename = os.path.join(testpath, 'image')
         block_size = random.sample({512, 1024, 2048, 4096}, 1)[0]
+        scrub_history = BlockUidHistory()
+        deep_scrub_history = BlockUidHistory()
         for i in range(100):
             print('Run {}'.format(i + 1))
             hints = []
@@ -105,13 +108,13 @@ class SmokeTestCase:
 
             benji_obj = self.benjiOpen(initdb=initdb)
             benji_obj.rm(version_uid, force=True, keep_backend_metadata=True)
-            print('  Remove version successful')
             benji_obj.close()
+            print('  Remove version successful')
 
             benji_obj = self.benjiOpen(initdb=initdb)
             benji_obj.import_from_backend([version_uid])
-            print('  Import version from backend successful')
             benji_obj.close()
+            print('  Import version from backend successful')
 
             benji_obj = self.benjiOpen(initdb=initdb)
             blocks = benji_obj.ls_version(version_uid)
@@ -119,8 +122,8 @@ class SmokeTestCase:
             self.assertTrue(len(blocks) > 0)
             if len(blocks) > 1:
                 self.assertTrue(reduce(and_, [block.size == block_size for block in blocks[:-1]]))
-            print('  Block list successful')
             benji_obj.close()
+            print('  Block list successful')
 
             benji_obj = self.benjiOpen(initdb=initdb)
             versions = benji_obj.ls()
@@ -129,21 +132,34 @@ class SmokeTestCase:
             self.assertTrue(reduce(and_, [version.snapshot_name == 'snapshot-name' for version in versions]))
             self.assertTrue(reduce(and_, [version.block_size == block_size for version in versions]))
             self.assertTrue(reduce(and_, [version.size > 0 for version in versions]))
-            print('  Version list successful')
             benji_obj.close()
+            print('  Version list successful')
 
             benji_obj = self.benjiOpen(initdb=initdb)
             benji_obj.scrub(version_uid)
             benji_obj.close()
-            print('  Deep scrub successful')
+            print('  Scrub successful')
+
             benji_obj = self.benjiOpen(initdb=initdb)
             benji_obj.deep_scrub(version_uid)
             benji_obj.close()
             print('  Deep scrub successful')
+
             benji_obj = self.benjiOpen(initdb=initdb)
             benji_obj.deep_scrub(version_uid, 'file://' + image_filename)
             benji_obj.close()
             print('  Deep scrub with source successful')
+
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.scrub(version_uid, history=scrub_history)
+            benji_obj.close()
+            print('  Scrub with history successful')
+
+            benji_obj = self.benjiOpen(initdb=initdb)
+            benji_obj.deep_scrub(version_uid, history=deep_scrub_history)
+            benji_obj.close()
+            print('  Deep scrub with history successful')
+
             restore_filename_1 = os.path.join(testpath, 'restore.{}'.format(i + 1))
             restore_filename_2 = os.path.join(testpath, 'restore-mdl.{}'.format(i + 1))
             benji_obj = self.benjiOpen(initdb=initdb)
@@ -151,6 +167,7 @@ class SmokeTestCase:
             benji_obj.close()
             self.assertTrue(self.same(image_filename, restore_filename_1))
             print('  Restore successful')
+
             benji_obj = self.benjiOpen(in_memory=True)
             benji_obj.import_from_backend([version_uid])
             benji_obj.restore(version_uid, 'file://' + restore_filename_2, sparse=False, force=False)
@@ -171,6 +188,9 @@ class SmokeTestCase:
                 benji_obj = self.benjiOpen(initdb=initdb)
                 benji_obj.cleanup_fast(dt=0)
                 benji_obj.close()
+            if (i % 13) == 0:
+                scrub_history = BlockUidHistory()
+                deep_scrub_history = BlockUidHistory()
 
 
 class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):

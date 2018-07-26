@@ -204,7 +204,41 @@ class Benji:
             hash_function=self._hash_function,
         )
 
-    def scrub(self, version_uid, block_percentage=100):
+    def _scrub_prepare(self, *, version, blocks, history, block_percentage, deep_scrub):
+        read_jobs = 0
+        for i, block in enumerate(blocks):
+            notify(
+                self._process_name, 'Preparing {} scrub of version {} ({:.1f}%)'.format(
+                    'deep' if deep_scrub else '', version.uid.readable, (i + 1) / len(blocks) * 100))
+            if not block.uid:
+                logger.debug('{} of block {} (UID {}) skipped (sparse).'.format('Deep scrub' if deep_scrub else 'Scrub',
+                                                                                block.id, block.uid))
+                continue
+            if history and block.uid in history:
+                logger.debug('{} of block {} (UID {}) skipped (already seen).'.format(
+                    'Deep scrub' if deep_scrub else 'Scrub', block.id, block.uid))
+                continue
+            if block_percentage < 100 and random.randint(1, 100) > block_percentage:
+                logger.debug('{} of block {} (UID {}) skipped (percentile is {}).'.format(
+                    'Deep scrub' if deep_scrub else 'Scrub', block.id, block.uid, block_percentage))
+            else:
+                self._data_backend.read(block.deref(), metadata_only=(not deep_scrub))
+                read_jobs += 1
+        return read_jobs
+
+    def _scrub_report_progress(self, *, version_uid, block, read_jobs, done_read_jobs, deep_scrub):
+        logger.debug('{} of block {} (UID {}) ok.'.format('Deep scrub' if deep_scrub else 'Scrub', block.id, block.uid))
+
+        notify(
+            self._process_name, '{} version {} ({:.1f}%)'.format('Deep scrubbing'
+                                                                 if deep_scrub else 'Scrubbing', version_uid.readable,
+                                                                 done_read_jobs / read_jobs * 100))
+        log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
+            logger.info('{} {}/{} blocks ({:.1f}%)'.format('Deep scrubbed' if deep_scrub else 'Scrubbed',
+                                                           done_read_jobs, read_jobs, done_read_jobs / read_jobs * 100))
+
+    def scrub(self, version_uid, block_percentage=100, history=None):
         self._locking.lock_version(version_uid, reason='Scrubbing version')
         try:
             version = self._metadata_backend.get_version(version_uid)
@@ -217,27 +251,15 @@ class Benji:
 
         valid = True
         try:
-            read_jobs = 0
-            for i, block in enumerate(blocks):
-                if block.uid:
-                    if block_percentage < 100 and random.randint(1, 100) > block_percentage:
-                        logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                            block.id, block.uid, block_percentage))
-                    else:
-                        self._data_backend.read(block.deref(), metadata_only=True)  # async queue
-                        read_jobs += 1
-                else:
-                    logger.debug('Scrub of block {} (UID {}) skipped (sparse).'.format(block.id, block.uid))
-                notify(
-                    self._process_name, 'Preparing scrub of version {} ({:.1f}%)'.format(
-                        version.uid.readable, (i + 1) / len(blocks) * 100))
+            read_jobs = self._scrub_prepare(
+                version=version, blocks=blocks, history=history, block_percentage=block_percentage, deep_scrub=False)
 
             done_read_jobs = 0
-            log_every_jobs = read_jobs // 200 + 1  # about every half percent
             for entry in self._data_backend.read_get_completed():
                 done_read_jobs += 1
                 if isinstance(entry, Exception):
                     logger.error('Data backend read failed: {}'.format(entry))
+                    # If it really is a data inconsistency mark blocks invalid
                     if isinstance(entry, (KeyError, ValueError)):
                         self._metadata_backend.set_blocks_invalid(block.uid)
                         valid = False
@@ -257,12 +279,15 @@ class Benji:
                 except:
                     raise
 
-                logger.debug('Scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
-                notify(self._process_name, 'Scrubbing version {} ({:.1f}%)'.format(version_uid.readable,
-                                                                                   done_read_jobs / read_jobs * 100))
-                if i % log_every_jobs == 0 or done_read_jobs == read_jobs:
-                    logger.info('Scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,
-                                                                         done_read_jobs / read_jobs * 100))
+                if history:
+                    history.add(block.uid)
+
+                self._scrub_report_progress(
+                    version_uid=version_uid,
+                    block=block,
+                    read_jobs=read_jobs,
+                    done_read_jobs=done_read_jobs,
+                    deep_scrub=False)
         except:
             raise
         finally:
@@ -282,7 +307,7 @@ class Benji:
         if not valid:
             raise ScrubbingError('Scrub of version {} failed.'.format(version_uid.readable))
 
-    def deep_scrub(self, version_uid, source=None, block_percentage=100):
+    def deep_scrub(self, version_uid, source=None, block_percentage=100, history=None):
         self._locking.lock_version(version_uid, reason='Deep scrubbing')
         try:
             version = self._metadata_backend.get_version(version_uid)
@@ -300,23 +325,10 @@ class Benji:
         valid = True
         try:
             old_use_read_cache = self._data_backend.use_read_cache(False)
-            read_jobs = 0
-            for i, block in enumerate(blocks):
-                if block.uid:
-                    if block_percentage < 100 and random.randint(1, 100) > block_percentage:
-                        logger.debug('Deep scrub of block {} (UID {}) skipped (percentile is {}).'.format(
-                            block.id, block.uid, block_percentage))
-                    else:
-                        self._data_backend.read(block.deref())  # async queue
-                        read_jobs += 1
-                else:
-                    logger.debug('Deep scrub of block {} (UID {}) skipped (sparse).'.format(block.id, block.uid))
-                notify(
-                    self._process_name, 'Preparing deep scrub of version {} ({:.1f}%)'.format(
-                        version.uid.readable, (i + 1) / len(blocks) * 100))
+            read_jobs = self._scrub_prepare(
+                version=version, blocks=blocks, history=history, block_percentage=block_percentage, deep_scrub=True)
 
             done_read_jobs = 0
-            log_every_jobs = read_jobs // 200 + 1  # about every half percent
             for entry in self._data_backend.read_get_completed():
                 done_read_jobs += 1
                 if isinstance(entry, Exception):
@@ -361,12 +373,15 @@ class Benji:
                         # when the block is there AND the checksum is good,
                         # then the source is invalid.
 
-                logger.debug('Deep scrub of block {} (UID {}) ok.'.format(block.id, block.uid))
-                notify(self._process_name, 'Deep scrubbing version {} ({:.1f}%)'.format(
-                    version_uid.readable, (i + 1) / read_jobs * 100))
-                if done_read_jobs % log_every_jobs == 0 or done_read_jobs == read_jobs:
-                    logger.info('Deep scrubbed {}/{} blocks ({:.1f}%)'.format(done_read_jobs, read_jobs,
-                                                                              done_read_jobs / read_jobs * 100))
+                if history:
+                    history.add(block.uid)
+
+                self._scrub_report_progress(
+                    version_uid=version_uid,
+                    block=block,
+                    read_jobs=read_jobs,
+                    done_read_jobs=done_read_jobs,
+                    deep_scrub=True)
         except:
             self._locking.unlock_version(version_uid)
             raise

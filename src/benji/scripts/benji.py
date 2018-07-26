@@ -16,6 +16,7 @@ from prettytable import PrettyTable
 
 import benji.exception
 from benji.benji import Benji, BenjiStore
+from benji.blockuidhistory import BlockUidHistory
 from benji.config import Config
 from benji.logging import logger, init_logging
 from benji.metadata import Version, VersionUid
@@ -176,6 +177,7 @@ class Commands:
             version_percentage = int(version_percentage)
         if block_percentage:
             block_percentage = int(block_percentage)
+        history = BlockUidHistory()
         benji_obj = None
         try:
             benji_obj = Benji(self.config)
@@ -194,7 +196,7 @@ class Commands:
             for version in versions:
                 try:
                     logging.info('Scrubbing version {} with name {}.'.format(version.uid.readable, version.name))
-                    getattr(benji_obj, method)(version.uid, block_percentage=block_percentage)
+                    getattr(benji_obj, method)(version.uid, block_percentage=block_percentage, history=history)
                 except benji.exception.ScrubbingError as exception:
                     logger.error(exception)
                     errors.append(version)
