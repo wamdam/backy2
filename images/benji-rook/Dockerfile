@@ -17,7 +17,7 @@ RUN apt-get update && \
 RUN python3.6 -m venv $VENV_PATH && \
 	ln -s /usr/bin/python3.6-config $VENV_PATH/bin/python-config && \
 	. $VENV_PATH/bin/activate && \
-	pip install --upgrade pip && \
+	pip install --upgrade 'pip==10.0.*' && \
 	sed -i "s|self.run_command(\['clone', '-q', url, dest\])|self.run_command(['clone', '--depth=1', '--branch', rev if rev else 'master', '-q', url, dest])|" $(python -c 'import site; print(site.getsitepackages()[0])')/pip/_internal/vcs/git.py
 
 RUN . $VENV_PATH/bin/activate && \
