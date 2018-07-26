@@ -157,6 +157,10 @@ class BlockUidBase:
     def __hash__(self):
         return hash((self.left, self.right))
 
+    # For sorting
+    def __lt__(self, other):
+        return self.left < other.left or self.left == other.left and self.right < other.right
+
 
 class DereferencedBlockUid(BlockUidBase):
 
