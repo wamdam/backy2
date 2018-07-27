@@ -40,6 +40,7 @@ Topic :: System :: Archiving :: Backup
         'ruamel.yaml>=0.15.37',
         'psycopg2-binary>=2.7.4',
         'argcomplete>=1.9.4',
+        'sparsebitfield>=0.2.2',
     ],
     extras_require={
         's3_boto3 data backend': ['boto3>=1.7.28'],
