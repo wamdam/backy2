@@ -1,12 +1,15 @@
 import base64
 
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
+except ImportError:
+    raise NotImplementedError('Python module "pycryptodome" is required to enable encryption support.')
 
 from aes_keywrap import aes_wrap_key, aes_unwrap_key
 # This implements envelope encryption with AES-256 in GCM mode. The envelope key is wrapped with AESWrap.
 from benji.config import Config
-from benji.utils import derive_key
+from benji.data_backends.encryption.utils import derive_key
 
 
 class Encryption:
