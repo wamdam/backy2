@@ -510,7 +510,7 @@ class DataBackend(metaclass=ABCMeta):
             '{:.2f}'.format(overall_ratio), self._compression_statistics['data_in_compression'],
             self._compression_statistics['data_out_compression'], '{:.2f}'.format(ratio)
         ])
-        logger.debug('Compression statistics:  \n' + textwrap.indent(str(tbl), '          '))
+        logger.info('Compression statistics:  \n' + textwrap.indent(str(tbl), '          '))
 
     def close(self):
         self._log_compression_statistics()
