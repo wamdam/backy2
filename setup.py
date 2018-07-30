@@ -41,6 +41,7 @@ Topic :: System :: Archiving :: Backup
         'psycopg2-binary>=2.7.4',
         'argcomplete>=1.9.4',
         'sparsebitfield>=0.2.2',
+        'colorlog>=3.1.4',
     ],
     extras_require={
         's3_boto3 data backend': ['boto3>=1.7.28'],

@@ -519,16 +519,19 @@ def main():
         description='Backup and restore for block devices.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
-    parser.add_argument('-m', '--machine-output', action='store_true', default=False)
+    parser.add_argument(
+        '-m', '--machine-output', action='store_true', default=False, help='Enable machine-readable JSON output')
     parser.add_argument('-V', '--version', action='store_true', help='Show version')
-    parser.add_argument('-c', '--configfile', default=None, type=str)
+    parser.add_argument('-c', '--configfile', default=None, type=str, help='Specify a non-default configuration file')
+    parser.add_argument(
+        '--no-color', action='store_true', default=False, help='Disable colourisation of logged messages')
 
     subparsers = parser.add_subparsers()
 
     # INITDB
     p = subparsers.add_parser(
         'initdb',
-        help="Initialize the database by populating tables. This will not delete tables or data if they exist.")
+        help='Initialize the database by populating tables, this will not delete tables or data if they exist')
     p.set_defaults(func='initdb')
 
     # BACKUP
@@ -789,9 +792,9 @@ def main():
 
     # logging ERROR only when machine output is selected
     if args.machine_output:
-        init_logging(config.get('logFile', types=(str, type(None))), logging.ERROR)
+        init_logging(config.get('logFile', types=(str, type(None))), logging.ERROR, no_color=args.no_color)
     else:
-        init_logging(config.get('logFile', types=(str, type(None))), console_level)
+        init_logging(config.get('logFile', types=(str, type(None))), console_level, no_color=args.no_color)
 
     commands = Commands(args.machine_output, config)
     func = getattr(commands, args.func)
@@ -803,6 +806,7 @@ def main():
     del func_args['verbose']
     del func_args['version']
     del func_args['machine_output']
+    del func_args['no_color']
 
     # From most specific to least specific
     exit_code_list = [

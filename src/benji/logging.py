@@ -5,14 +5,20 @@ import logging
 import sys
 from logging.handlers import WatchedFileHandler
 
+import colorlog
+
 logger = logging.getLogger(__name__)
 
 
-def init_logging(logfile, console_level):  # pragma: no cover
+def init_logging(logfile, console_level, no_color=False):
     handlers = []
 
-    console = logging.StreamHandler(sys.stderr)
-    console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s'))
+    if no_color:
+        console = logging.StreamHandler(sys.stderr)
+        console.setFormatter(logging.Formatter('%(levelname)8s: %(message)s'))
+    else:
+        console = colorlog.StreamHandler(sys.stderr)
+        console.setFormatter(colorlog.TTYColoredFormatter('%(log_color)s%(levelname)8s: %(message)s'))
     console.setLevel(console_level)
     handlers.append(console)
 
