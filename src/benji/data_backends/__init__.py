@@ -480,7 +480,7 @@ class DataBackend(metaclass=ABCMeta):
         return False
 
     def _log_compression_statistics(self):
-        if self._compression_statistics['objects_considered'] == 0:
+        if self.active_compression is None or self._compression_statistics['objects_considered'] == 0:
             return
 
         overall_ratio, ratio = 0.0, 0.0
