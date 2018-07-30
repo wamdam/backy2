@@ -1,13 +1,20 @@
 # -*- encoding: utf-8 -*-
-from setuptools import setup, find_packages
-
 version = '0.1.0'
+
+try:
+    from setuptools import setup, Extension, find_packages
+except ImportError:
+    from distutils.core import setup, Extentsion, find_packages
+
+with open("README.rst", "r") as fh:
+    long_description = fh.read()
 
 setup(
     name='benji',
     version=version,
-    description="A block / disk based backup and restore solution",
-    long_description=open('README.rst', 'r', encoding='utf-8').read(),
+    description='A block based deduplicating backup software for Ceph RBD, image files and devices ',
+    long_description=long_description,
+    long_description_content_type='text/x-rst',
     classifiers="""Development Status :: 3 - Alpha
 Environment :: Console
 Intended Audience :: System Administrators
@@ -22,7 +29,7 @@ Topic :: System :: Archiving :: Backup
     author_email='daniel.kraft@d9t.de, lf@elemental.net',
     url='https://github.com/elemental-lf/benji',
     license='LGPL-3',
-    packages=find_packages('src', exclude=['ez_setup', 'examples', 'tests']),
+    packages=find_packages('src', exclude=['*.tests', '*.tests.*']),
     package_dir={
         '': 'src',
     },
