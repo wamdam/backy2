@@ -21,14 +21,13 @@ RUN python3.6 -m venv $VENV_PATH && \
 	sed -i "s|self.run_command(\['clone', '-q', url, dest\])|self.run_command(['clone', '--depth=1', '--branch', rev if rev else 'master', '-q', url, dest])|" $(python -c 'import site; print(site.getsitepackages()[0])')/pip/_internal/vcs/git.py
 
 RUN . $VENV_PATH/bin/activate && \
-	pip install git+https://github.com/kurtbrose/aes_keywrap && \
-	pip install boto3 b2 pycryptodome diskcache cython zstandard && \
+    pip install cython && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rados" && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rbd"
 
 ADD . /benji-source/
 RUN . $VENV_PATH/bin/activate && \
-	pip install /benji-source/
+	pip install --process-dependency-links '/benji-source/[encryption,compression,s3,readcache,b2]'
 
 FROM rook/toolbox:v0.7.1 AS runtime
 

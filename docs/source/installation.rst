@@ -56,19 +56,27 @@ Benji and its dependencies::
     # Let's upgrade pip first
     pip install --upgrade pip
     # And now install Benji and its dependencies
-    pip install git+https://github.com/elemental-lf/benji
-    pip install git+https://github.com/kurtbrose/aes_keywrap
+    pip install --process-dependency-links 'git+https://github.com/elemental-lf/benji'
 
 .. NOTE:: aes_keywrap is available on PyPI, but the version there isn't
     compatible with Python 3. The source repository contains the
-    necessary changes.
+    necessary changes. The option ``--process-dependency-links`` is
+    necessary to allow PIP to fetch this external dependency.
 
-If you want to use certain features of Benji in the future you might
-want to install additional dependencies:
+If you want to use certain features of Benji you need to install additional
+dependencies:
 
-- ``boto3``: AWS S3 *data backend* support
+- ``s3``: AWS S3 *data backend* support
 - ``b2``: Backblaze's B2 Cloud *data backend* support
-- ``pycryptodome``: Encryption support
-- ``diskcache``: Disk caching support
-- ``zstandard``: Compression support
+- ``encryption``: Encryption support
+- ``compression``: Compression support
+- ``readcache``: Disk caching support
 
+You can do this be specifying a comma delimited list of extra features in square brackets after the package URL::
+
+    pip install --process-dependency-links '.[encryption,compression,s3,readcache,b2]'
+
+To uprgade an existing installation use the same command line but add the ``--upgrade`` option.
+
+.. NOTE:: It is recommended to install and use the compression feature for
+    almost all use cases.
