@@ -74,7 +74,7 @@ dependencies:
 
 You can do this be specifying a comma delimited list of extra features in square brackets after the package URL::
 
-    pip install --process-dependency-links '.[encryption,compression,s3,readcache,b2]'
+    pip install --process-dependency-links 'git+https://github.com/elemental-lf/benji[encryption,compression,s3,readcache,b2]'
 
 To uprgade an existing installation use the same command line but add the ``--upgrade`` option.
 
