@@ -11,7 +11,7 @@ from b2.account_info.exception import MissingAccountData
 from b2.account_info.in_memory import InMemoryAccountInfo
 from b2.account_info.sqlite_account_info import SqliteAccountInfo
 from b2.download_dest import DownloadDestBytes
-from b2.exception import B2Error, FileNotPresent, UnknownError
+from b2.exception import B2Error, FileNotPresent
 from benji.data_backends import ReadCacheDataBackend
 from benji.logging import logger
 
@@ -96,11 +96,7 @@ class DataBackend(ReadCacheDataBackend):
             try:
                 self.bucket.download_file_by_name(key, data_io)
             except B2Error as exception:
-                # Currently FileNotPresent isn't always signaled correctly.
-                # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-                if isinstance(exception,
-                              FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-                    #if isinstance(exception, FileNotPresent):
+                if isinstance(exception, FileNotPresent):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
@@ -129,11 +125,7 @@ class DataBackend(ReadCacheDataBackend):
             try:
                 file_version_info = self._file_info(key)
             except B2Error as exception:
-                # Currently FileNotPresent isn't always signaled correctly.
-                # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-                if isinstance(exception,
-                              FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-                    #if isinstance(exception, FileNotPresent):
+                if isinstance(exception, FileNotPresent):
                     raise FileNotFoundError('UID {} not found.'.format(key)) from None
                 else:
                     if i + 1 < self._read_object_attempts:
@@ -153,10 +145,7 @@ class DataBackend(ReadCacheDataBackend):
             file_version_info = self._file_info(key)
             self.bucket.delete_file_version(file_version_info.id_, file_version_info.file_name)
         except B2Error as exception:
-            # Currently FileNotPresent isn't always signaled correctly.
-            # See: https://github.com/Backblaze/B2_Command_Line_Tool/pull/436
-            if isinstance(exception, FileNotPresent) or isinstance(exception, UnknownError) and "404 not_found" in str(exception):
-                #if isinstance(exception, FileNotPresent):
+            if isinstance(exception, FileNotPresent):
                 raise FileNotFoundError('Object {} not found.'.format(key)) from None
             else:
                 raise
