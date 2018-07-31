@@ -210,10 +210,18 @@ class SmokeTestCaseSQLLite_File(SmokeTestCase, BenjiTestCase, TestCase):
                 path: {testpath}/data
                 consistencyCheckWrites: True
                 activeCompression: zstd
+                activeEncyption: k1
               compression:
                 - type: zstd
                   materials:
                     level: 1
+              encryption:
+                - identifier: k1
+                  type: aes_256_gcm
+                  materials:
+                    kdfSalt: !!binary CPJlYMjRjfbXWOcqsE309A==
+                    kdfIterations: 20000
+                    password: "this is a very secret password"                    
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
@@ -242,10 +250,18 @@ class SmokeTestCasePostgreSQL_File(SmokeTestCase, BenjiTestCase, TestCase):
                 path: {testpath}/data
                 consistencyCheckWrites: True
                 activeCompression: zstd
+                activeEncyption: k1
               compression:
                 - type: zstd
                   materials:
                     level: 1
+              encryption:
+                - identifier: k1
+                  type: aes_256_gcm
+                  materials:
+                    kdfSalt: !!binary CPJlYMjRjfbXWOcqsE309A==
+                    kdfIterations: 20000
+                    password: "this is a very secret password" 
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
@@ -278,10 +294,18 @@ class SmokeTestCasePostgreSQL_S3(SmokeTestCase, BenjiTestCase, TestCase):
                 disableEncodingType: false
                 consistencyCheckWrites: True
                 activeCompression: zstd
+                activeEncyption: k1
               compression:
                 - type: zstd
                   materials:
                     level: 1
+              encryption:
+                - identifier: k1
+                  type: aes_256_gcm
+                  materials:
+                    kdfSalt: !!binary CPJlYMjRjfbXWOcqsE309A==
+                    kdfIterations: 20000
+                    password: "this is a very secret password" 
               simultaneousWrites: 1
               simultaneousReads: 1
               bandwidthRead: 0
@@ -316,10 +340,18 @@ class SmokeTestCasePostgreSQL_S3_ReadCache(SmokeTestCase, BenjiTestCase, TestCas
                 disableEncodingType: false
                 consistencyCheckWrites: True
                 activeCompression: zstd
+                activeEncyption: k1
               compression:
                 - type: zstd
                   materials:
                     level: 1
+              encryption:
+                - identifier: k1
+                  type: aes_256_gcm
+                  materials:
+                    kdfSalt: !!binary CPJlYMjRjfbXWOcqsE309A==
+                    kdfIterations: 20000
+                    password: "this is a very secret password" 
               simultaneousWrites: 1
               simultaneousReads: 1
               bandwidthRead: 0
@@ -355,10 +387,18 @@ class SmokeTestCasePostgreSQL_B2(SmokeTestCase, BenjiTestCase, TestCase):
                  uploadAttempts: 5
                  consistencyCheckWrites: True
                  activeCompression: zstd
+                 activeEncyption: k1
               compression:
                 - type: zstd
                   materials:
                     level: 1
+              encryption:
+                - identifier: k1
+                  type: aes_256_gcm
+                  materials:
+                    kdfSalt: !!binary CPJlYMjRjfbXWOcqsE309A==
+                    kdfIterations: 20000
+                    password: "this is a very secret password" 
               simultaneousWrites: 5
               simultaneousReads: 5
               bandwidthRead: 0
