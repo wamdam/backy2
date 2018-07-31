@@ -15,7 +15,7 @@ as part of a script for example right after creating a new *version* with
 This Benji command is just for policy enforcement (i.e. thinning out *versions* by
 removal over time). You have to adjust your schedule to match your policy. If you
 want to keep hourly backups for the last 72 hours (hours72) you have to create
-a new *version* at least every  hour.
+a new *version* at least every hour for example.
 
 ``benji enforce`` supports machine readable output (see section :ref:`machine_output`).
 All removed versions are listed and could be aggregated into a report for example.
@@ -60,14 +60,14 @@ Examples:
 
 - latest10
 
-  * Keep the  youngest ten versions
+  * Keep the youngest ten versions
 
 Even when you specify the time categories in a different order, they are always
 considered from youngest to oldest (see the second example).
 
 You can call ``benji enforce`` as many times a day as you want. If no version
 currently falls into a specified category the oldest version of the category
-it below is always kept, so that it has a chance to get old enough. So if in
+below it is always kept, so that it has a chance to get old enough. So if in
 the third example there is one version which is older than 24 hours but younger
 than one year it will be kept till it is old enough even though it falls out
 of the first specified category.
