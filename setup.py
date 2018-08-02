@@ -1,6 +1,5 @@
 # -*- encoding: utf-8 -*-
-version = '0.1.0'
-
+import subprocess
 try:
     from setuptools import setup, Extension, find_packages
 except ImportError:
@@ -8,6 +7,8 @@ except ImportError:
 
 with open("README.rst", "r") as fh:
     long_description = fh.read()
+
+version = subprocess.run(['maint-scripts/git-pep440-version'], stdout=subprocess.PIPE).stdout.decode('ascii').strip()
 
 setup(
     name='benji',

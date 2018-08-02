@@ -1,6 +1,9 @@
 FROM python:3.6-stretch AS build
 
-ENV CEPH_VERSION 12.2.5
+# For the Debian repository
+ARG CEPH_CODENAME="luminous"
+# For the Git checkout
+ARG CEPH_VERSION="12.2.7"
 
 # If you change VENV_PATH you also need to change the path to activate in scripts/backup.sh.
 ENV VENV_PATH /benji
@@ -9,7 +12,7 @@ RUN apt-get update && \
 	apt-get upgrade -y -q && \
 	apt-get install -y -q --force-yes --no-install-recommends software-properties-common apt-transport-https && \
 	curl -sSL https://download.ceph.com/keys/release.asc -o- | apt-key add - && \
-	apt-add-repository 'deb https://download.ceph.com/debian-luminous/ stretch main' && \
+	apt-add-repository "deb https://download.ceph.com/debian-$CEPH_CODENAME/ stretch main" && \
 	apt-get update && \
 	apt-get install  -y -q --force-yes --no-install-recommends git gcc && \
 	apt-get install -y -q --force-yes --no-install-recommends librados2 librbd1 librados-dev librbd-dev
@@ -30,6 +33,18 @@ RUN . $VENV_PATH/bin/activate && \
 	pip install --process-dependency-links '/benji-source/[encryption,compression,s3,readcache,b2]'
 
 FROM python:3.6-slim-stretch AS runtime
+
+ARG VCS_REF
+ARG VCS_URL
+ARG VERSION 
+ARG BUILD_DATE
+
+LABEL org.label-schema.schema-version="1.0" \
+      org.label-schema.vcs-ref="$VCS_REF" \
+      org.label-schema.vcs-url="$VCS_URL" \
+      org.label-schema.build-date="$BUILD_DATE" \
+      org.label-schema.version="$VERSION" \
+      org.label-schema.url="https://benji-backup.me/"
 
 ENV SCRIPTS_PATH /scripts
 

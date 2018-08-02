@@ -1,6 +1,7 @@
 FROM rook/toolbox:v0.7.1 AS build
 
-ENV CEPH_VERSION 12.2.5
+# For the Git checkout
+ARG CEPH_VERSION="12.2.7"
 
 # If you change VENV_PATH you also need to change the paths in 
 # images/common/benji-wrapper and images/common/bashrc
@@ -21,7 +22,7 @@ RUN python3.6 -m venv $VENV_PATH && \
 	sed -i "s|self.run_command(\['clone', '-q', url, dest\])|self.run_command(['clone', '--depth=1', '--branch', rev if rev else 'master', '-q', url, dest])|" $(python -c 'import site; print(site.getsitepackages()[0])')/pip/_internal/vcs/git.py
 
 RUN . $VENV_PATH/bin/activate && \
-    pip install cython && \
+	pip install cython && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rados" && \
 	pip install "git+https://github.com/ceph/ceph@v$CEPH_VERSION#subdirectory=src/pybind/rbd"
 
@@ -31,7 +32,19 @@ RUN . $VENV_PATH/bin/activate && \
 
 FROM rook/toolbox:v0.7.1 AS runtime
 
-ENV GO_CRON_VERSION 0.0.7
+ARG VCS_REF
+ARG VCS_URL
+ARG VERSION 
+ARG BUILD_DATE
+
+LABEL org.label-schema.schema-version="1.0" \
+      org.label-schema.vcs-ref="$VCS_REF" \
+      org.label-schema.vcs-url="$VCS_URL" \
+      org.label-schema.build-date="$BUILD_DATE" \
+      org.label-schema.version="$VERSION" \
+      org.label-schema.url="https://benji-backup.me/"
+
+ARG GO_CRON_VERSION="0.0.7"
 
 ENV SCRIPTS_PATH /scripts
 

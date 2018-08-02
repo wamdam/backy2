@@ -1,0 +1,39 @@
+#!/bin/bash
+GIT_DESCRIBE="$(git describe --long --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --dirty=-d$(date +'%Y%m%d%H%M%S'))"
+
+GIT_DESCRIBE_ARRAY=(${GIT_DESCRIBE//-/ })
+TAG=${GIT_DESCRIBE_ARRAY[0]}
+DISTANCE=${GIT_DESCRIBE_ARRAY[1]}
+COMMIT=${GIT_DESCRIBE_ARRAY[2]}
+DIRTY=${GIT_DESCRIBE_ARRAY[3]}
+
+# v0.1.0-0-g43ecd2f-d20180802160059
+# v0.1.0-3-g43ec123-d20180802160059
+# v0.1.0-0-g43ecd2f
+# v0.1.0-3-g43ec123
+
+# Remove leading "v" from tag
+TAG=${TAG#v}
+
+# Versioning scheme based on:
+# https://www.python.org/dev/peps/pep-0440/
+# https://pypi.org/project/setuptools_scm/
+
+if [[ $DISTANCE == 0 ]]; then
+  if [[ $DIRTY ]]; then
+    echo "$TAG+$DIRTY"
+  else
+    echo "$TAG"
+  fi
+else
+  # Increment last version number by one
+  TAG_ARRAY=(${TAG//./ })
+  TAG_ARRAY[2]=$[TAG_ARRAY[2] + 1]
+  TAG="${TAG_ARRAY[0]}.${TAG_ARRAY[1]}.${TAG_ARRAY[2]}"
+
+  if [[ $DIRTY ]]; then
+    echo "$TAG.dev$DISTANCE+$COMMIT.$DIRTY"
+  else
+    echo "$TAG.dev$DISTANCE+$COMMIT"
+  fi
+fi
