@@ -5,7 +5,7 @@ try:
 except ImportError:
     from distutils.core import setup, Extentsion, find_packages
 
-with open("README.rst", "r") as fh:
+with open('README.rst', 'r', encoding='utf-8') as fh:
     long_description = fh.read()
 
 version = subprocess.run(['maint-scripts/git-pep440-version'], stdout=subprocess.PIPE).stdout.decode('ascii').strip()
