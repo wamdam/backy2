@@ -1,6 +1,15 @@
 #!/bin/bash
 set -xueo pipefail
-VERSION="$(maint-scripts/git-pep440-version)"
+pwd
+if [[ $COMMIT_MSG ]]; then
+	# Docker Cloud auto build
+	VERSION="$(../../maint-scripts/git-pep440-version)"
+	# CWD is directory of the Dockerfile
+	cd ../..
+else
+	# Local
+	VERSION="$(maint-scripts/git-pep440-version)"
+fi
 exec docker build \
   --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
   --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
