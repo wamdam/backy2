@@ -92,7 +92,7 @@ class DataBackend(metaclass=ABCMeta):
         active_compression = config.get('dataBackend.{}.activeCompression'.format(self.NAME), None, types=str)
         if active_compression is not None:
             if self.compression and active_compression in self.compression:
-                logger.info('Encryption is enabled for the {} data backend.'.format(self.NAME))
+                logger.info('Compression is enabled for the {} data backend.'.format(self.NAME))
                 self.active_compression = self.compression[active_compression]
             else:
                 raise ConfigurationError('Compression type {} is unknown.'.format(active_compression))
