@@ -1,0 +1,10 @@
+#!/bin/bash
+# This is only used by Docker Cloud auto build
+set -xueo pipefail
+pwd
+VERSION="$(../../maint-scripts/git-pep440-version)"
+# Only tag releases
+if [[ $VERSION =~ ^[0-9]+\.[0-9]+.[0-9]+$ ]]; then
+	docker tag $IMAGE_NAME "$DOCKER_REPO:$VERSION"
+	docker push "$DOCKER_REPO:$VERSION"
+fi

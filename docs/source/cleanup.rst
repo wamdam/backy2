@@ -3,105 +3,78 @@
 Cleanup
 =======
 
-In order to get rid of old backup versions, backy2 uses a garbage collection
-algorithm which is a 2-step process in backy2.
+In order to remove of old backup versions, Benji uses a two step garbage
+collection algorithm.
 
-Remove old versions
--------------------
+Removing old versions
+---------------------
 
-In order to remove an old version, use ``backy2 rm``:
+In order to remove an old version, use ``benji rm``:
 
-.. command-output:: backy2 rm --help
+.. command-output:: benji rm --help
 
 Example::
 
-    $ backy2 rm 2453fe90-2f22-11e7-b961-a44e314f9270
-        INFO: $ /home/dk/develop/backy2/env/bin/backy2 rm 2453fe90-2f22-11e7-b961-a44e314f9270
-        INFO: Removed backup version 2453fe90-2f22-11e7-b961-a44e314f9270 with 25600 blocks.
-        INFO: Backy complete.
+    $ benji rm -f V1
+        INFO: $ benji rm -f V1
+        INFO: Removed version V0000000001 metadata from backend storage.
+        INFO: Removed backup version V0000000001 with 10 blocks.
 
-There is a config option called ``disallow_rm_when_younger_than_days`` which
-defaults to 6. If the to-be-removed backup version is younger than this value,
-backy2 throws an error and exits with code 100::
+There is a config option called ``disallowRemoveWhenYounger`` which
+defaults to 6. If you request the removal of a backup version that is younger
+than this value, Benji exists with an error::
 
-    backy2 rm 2453fe90-2f22-11e7-b961-a44e314f9270
-        INFO: $ /home/dk/develop/backy2/env/bin/backy2 rm 2453fe90-2f22-11e7-b961-a44e314f9270
-       ERROR: Unexpected exception
-       ERROR: 'Version 2453fe90-2f22-11e7-b961-a44e314f9270 is too young. Will not delete.'
-       …
-    backy2.backy.LockError: 'Version 2453fe90-2f22-11e7-b961-a44e314f9270 is too young. Will not delete.'
-        INFO: Backy failed.
+    $ benji rm V1
+           INFO: $ benji rm V1
+          ERROR: Version V0000000001 is too young. Will not delete.
 
-    $ echo $?
-    100
+You can force the removal of a version by using ``--force``.
 
-Of course you can ``--force`` backy2 to delete this version::
+``benji rm`` removes the version metadata and corresponding blocks from the
+*metadata backend*. It also adds the removed block entries into a deletion
+candidate list. By default it also removes the backup of the metadata on
+the *data backend*. If you want to keep this data, you can use the ``-k``
+or ``--keep-backend-metadata`` option.
 
-    $ backy2 rm 2453fe90-2f22-11e7-b961-a44e314f9270 --force
-        INFO: $ /home/dk/develop/backy2/env/bin/backy2 rm 2453fe90-2f22-11e7-b961-a44e314f9270 --force
-        INFO: Removed backup version 2453fe90-2f22-11e7-b961-a44e314f9270 with 25600 blocks.
-        INFO: Backy complete.
-
-
-``backy2 rm`` removes version and corrosponding blocks from the metadata store.
-It also adds the removed metadata entries into a *delete-candidates* - List.
-
-In order to really delete blocks from the backup target, you'll need ``backy2
+In order to really delete blocks from the *data backend*, you'll need ``benji
 cleanup``.
 
+Cleanup
+-------
 
-backy2 cleanup
---------------
-
-To free up space on the backup target, you need to cleanup.
+To free up space on the *data backend*, you need to cleanup.
 There are two different cleanup methods, but you'll usually only need the
 so-called *fast-cleanup*.
 
-.. command-output:: backy2 cleanup --help
+.. command-output:: benji cleanup --help
 
-fast-cleanup
+Fast Cleanup
 ~~~~~~~~~~~~
 
-``backy2 cleanup`` will go through the list of *delete-candidates* and check if
-there are blocks which are not referenced from any other version anymore.
+``benji cleanup`` will go through the list of deletion candidates and check if
+there are blocks which aren't referenced from any other version anymore.
 
-These blocks are then deleted from the backup-target. The still-in-use blocks
-are removed from the list of *delete-candidates*.
+These blocks are then deleted from the *data backend*. The still-in-use blocks
+are removed from the list of candidates.
 
-In order to provide parallelism (i.e. multiple backy2 processes at the same
-time), backy2 needs to prevent race-conditions between adding a
-*delete-candidate* to the list and actually removing its data. That's why
+In order to provide parallelism (i.e. multiple Benji processes at the same
+time), Benji needs to prevent race-conditions between removing a block
+completely and referencing this block from another version. That is why
 a cleanup will only remove data blocks once they're on the list of
-*delete-candidates* for more than 1 hour.
+deletion condidates for more than one hour.
 
 .. _full_cleanup:
 
-full-cleanup
+Full Cleanup
 ~~~~~~~~~~~~
 
 There are times (e.g. when your database is corrupted or when you create a new
-database based on export/import) when backy2 does not know if the blocks in the
-backend storage are all known by the metadata store.
+database based on export/import) when Benji does not know if the blocks in the
+*data backend* are all known by the metadata store.
 
-Then the ``-f`` option of cleanup comes into play. With this option, backy2 will
+Then the ``-full`` option of cleanup comes into play. With this option, Benji will
 read all block UIDs from the backend storage (which can take *very* long) and
-compare it to the list of known block UIDs in the metadata store.
+compare it to the list of known block UIDs in the *metadata backend*
 
-Blocks unknown to the metadata store are then deleted from the backend storage.
-
-Because this can be a very slow process, you can use the ``-p`` option to
-provide a prefix. The first 10 characters of block UIDs are hexadecimal numbers
-and small letters (0-9, a-f).
-
-So a typical cleanup process after a desaster looks like this::
-
-    $ backy2 cleanup -f -p 00
-    $ backy2 cleanup -f -p 01
-    …
-    $ backy2 cleanup -f -p fe
-    $ backy2 cleanup -f -p ff
-
-Or even something like ::
-
-    $ for p in $(printf %02x'\n' `seq -f %1.f 0 255`); do backy2 cleanup -f -p $p; done
+Blocks unknown to the *metadata backend* are then deleted from the *data backend*.
 

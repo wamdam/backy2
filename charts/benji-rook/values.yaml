@@ -1,0 +1,66 @@
+timeZone: Europe/Berlin
+
+benji:
+  image:
+    registry: docker.io
+    repository: elementalnet/benji-rook
+    tag: latest
+    pullPolicy: Always
+
+  resources: {}
+
+  backup:
+    schedule: '0 3 1/6 * * *'
+    retention: 'latest3,hours24,days30,months3'
+    # Set to empty string to backup all PVCs
+    selector: ''
+
+  deepScrubbing:
+    enabled: true
+    versionsPercentage: 4
+    blocksPercentage: 50
+
+  scrubbing:
+    enabled: false
+    versionsPercentage: 4
+    blocksPercentage: 50
+
+  # Configuration for Benji
+  # This needs to be provided by the user.
+  #configuration: |
+  #  configurationVersion: '1.0.0'
+  #  processName: benji
+  #  logFile: /tmp/benji.log
+  #  hashFunction: blake2b,digest_size=32
+  #  blockSize: 4194304
+  #  metadataBackend:
+  #    engine: postgresql://benji:secret@benji-postgresql:5432/benji
+  #  dataBackend:
+  #    type: s3
+  #    s3:
+  #      awsAccessKeyId: ********
+  #      awsSecretAccessKey: ********
+  #      endpointUrl: https://storage.googleapis.com/
+  #      bucketName: benji
+  #      multiDelete: false
+  #      addressingStyle: path
+  #      disableEncodingType: true
+
+# Experimental feature: Running the metadata backend on the same cluster is
+# dangerous! Please consider the implications.
+postgresql:
+  enabled: false
+  postgresUser: benji
+  postgresDatabase: benji
+  postgresPassword: secret
+
+pushgateway:
+  image:
+    registry: docker.io
+    repository: prom/pushgateway
+    tag: v0.5.1
+    pullPolicy: IfNotPresent
+
+  port: 9091
+
+  resources: {}

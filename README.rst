@@ -1,150 +1,147 @@
-What is backy2?
-###############
+Benji Backup
+============
 
-backy2 is a deduplicating block based backup software.
+Benji Backup is a block based deduplicating  backup software. It builds on the
+excellent foundations and concepts of `backy² <http://backy2.com/>`_ by Daniel Kraft.
+Many thanks go to him for making his work public and releasing backy² as
+open-source software!
 
-The primary usecases for backy are:
+The primary use cases for Benji are:
 
-* fast and bandwidth-efficient backup of ceph/rbd virtual machine images to S3
-  or NFS storage
-* backup of LVM volumes (e.g. from personal computers) to external USB disks
+* Fast and resource-efficient backup of Ceph RBD images to object or file storage
+* Backup of LVM volumes (e.g. from servers or personal computers) to external hard
+  drives or the cloud
 
+Benji features a Docker image and Helm chart for integration with
+`Kubernetes <https://kubernetes.io/>`_ and  `Rook <https://rook.io/>`_. This makes it
+easy to setup a backup solution for your persistent volumes.
 
-Main features
+Status
+------
+
+Benji is currently somewhere between alpha and beta quality. It passes all included
+tests. The documentation is mostly up-to-date but the web site is not.
+
+Benji requires **Python 3.6.5 or newer** because older Python versions
+have some shortcomings in the concurrent.futures implementation which lead to an
+excessive memory usage.
+
+Main Features
 -------------
 
 **Small backups**
-    backy2 deduplicates while reading from the block device and only writes
-    blocks once if they have the same checksum (sha512).
+    Benji deduplicates while reading from the block device and only writes
+    blocks once if they have the same checksum. Deduplication takes into
+    account all historic data present in the backup storage target and so
+    spans all backups and all backup sources. This can make deduplication
+    more effective if images are clones of a common ancestor.
 
 **Fast backups**
-    With the help of ceph's ``rbd diff``, backy2 will only read the changed
-    blocks since the last backup. We have virtual machines with 600GB backed
-    up in about 30 seconds with <70MB/s bandwidth.
+    With the help of Ceph's ``rbd diff``, Benji will only read the blocks
+    that have changed since the last backup. Even when this information
+    is not available (like with LVM) Benji will of course still only backup
+    changed blocks.
 
-**Small required bandwidth to the backup target**
-    As only changed blocks are written to the backup target, a small (i.e.
-    gbit) connection is sufficient even for larger backups. Even with newly
-    created block devices the traffic to the backup target is small, because
-    these block devices usually are full of \\0 and are deduplicated before even
-    reaching the target storage.
+**Fast restores**
+    With supporting block storage (like Ceph's RBD), a sparse restore is
+    possible. This means, sparse blocks (i.e. blocks which are holes or are
+    all zeros) will be skipped on restore.
 
-**As simple as cp, but as clever as backup needs to be**
-    With a very small set of commands, good ``--help`` and intuitive usage,
-    backy2 feels mostly like ``cp``. And that's intentional, because we think,
-    a restore must be fool-proof and succeed even if you're woken up at 3am
-    and are drunk.
+**NBD server facilitating file-based restores**
+    Benji brings its own NBD (network block device) server which makes backup
+    images directly mountable - even over the network on another machine. This
+    enables file-based restores without restoring the whole image.
 
-    And it must be hard for you to do stupid things. For example, existing
-    files or rbd volumes will not be overwritten unless you ``--force``,
-    deletion of young backups will fail per default.
+    These mounts are read/write (unless you specify ``-r``) and writing to them
+    creates a copy-on-write backup version (**i.e. the original version is not modified**).
+    This makes it possible to do repairs on the image (``fsck``, etc.) and restore
+    the repaired copy afterwards.
 
-**Scrubbing with or without source data against bitrod and other data loss**
-    Every backed up block keeps a checksum with it. When backy scrubs the backup,
-    it reads the block from the backup target storage, calculates it's
-    checksum and compares it to the stored checksum (and size). If the checksum
-    differs, it's most likely that there was an error when storing or reading
-    the block, or by bitrod on the backup target storage.
+**Small bandwidth requirements**
+    As only changed blocks are written to the backup target, a small connection
+    is sufficient even for larger backups. Even with newly created block devices
+    the traffic to the backup target is small, because these block devices usually
+    contain mostly zeros and are deduplicated before reaching the target storage.
 
-    Then, the block and the backups it belongs to, are marked 'invalid' and the
-    block will be re-read for the next backup version even if ``rbd diff`` indicates
-    that it hasn't been changed.
+    In addition to this Benji supports fast state-of-the-art compression based on
+    `zstandard <https://github.com/facebook/zstd>`_. This will further reduce the
+    required bandwidth and also reduce the storage space requirements.
 
-    Scrubbing can also take a percentage value for how many blocks of the backup
+**Support for a variety of backup storage targets**
+    Benji supports AWS S3 as a data backend but also has options to enable
+    compatibility with other S3 implementations like Google Storage, Ceph
+    RADOS Gateway or `Minio <https://www.minio.io/>`_.
+
+    Benji also supports `Backblaze's <https://www.backblaze.com/>`_ B2 Cloud
+    Storage which opens up a very cost effective way to keep your backups.
+
+    Last but not least Benji can also use any file based storage including
+    external hard drives and NFS based storage solutions.
+
+**Confidentiality**
+    Benji supports AES-256 in GCM mode to encrypt all your data on the backup
+    storage target. By using envelope encryption every block is encrypted
+    with its own unique random key which makes plaintext attacks even more
+    difficult.
+
+**Integrity protection**
+    Every backed up block keeps a checksum with it. When Benji scrubs the backup,
+    it reads the block from the backup target storage, calculates its
+    checksum and compares it to the stored checksum. If the checksum differs,
+    it's most likely that there was an error while storing or reading
+    the block, or because of bit rot on the backup target storage.
+
+    Benji also supports a faster light-weight scrubbing mode which only checks
+    the meta data consistency and object existence on the target storage.
+
+    If a scrubbing failure occurs, the defective block and the backups it belongs
+    to are marked as 'invalid' and the block will be re-read for the next backup
+    version even if ``rbd diff`` indicates that it hasn't changed.
+
+    Scrubbing can also take a percentage value of how many blocks of the backup
     it should scrub. So you can statistically scrub 16% each day and have a
     full scrub each week (16*7 > 100).
 
     .. NOTE:: Even invalid backups can be restored!
 
-**Fast restores**
-    With supporting block storage (like ceph/rbd), a sparse restore is
-    possible. This means, sparse blocks (i.e. blocks which "don't exist" or are
-    all \\0) will be skipped on restore.
+**Concurrency: Backup while scrubbing while restoring**
+    As Benji is a long-running process, you don't want to wait until something has
+    finished of course. While there are a few places in Benji where
+    a global lock will be held most operations can run in parallel. So you
+    can scrub, backup and restore at the same time and multiple times each.
 
-**Parallel: backups while scrubbing while restoring**
-    As backy2 is a long-running process, you will of course not want to wait
-    until something has finished. So there are very few places in backy where
-    a global lock will be applied (especially on cleanup which you can kill
-    at any time to release the lock).
+    Benji even supports distributed operation where multiple instances run on
+    different hosts or in different containers at the same time.
 
-    So you can scrub, backup and restore (multiple times each) on the same
-    machine.
+**Cache friendly**
+    While reading large pieces of data on Linux, often buffers and caches get filled
+    up with data (which in case of backups is essentially only needed once).
+    Benji instructs Linux and Ceph to immediately forget the data once it's processed.
 
-**Does not flood your caches**
-    When reading large pieces of data on linux, often buffers/caches get filled
-    with this data (which in case of backups is essentially only needed once).
-    backy2 instructs linux to immediately forget the data once it's processed.
-
-**Backs up very large volumes RAM- and CPU efficiently**
-    We backup multiple terabytes per vm (and this multiple times per night).
-    backy2 typically runs in <1GB of RAM with these volume sizes. RAM usage
-    depends mostly on simultaneous reads/writes which are configured through
-    ``backy.cfg``.
-
-**backups can be directly mounted**
-    backy2 brings it's own nbd (network block device) server. So a simple linux
-    command makes backups directly mountable - even on another machine::
-
-        root@backy2:~# backy2 nbd --help
-        usage: backy2 nbd [-h] [-a BIND_ADDRESS] [-p BIND_PORT] [-r] [version_uid]
-
-        positional arguments:
-          version_uid           Start an nbd server for this version
-
-        optional arguments:
-          -h, --help            show this help message and exit
-          -a BIND_ADDRESS, --bind-address BIND_ADDRESS
-                                Bind to this ip address (default: 127.0.0.1)
-          -p BIND_PORT, --bind-port BIND_PORT
-                                Bind to this port (default: 10809)
-          -r, --read-only       Read only if set, otherwise a copy on write backup is
-                                created.
-
-        root@backy2:~# backy2 nbd 446781e2-2046-11e7-8594-00163e8c0370
-            INFO: $ /usr/bin/backy2 nbd 446781e2-2046-11e7-8594-00163e8c0370
-            INFO: Starting to serve nbd on 127.0.0.1:10809
-            INFO: You may now start
-            INFO:   nbd-client -l 127.0.0.1 -p 10809
-            INFO: and then get the backup via
-            INFO:   modprobe nbd
-            INFO:   nbd-client -N <version> 127.0.0.1 -p 10809 /dev/nbd0
-
-        root@backy2:~# partprobe /dev/nbd0
-        root@backy2:~# mount /dev/nbd0p1 /mnt
-
-    These mounts are read/write (unless you specify ``-r``) and writing to them
-    creates a copy-on-write backup version (*i.e. the original version is not
-    modified*).
-
-**Automatic tagging of backup versions**
-    You can tag backups with your own tags depending on your usecase. However,
-    backy2 also tags automatically with these tags::
-
-        b_daily
-        b_weekly
-        b_monthly
-
-    It has a clever algorithm to detect how long the backup for any given image
-    and this tag is ago and then tags again with the given tag. So you'll see
-    a b_weekly every 7 days (if you keep these backups).
+**Simplicity: As simple as cp, but as clever as a backup solution needs to be**
+    With a very small set of commands, good ``--help`` and intuitive usage,
+    Benji feels mostly like ``cp``. And that's intentional, because we think,
+    a restore must be fool-proof and succeed even if you're woken up at 3am.
 
 **Prevents you from doing something stupid**
-    By providing a config-value for how old backups need to be in order to be
-    able to delete them, you can't accidentially delete very young backups.
+    By providing a configuration value for how old backups need to be in order to
+    be able to delete them, you can't accidentally delete very young backups. An
+    exception to this is the enforcement of retention policies which will also
+    delete young backups if configured.
 
-    Also, with ``backy protect`` you can protect versions from being deleted.
-    This is very important when you need to restore a version which is suspect
-    to be deleted within the next hours. During restore a lock will prevent
+    With ``benji protect`` you can protect versions from being deleted.
+    This is very important when you need to restore a version which according to the
+    retention policy may be deleted soon. During restore a lock will also prevent
     deletion, however, by protecting it, it cannot be deleted until you decide
     that it's not needed anymore.
 
-    Also, you'll need ``--force`` to overwrite existing files or volumes.
-
-**Easy installation**
-    Currently under ubuntu 16.04, you simply install the .deb. Please refer to
-    :ref:`installation` for a detailed install process.
+    Also, you'll need to use ``--force`` to overwrite existing files or volumes.
 
 **Free and Open Source Software**
     Anyone can review the source code and audit security and functionality.
-    backy2 is licensed under the LGPLv3 license (:ref:`license`).
+    Benji is licensed under the LGPLv3 license. Please see the documentation
+    for a full list of licenses.
+
+
+
 

@@ -1,40 +1,41 @@
-.. backy2 documentation master file, created by
-   sphinx-quickstart on Thu Apr 13 12:57:59 2017.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 .. include:: global.rst.inc
+.. meta::
+    :description: Benji Backup Documentation:  A block based deduplicating backup software for Ceph RBD, image files and devices
+    :keywords: backup,deduplication,ceph,lvm,block-based,s3,b2,rook,kubernetes
 
+Benji, backup me!
+=================
 
-backy2 documentation
-====================
+.. raw:: html
 
-backy2 homepage: http://backy2.com/
+    <asciinema-player src="_static/quickstart.cast" 
+        cols="160" rows="20" 
+        autoplay="yes" preload="yes"
+        loop="yes" speed="1.2" idle-time-limit="0.5">
+    </asciinema-player>
 
-Overview
---------
+Source Code
+-----------
 
-.. image:: _static/backy2-overview.gif
-   :width: 100%
-   :alt: backy2 overview
+The source code is hosted on GitHub at `https://github.com/elemental-lf/benji <https://github.com/elemental-lf/benji>`_.
+See section :ref:`installation` for installation instructions.
 
 .. include:: ../../README.rst
 
 .. toctree::
-   :maxdepth: 2
+    :maxdepth: 2
 
-   quickstart
-   configuration
-   backup
-   scrub
-   restore
-   cleanup
-   administration
-   datalayout
-   develop
-   support
-   license
-   imprint
-
-.. TODO
-    logging
+    installation
+    quickstart
+    configuration
+    backup
+    scrub
+    restore
+    enforce
+    cleanup
+    administration
+    datalayout
+    container
+    backy2
+    support
+    licenses

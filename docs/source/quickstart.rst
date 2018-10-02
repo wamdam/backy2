@@ -5,180 +5,208 @@ Quick Start
 ===========
 
 This guide will show you how to do a *backup* - *scrub* - *restore* - *cleanup*
-cycle with **sqlite** as metadata backend and a **file storage** backup target
-(e.g. NFS).
+cycle.
 
-
-What you need to know:
-----------------------
+Some Vocabulary
+---------------
 
 Backup source
-    A block device or image file (e.g. containing a VM) to be backed up.
-    backy2 can not backup folders or multiple files. The source must not be
-    modified during backup, so either stop all writers or create a snapshot.
+    A block device or image file to be backed up. Benji can't backup folders
+    or multiple files. The source must not be modified during backup, so either
+    stop all writes or create a snapshot.
 
 Backup target
-    A storage (currently supported: filesystem or S3 compatible) to which the
-    backed up data will be saved in 4MB blocks.
+    A data storage (currently supported: filesystem, S3 and B2) to which the
+    backed up data will be saved. Also referred to as the *data backend*.
 
 Backup Metadata
-    A Database containing information on how to reassemble the stored blocks
-    to get the original data back. Currently an SQL database.
+    A SQL database containing information on how to reassemble the stored blocks
+    to get the original data back. Also referred to as the *metadata backend*.
+    For restores the *metadata backend* is not compulsory. See :ref:`metadata_backend_less`.
 
 Version
-    A version of a backup. A version is a backup on a specific time for a
-    specific backup source. A version is identified by its UUID.
-
-
-.. _installation:
-
-Installation
-------------
-
-Ubuntu 16.04
-~~~~~~~~~~~~
-
-Installation::
-
-    wget https://github.com/wamdam/backy2/releases/download/2.9.9/backy2_2.9.11_all.deb
-    sudo dpkg -i backy2_2.9.11_all.deb  # Install the debian archive
-    sudo apt-get -f install            # Install the dependencies
-
-.. TODO: Show how to install drivers for postgreSQL, MySQL, others
-
-Edit backy.cfg::
-
-    vim /etc/backy.cfg
-
-Especially look if these paths are good.
-
-1. Metadata storage path ::
-
-       engine: sqlite:////var/lib/backy2/backy.sqlite
-
-2. Data storage path ::
-
-       path: /var/lib/backy2/data  # This should be the mountpoint of NFS
-
-Other values of interest are ``simultaneous_writes`` and ``simultaneous_reads``.
-Depending on your backup source and target you may want to go lower (i.e.
-disk with very slow seeks) or higher (raid source or target, S3 target, ...).
-
-.. TIP::
-    For reference, we use about the half the number of disks as value for
-    simultaneous access. So if you have 40 OSDs in ceph/rbd on the backup
-    source and a 20 disk raid 10 backup target (which makes only 10 parallel
-    disks on writes), you'd use ::
-
-        simultaneous_reads: 20
-        simultaneous_writes: 5
-
-    Of course your mileage may vary.
-
-These settings have great impact on the backup and restore performance. Higher
-values need a bit more RAM.
+    A *version* is a backup of a specific backup source at a specific point in time.
+    A *version* is identified by a unique id.
 
 .. _backup:
 
-backup
+Backup
 ------
+
+0. Minimal configuration:
+
+This represents a minimal configuration mit SQLite3 backend and file-based block storage::
+
+    configurationVersion: '1.0.0'
+    dataBackend:
+      type: file
+      file:
+        path: /tmp
+    metadataBackend:
+      engine: sqlite:///tmp/benji.sqlite
+
+You might want to change the above paths. Benji will run as a normal user
+without problems, but it will probably need root privileges to access most
+backup sources.
+
+Please see :ref:`configuration` for a full list of configuration options.
 
 1. Initialize the database::
 
-        $ backy2 initdb
-            INFO: $ /usr/bin/backy2 initdb
-            INFO: Backy complete.
+    $ benji initdb
+        INFO: $ benji initdb
 
-   .. NOTE:: Initializing a database multiple times does **not** destroy any
-       data, instead will fail because it finds already-existing tables.
+   .. NOTE:: Initializing the database multiple times does **not** destroy any
+       data. Instead it will fail because it finds already existing tables.
 
-2. Create demo data:
+2. Create some demo data:
 
-   For demonstration purpose, create a 40MB test file::
+   For demonstration purpose create a 40MB test file::
 
-        $ dd if=/dev/urandom of=TESTFILE bs=1M count=40
-        40+0 records in
-        40+0 records out
-        41943040 bytes (42 MB, 40 MiB) copied, 0.175196 s, 239 MB/s
-
+    $ dd if=/dev/urandom of=TESTFILE bs=1M count=40
+    40+0 records in
+    40+0 records out
+    41943040 bytes (42 MB, 40 MiB) copied, 0.231886 s, 181 MB/s
 
 3. Backup the image (works similar with a device)::
 
-        $ backy2 backup file://TESTFILE myfirsttestbackup
-            INFO: $ /usr/bin/backy2 backup file://TESTFILE myfirsttestbackup
-            INFO: Backed up 1/10 blocks (10.0%)
-            INFO: Backed up 2/10 blocks (20.0%)
-            INFO: Backed up 3/10 blocks (30.0%)
-            INFO: Backed up 4/10 blocks (40.0%)
-            INFO: Backed up 5/10 blocks (50.0%)
-            INFO: Backed up 6/10 blocks (60.0%)
-            INFO: Backed up 7/10 blocks (70.0%)
-            INFO: Backed up 8/10 blocks (80.0%)
-            INFO: Backed up 9/10 blocks (90.0%)
-            INFO: Backed up 10/10 blocks (100.0%)
-            INFO: New version: 8fd42f1a-2364-11e7-8594-00163e8c0370 (Tags: [b_daily,b_weekly,b_monthly])
-            INFO: Backy complete.
-
+    $ benji backup file://TESTFILE myfirsttestbackup
+        INFO: $ benji backup file://TESTFILE myfirsttestbackup
+        INFO: Backed up 1/10 blocks (10.0%)
+        INFO: Backed up 2/10 blocks (20.0%)
+        INFO: Backed up 3/10 blocks (30.0%)
+        INFO: Backed up 4/10 blocks (40.0%)
+        INFO: Backed up 5/10 blocks (50.0%)
+        INFO: Backed up 6/10 blocks (60.0%)
+        INFO: Backed up 7/10 blocks (70.0%)
+        INFO: Backed up 8/10 blocks (80.0%)
+        INFO: Backed up 9/10 blocks (90.0%)
+        INFO: Backed up 10/10 blocks (100.0%)
+        INFO: Exported version V0000000001 metadata to backend storage.
+        INFO: New version: V0000000001 (Tags: [])
 
 4. List backups::
 
-        $ backy2 ls
-            INFO: $ /usr/bin/backy2 ls
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly |
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-            INFO: Backy complete.
+    $ benji ls
+        INFO: $ benji ls
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    |         date        |     uid     | name              | snapshot_name |     size | block_size | valid | protected | tags |
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+    | 2018-06-06T21:41:41 | V0000000001 | myfirsttestbackup |               | 41943040 |    4194304 |  True |   False   |      |
+    +---------------------+-------------+-------------------+---------------+----------+------------+-------+-----------+------+
+
+``benji ls`` supports various options to filter the output:
+
+.. command-output:: benji ls --help
+
+Some commands can also produce machine readable JSON output for usage in scripts::
+
+    $ benji -m ls
+    {
+      "metadataVersion": "1.0.0",
+      "versions": [
+        {
+          "uid": 1,
+          "date": "2018-06-06T21:41:41",
+          "name": "myfirsttestbackup",
+          "snapshot_name": "",
+          "size": 41943040,
+          "block_size": 4194304,
+          "valid": true,
+          "protected": false,
+          "tags": []
+        }
+      ]
+    }
+
+Specifying ``-m`` also automatically turns down the verbosity level to only output
+errors. Please see section :ref:`machine_output` for details.
+
+Deep Scrub and Scrub
+--------------------
+
+Deep scrubbing reads all the blocks of a particular *version* from the *data backend*
+(or some of them if you use the ``-p`` option) and compares the checksums of these
+blocks to the checksums recorded in the *metadata backend*. If you pass the
+source option (``-s``) the blocks will also be compared to the original source data.
+::
+
+    $ benji deep-scrub v1
+        INFO: $ benji deep-scrub v1
+        INFO: Deep scrubbed 1/10 blocks (10.0%)
+        INFO: Deep scrubbed 2/10 blocks (20.0%)
+        INFO: Deep scrubbed 3/10 blocks (30.0%)
+        INFO: Deep scrubbed 4/10 blocks (40.0%)
+        INFO: Deep scrubbed 5/10 blocks (50.0%)
+        INFO: Deep scrubbed 6/10 blocks (60.0%)
+        INFO: Deep scrubbed 7/10 blocks (70.0%)
+        INFO: Deep scrubbed 8/10 blocks (80.0%)
+        INFO: Deep scrubbed 9/10 blocks (90.0%)
+        INFO: Deep scrubbed 10/10 blocks (100.0%)
+
+If an error occurs (for example, if some blocks couldn't be read or a
+checksum mismatch was detected), the output from ``deep-scrub`` looks
+like this::
+
+    $ benji deep-scrub v1
+        INFO: $ benji deep-scrub v1
+        INFO: Deep scrubbed 1/10 blocks (10.0%)
+        INFO: Deep scrubbed 2/10 blocks (20.0%)
+        INFO: Deep scrubbed 3/10 blocks (30.0%)
+        INFO: Deep scrubbed 4/10 blocks (40.0%)
+        INFO: Deep scrubbed 5/10 blocks (50.0%)
+        INFO: Deep scrubbed 6/10 blocks (60.0%)
+       ERROR: Checksum mismatch during deep scrub of block 6 (UID 1-7) (is: 729a77dc964e5f54... should-be: b70aeb070b95df31...).
+        INFO: Marked block invalid (UID 1-7, Checksum b70aeb070b95df31. Affected versions: V0000000001
+        INFO: Marked version invalid (UID V0000000001)
+        INFO: Deep scrubbed 8/10 blocks (80.0%)
+        INFO: Deep scrubbed 9/10 blocks (90.0%)
+        INFO: Deep scrubbed 10/10 blocks (100.0%)
+       ERROR: Marked version V0000000001 invalid because it has errors.
+       ERROR: Deep scrub of version V0000000001 failed.
+
+In case of a scrubbing error the exit code is non-zero. A failed scrub is
+signaled by EX_IOERR which is 74 on Linux.
+
+Also, the version is marked invalid as you can see here::
+
+    $ benji ls
+        INFO: $ benji ls
+    +---------------------+-------------+---------------+---------------+---------+------------+-------+-----------+------+
+    |         date        |     uid     | name          | snapshot_name |    size | block_size | valid | protected | tags |
+    +---------------------+-------------+---------------+---------------+---------+------------+-------+-----------+------+
+    | 2018-06-13T15:23:00 | V0000000001 | myfirstbackup |               | 40.0MiB |     4.0MiB |  True |   False   |      |
 
 
-scrub
------
+Just in case you are able to fix the error, just scrub again and Benji will mark the version as valid again.
 
-Scrubbing reads all the blocks from the backup target (or some of them if you
-use the ``-p`` option) and compares them with the metadata or, if you pass a
-source option (``-s``), also with the original data. ::
+There also is a little brother to ``deep-scrub`` which only checks metadata consistency and block existence::
 
-    $ backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: $ /usr/bin/backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: Backy complete.
+    $ benji scrub v1
+        INFO: $ benji scrub v1
+        INFO: Scrubbed 1/10 blocks (10.0%)
+        INFO: Scrubbed 2/10 blocks (20.0%)
+        INFO: Scrubbed 3/10 blocks (30.0%)
+        INFO: Scrubbed 4/10 blocks (40.0%)
+        INFO: Scrubbed 5/10 blocks (50.0%)
+        INFO: Scrubbed 6/10 blocks (60.0%)
+        INFO: Scrubbed 7/10 blocks (70.0%)
+        INFO: Scrubbed 8/10 blocks (80.0%)
+        INFO: Scrubbed 9/10 blocks (90.0%)
+        INFO: Scrubbed 10/10 blocks (100.0%)
 
-If an error occurs (for example, if backup target blocks couldn't be read or data
-has changed), this looks like that::
+``scrub`` will only mark versions as invalid never as valid. This is because there
+isn't enough information to determine if the version is really okay when only
+checking metadata consistency and block existence. A ``scrub`` of an invalid version
+will fail immediately.
 
-    $ backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-         INFO: $ /usr/bin/backy2 scrub 8fd42f1a-2364-11e7-8594-00163e8c0370
-        ERROR: Blob not found: Block(uid='2c0910bef8qnAm54mnyBsonRsPBfTzP', version_uid='8fd42f1a-2364-11e7-8594-00163e8c0370', id=8, date=datetime.datetime(2017, 4, 17, 11, 54, 7, 639022), checksum='41c9aa8df42913b3544270a10f1b219cd1b5e1ad9d51700e97acdaeaed3cea843ffaad99590e07de260918ce3847a8b612c9f51f2c945a2d14238956a49ca572', size=4194304, valid=1)
-         INFO: Marked block invalid (UID 2c0910bef8qnAm54mnyBsonRsPBfTzP, Checksum 41c9aa8df42913b3544270a10f1b219cd1b5e1ad9d51700e97acdaeaed3cea843ffaad99590e07de260918ce3847a8b612c9f51f2c945a2d14238956a49ca572. Affected versions: 8fd42f1a-2364-11e7-8594-00163e8c0370
-         INFO: Marked version invalid (UID 8fd42f1a-2364-11e7-8594-00163e8c0370)
-        ERROR: Marked version invalid because it has errors: 8fd42f1a-2364-11e7-8594-00163e8c0370
-
-The exit code is then != 0. Which one exactly depends on the kind of error::
-
-    $ echo $?
-    20
-
-Also, the version is marked invalid as you can see in::
-
-    $ backy2 ls
-        INFO: $ /usr/bin/backy2 ls
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-    |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-    | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   0   |     0     | b_daily,b_monthly,b_weekly |
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        INFO: Backy complete
-
-Just in case you are able to fix the error, just scrub again and backy2 will mark the version valid again.
-
-
-restore
+Restore
 -------
 
 Restore into a file or device::
 
-    $ backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-        INFO: $ /usr/bin/backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
+    $ benji restore v1 file://RESTOREFILE
+        INFO: $ benji restore v1 file://RESTOREFILE
         INFO: Restored 1/10 blocks (10.0%)
         INFO: Restored 2/10 blocks (20.0%)
         INFO: Restored 3/10 blocks (30.0%)
@@ -189,15 +217,13 @@ Restore into a file or device::
         INFO: Restored 8/10 blocks (80.0%)
         INFO: Restored 9/10 blocks (90.0%)
         INFO: Restored 10/10 blocks (100.0%)
-        INFO: Backy complete.
 
-backy2 prevents you from restoring into an existing file (or device). So if you
+Benji prevents you from restoring into an existing file (or device). So if you
 try again, it will fail::
 
-    $ backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-        INFO: $ /usr/bin/backy2 restore 8fd42f1a-2364-11e7-8594-00163e8c0370 file://RESTOREFILE
-       ERROR: Target already exists: file://RESTOREFILE
-    Error opening restore target. You must force the restore.
+    $ benji restore v1 file://RESTOREFILE
+        INFO: $ benji restore v1 file://RESTOREFILE
+       ERROR: Restore target RESTOREFILE already exists. Force the restore if you want to overwrite it.
 
 If you want to overwrite data, you must ``--force``.
 
@@ -205,63 +231,63 @@ If you want to overwrite data, you must ``--force``.
     section :ref:`restore`.
 
 
-version rm and cleanup
-----------------------
+Version Removal and Cleanup
+---------------------------
 
-You can remove any given backup version by::
+You can remove any given backup *version* by::
 
-    $ backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370
-        INFO: $ /usr/bin/backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370
-       ERROR: Unexpected exception
-       ERROR: 'Version 8fd42f1a-2364-11e7-8594-00163e8c0370 is too young. Will not delete.'
-       […]
-        INFO: Backy failed.
+    $ benji rm V0000000001
+        INFO: $ benji rm V0000000001
+       ERROR: Version V0000000001 is too young. Will not delete it.
 
-What prevents this version to be deleted is the ``backy.cfg`` option ::
+What prevents this *version* from being deleted is the ``benji.yaml`` option::
 
-    disallow_rm_when_younger_than_days: 6
+    disallowRemoveWhenYounger: 6
 
-However, instead of changing this option, you can simply use the ``--force``::
+However, instead of changing this option, you can simply use ``--force``::
 
-    $ backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
-        INFO: $ /usr/bin/backy2 rm 8fd42f1a-2364-11e7-8594-00163e8c0370 --force
-        INFO: Removed backup version 8fd42f1a-2364-11e7-8594-00163e8c0370 with 10 blocks.
-        INFO: Backy complete.
+    $ benji rm -f v1
+        INFO: $ benji rm -f v1
+        INFO: Removed version V0000000001 metadata from backend storage.
+        INFO: Removed backup version V0000000001 with 10 blocks.
 
-backy2 stores each block in the backup target (i.e. filesystem, s3, ...) once.
+Benji stores each block in the backup target (i.e. filesystem, S3, etc.) once.
 If it encounters another block on the backup source with the same checksum [1]_,
-it will only write metadata which refers to the same backup target block.
+it will only write metadata which refers to the same backup target block. So if
+a version is deleted, Benji needs to check if there aren't any other references
+to any of the blocks referenced by this version. This may be resource intensive
+but may also introduce race conditions due to other backup sessions running
+in parallel. This is why there is a separate command to cleanup unreferenced
+blocks::
 
-So if a backup is deleted, backy2 needs to check if all references to each block
-are gone. So backy2 can't just simply wipe all blocks from a removed backup
-version.
-
-As this is a resource-intensive task, it's separated into a special command::
-
-    $ backy2 cleanup
-        INFO: $ /usr/bin/backy2 cleanup
+    $ benji cleanup
+        INFO: $ benji cleanup
         INFO: Cleanup-fast: Cleanup finished. 0 false positives, 0 data deletions.
-        INFO: Backy complete.
 
-As you can see, nothing has been deleted. The reason for this is that backy2
-is prepared to be used in parallel (backups during restores during scrubs).
-On some edges (and this is one), it has timeouts to let data which might be
-in the flow or in caches settle.
+As you can see, nothing has been deleted. The reason for this is that only
+blocks  which have been on the candidate list for a certain time (1h) are considered
+for deletion to prevent race conditions. If we would have waited on hour after
+removing the version, we'd get a slightly different output which indicated that
+ten blocks have been permanently deleted::
 
-For cleanup this timeout is 1 hour. So you can now wait for 1 hour and repeat,
-or you can use the alternative cleanup option (``-f``) which will ignore this
-timeout. However be warned (also shown when doing a ``backy2 cleanup --help``):
+    $ benji cleanup
+        INFO: $ benji cleanup
+        INFO: Cleanup-fast: Cleanup finished. 0 false positives, 10 data deletions.
 
-    .. NOTE:: A full cleanup must not be run parallel to ANY other backy jobs.
-        backy2 will prevent you from doing this by creating a global lock on the
-        backup server.
+There is also the option (``-f`` or ``--full``) to do a full cleanup which iterates
+through all the blocks in the backend storage. This should only be used when an
+inconsistency is suspected as it can take a very long time to complete.
 
+.. NOTE:: A full cleanup must run in parallel to any other Benji jobs.
+    Benji will prevent you from doing this by creating a global lock.
 
 .. CAUTION:: Parallelism has been tested successfully with PostgreSQL. It might
     not work reliably with other DBMS.
 
-
-.. [1] backy2 uses sha512 which can be configured in ``backy.cfg``. sha512
-    is the only recommended checksum, however it's possible to use any other
-    algorithm from python3's hashlib (i.e. ``md5``, ``sha1``, ``sha224``,
-    ``sha256``, ``sha384``).
+.. [1] Benji uses blake2b with a 32 byte digest size but this can be configured
+    in ``benji.yaml``. blake2b is the recommended hash function as it is very
+    fast on modern computers. However it's possible to use any other algorithm
+    from Python's hashlib (i.e. ``md5``, ``sha1``, ``sha224``, ``sha256``,
+    ``sha384`` or ``sha512``). The maximum supported digest length is 64.
+    Smaller digest lengths have a higher chance of hash collisions which must
+    be avoided. Digest lengths below 32 bytes are not recommened.

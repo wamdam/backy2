@@ -3,8 +3,8 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = ../env/bin/sphinx-build
-SPHINXPROJ    = backy2
+SPHINXBUILD   = ../../venv/bin/sphinx-build
+SPHINXPROJ    = benji
 SOURCEDIR     = source
 BUILDDIR      = build
 

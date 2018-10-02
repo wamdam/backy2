@@ -1,0 +1,114 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ template "benji.fullname" . }}
+  labels:
+    app: {{ template "benji.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: 1
+  template:
+    metadata:
+      name: {{ template "benji.fullname" . }}
+      labels:
+        app: {{ template "benji.name" . }}
+        release: {{ .Release.Name }}
+      annotations:
+        prometheus.io/port: "{{ .Values.pushgateway.port }}"
+        prometheus.io/scrape: "true"
+    spec:
+      serviceAccount: {{ template "benji.fullname" . }}
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: benji
+          image: "{{ .Values.benji.image.registry }}/{{ .Values.benji.image.repository }}:{{ .Values.benji.image.tag }}"
+          imagePullPolicy: {{ .Values.benji.image.pullPolicy }}
+          env:
+            - name: ROOK_ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rook-ceph-mon
+                  key: admin-secret
+            - name: BACKUP_SCHEDULE
+              value: "{{ .Values.benji.backup.schedule }}"
+            - name: BACKUP_RETENTION
+              value: "{{ .Values.benji.backup.retention }}"
+            - name: BACKUP_SELECTOR
+              value: "{{ .Values.benji.backup.selector }}"
+            - name: SCRUBBING_ENABLED
+              value: "{{ .Values.benji.scrubbing.enabled | ternary "1" "0" }}"
+            - name: SCRUBBING_VERSIONS_PERCENTAGE
+              value: "{{ .Values.benji.scrubbing.versionsPercentage }}"
+            - name: SCRUBBING_BLOCKS_PERCENTAGE
+              value: "{{ .Values.benji.scrubbing.blocksPercentage }}"
+            - name: DEEP_SCRUBBING_ENABLED
+              value: "{{ .Values.benji.deepScrubbing.enabled | ternary "1" "0" }}"
+            - name: DEEP_SCRUBBING_VERSIONS_PERCENTAGE
+              value: "{{ .Values.benji.deepScrubbing.versionsPercentage }}"
+            - name: DEEP_SCRUBBING_BLOCKS_PERCENTAGE
+              value: "{{ .Values.benji.deepScrubbing.blocksPercentage }}"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /dev
+              name: dev
+            - mountPath: /sys/bus
+              name: sysbus
+            - mountPath: /lib/modules
+              name: libmodules
+            - name: mon-endpoint-volume
+              mountPath: /etc/rook
+            - name: benji-config
+              mountPath: /etc/benji
+            - name: tz-config
+              mountPath: /etc/localtime
+          resources:
+{{ toYaml .Values.benji.resources | indent 12 }}
+        - name: pushgateway
+          image: "{{ .Values.pushgateway.image.registry }}/{{ .Values.pushgateway.image.repository }}:{{ .Values.pushgateway.image.tag }}"
+          imagePullPolicy: {{ .Values.pushgateway.image.pullPolicy }}
+          args:
+            - "--web.listen-address=:{{ .Values.pushgateway.port }}"
+            - "--persistence.file=/var/lib/pushgateway/database.dat"
+          ports:
+            - containerPort: {{ .Values.pushgateway.port }}
+          volumeMounts:
+            - mountPath: /var/lib/pushgateway
+              name: pushgateway
+            - name: tz-config
+              mountPath: /etc/localtime
+      hostNetwork: false
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: sysbus
+          hostPath:
+            path: /sys/bus
+        - name: libmodules
+          hostPath:
+            path: /lib/modules
+        - name: mon-endpoint-volume
+          configMap:
+            name: rook-ceph-mon-endpoints
+            items:
+              - key: data
+                path: mon-endpoints
+        - name: benji-config
+          configMap:
+            name: {{ template "benji.fullname" . }}
+            items:
+              - key: benji.yaml
+                path: benji.yaml
+        - name: pushgateway
+          emptyDir: {}
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/{{ .Values.timeZone }}
+    {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+    {{- end }}

@@ -1,0 +1,4 @@
+apiVersion: v1
+description: Benji Backup for Rook
+name: benji-rook
+version: 0.1.0

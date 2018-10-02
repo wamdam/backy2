@@ -1,1 +1,8 @@
-recursive-include src *.txt *.ini README *.py
+include MANIFEST.in README.rst TODO.rst LICENSE.txt .dockerignore
+include requirements_docs.txt .style.yapf alembic
+recursive-include docs *.rst *.html Makefile *.gif *.png *.cast *.js *.css
+recursive-include src *.py *.ini
+recursive-include images Dockerfile *.sh
+recursive-include scripts *.sh
+recursive-include charts *.yaml *.tpl .helmignore
+recursive-include tests Makefile *.yaml

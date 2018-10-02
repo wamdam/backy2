@@ -1,48 +1,45 @@
 .. include:: global.rst.inc
+.. _configuration:
 
-backy2 configuration
-====================
+Configuration
+=============
 
-backy2 only needs to be configured once in order to define the *meta backend*
-and *data backend*. Most other config options default to reasonable values.
+Benji only needs to be configured once.
 
+benji.yaml
+----------
 
-.. _config_file:
+There is an example configuration which lists all possible configuration
+options:
 
-backy.cfg
----------
+.. literalinclude:: ../../etc/benji.yaml
 
-This is the default backy.cfg:
+Configuration File Location
+---------------------------
 
-.. literalinclude:: ../../etc/backy.cfg
+Benji will by default search the following locations for configuration files:
 
-Custom config file
-------------------
+* /etc/benji.yaml
+* /etc/benji/benji.yaml
+* ~/.benji.yaml
+* ~/benji.yaml
 
-backy2 will per default search the following locations for configuration files:
+If multiple of these files exist, only the first file found is read.
 
-* /etc/backy.cfg
-* /etc/backy/backy.cfg
-* /etc/backy/conf.d/*
-* ~/.backy.cfg
+In order to explicitly pass a configuration file, use the ``-c`` (or
+``--configfile``) parameter.
 
-In case multiple of these configurations exist, they are read in this order (later options
-overwrite earier ones).
+Multiple Instance Installations
+-------------------------------
 
-In order to explicitly pass a config file, use the ``-c`` (or ``--configfile``) parameter::
+You can run Benji multiple times on different machines or in different
+containers simultaneously. The configurations will have to match!
+this is the responsibility of the user and isn't checked by Benji.  Be
+careful to shutdown all instances before making configuration changes that
+could affect other instances (like adding an encryption key).
 
-  backy2 -c ./my_test_vm.cfg ls
+Multiple instances open up the possibility to scale-out Benji for
+performance reasons, to put instances where the backup source data is or to
+have a dedicated instance for restores for example.
 
-If you are using multiple config files, it's important for concurrency reasons
-to have at least these parameters set differently in each configuration:
-
-* ``process_name`` in section ``DEFAULTS``
-* ``lock_dir`` in section ``DEFAULTS``
-* ``logfile`` in section ``DEFAULTS``
-* ``engine`` in section ``MetaBackend``
-* ``path in`` section ``DataBackend``
-* ``cachedir`` in section ``NBD``
-
-If one of these are the same, no concurrency guarantees are given from backy2 and
-in addition, cleanup jobs might then delete current backup data. You have been warned.
-
+Locking between different instances is done via the central database.

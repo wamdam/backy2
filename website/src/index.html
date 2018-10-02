@@ -6,7 +6,7 @@
 -->
 <html>
     <head>
-        <title>backy2 &mdash; ceph rbd backup - fast open source block based backup software</title>
+        <title>benji &mdash; ceph rbd backup - fast open source block based backup software</title>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <!--[if lte IE 8]><script src="assets/js/ie/html5shiv.js"></script><![endif]-->
@@ -20,14 +20,14 @@
             <section id="header">
                 <div class="inner">
                     <!--<span class="icon major fa-cloud"></span>-->
-                    <span class="image"><img src="images/backy2-on-transparent-white-small.png" alt="backy2 logo" /></span>
-                    <h1>Hi, I'm <strong>backy2</strong>, a reliable open source<br />
+                    <span class="image"><img src="images/benji-on-transparent-white-small.png" alt="benji logo" /></span>
+                    <h1>Hi, I'm <strong>benji</strong>, a reliable open source<br />
                         block based backup software
                     </h1>
                     <p>I deduplicate data, store to s3 or filesytems and<br />
                     I have special features for <strong>ceph/rbd</strong> volumes.<br />
                     I'm blazingly fast.<br /><br /></p>
-                    <a href="https://github.com/wamdam/backy2/releases/latest" class="button special">Download .deb or src (zip)</a>
+                    <a href="https://github.com/wamdam/benji/releases/latest" class="button special">Download .deb or src (zip)</a>
                     <ul class="actions">
                         <li><a href="#one" class="button scrolly">Discover</a></li>
                     </ul>
@@ -44,11 +44,11 @@
                             </header>
                             <p>
                                 Backup any block based device, like LVM volumes, whole disks or ceph/rbd volumes.
-                                In contrast to other backup solutions, backy2 always backs up all data on the disk,
+                                In contrast to other backup solutions, benji always backs up all data on the disk,
                                 including the bootloader, kernel and partition data.
                             </p>
                             <p>
-                                As backy2 deduplicates all data before writing it, it's possible to backup a whole
+                                As benji deduplicates all data before writing it, it's possible to backup a whole
                                 rack with nothing more than a 1 gbit link.
                             </p>
                         </div>
@@ -97,14 +97,14 @@
                             <dl>
                                 <dt><strong>Using all your disks in parallel</strong></dt>
                                 <dd>
-                                    backy2 reads from multiple disks and writes to multiple disks simultaniously.
+                                    benji reads from multiple disks and writes to multiple disks simultaniously.
                                     You'll get the most out of your disk arrays, NAS, SAN, Ceph or RAID.
                                 </dd>
 
                                 <dt><strong>Small and fast backups</strong></dt>
                                 <dd>
-                                    backy2 deduplicates while reading from the block device and only writes blocks once if they are the same.
-                                    With the help of ceph’s rbd diff, backy2 will only read the changed blocks since the last backup.
+                                    benji deduplicates while reading from the block device and only writes blocks once if they are the same.
+                                    With the help of ceph’s rbd diff, benji will only read the changed blocks since the last backup.
                                 </dd>
 
                                 <dt><strong>Fast restores</strong></dt>
@@ -114,24 +114,24 @@
 
                                 <dt><strong>Partial restores / directly mount your backups</strong></dt>
                                 <dd>
-                                    With its own NBD server, backy2 backups can be directly mounted on any
+                                    With its own NBD server, benji backups can be directly mounted on any
                                     linux system.
                                 </dd>
 
                                 <dt><strong>High data consistency</strong></dt>
                                 <dd>
-                                    Every backed up piece of data has a checksum stored with it and backy2
+                                    Every backed up piece of data has a checksum stored with it and benji
                                     can scrub the backup data and check for correctness of the backups.
                                 </dd>
 
                                 <dt><strong>It will prevent you from doing stupid things</strong></dt>
                                 <dd>
-                                    backy2 will not execute commands that will destroy data, unless you <code>--force</code> it to.
+                                    benji will not execute commands that will destroy data, unless you <code>--force</code> it to.
                                 </dd>
 
                                 <dt><strong>Parallel: backups while scrubbing while restoring</strong></dt>
                                 <dd>
-                                    Parallel execution of multiple backy2 processes is fully supported.
+                                    Parallel execution of multiple benji processes is fully supported.
                                 </dd>
 
                                 <dt><strong>Easy installation</strong></dt>
@@ -141,7 +141,7 @@
 
                                 <dt><strong>Free and Open Source Software</strong></dt>
                                 <dd>
-                                    Anyone can review the source code and audit security and functionality. backy2 is licensed under the LGPLv3 license. 
+                                    Anyone can review the source code and audit security and functionality. benji is licensed under the LGPLv3 license.
                                 </dd>
                             </dl>
                         </div>
@@ -169,14 +169,14 @@
             <section id="three" class="main style1 special">
                 <div class="container">
                     <header class="major">
-                        <h2>You can use backy2 today.</h2>
+                        <h2>You can use benji today.</h2>
                     </header>
                     <p>Just read the docs, download the code or a .deb release and get support.</p>
                     <div class="row 150%">
                         <div class="4u 12u$(medium)">
                             <span class="image fit"><img src="images/pic02.jpg" alt="" /></span>
                             <h3>Documentation</h3>
-                            <p>Learn all about backup, scrub and restore with backy2.</p>
+                            <p>Learn all about backup, scrub and restore with benji.</p>
                             <ul class="actions">
                                 <li><a href="docs" class="button">Documentation</a></li>
                             </ul>
@@ -186,7 +186,7 @@
                             <h3>Support</h3>
                             <p>Get support and help other users on IRC freenode.net.</p>
                             <ul class="actions">
-                                <li><a href="http://webchat.freenode.net/?channels=#backy2" class="button">Chat</a></li>
+                                <li><a href="http://webchat.freenode.net/?channels=#benji" class="button">Chat</a></li>
                             </ul>
                         </div>
                         <div class="4u$ 12u$(medium)">
@@ -194,7 +194,7 @@
                             <h3>Code</h3>
                             <p>Download the code, .deb releases and participate.</p>
                             <ul class="actions">
-                                <li><a href="https://github.com/wamdam/backy2" class="button">GitHub</a></li>
+                                <li><a href="https://github.com/wamdam/benji" class="button">GitHub</a></li>
                             </ul>
                         </div>
                     </div>
@@ -207,10 +207,10 @@
                     <header class="major">
                         <h2>Need professional support?</h2>
                     </header>
-                    <p>We do backy2 consulting.</p>
+                    <p>We do benji consulting.</p>
                     <ul class="actions uniform">
                         <!--<li><a href="https://d9t.de/backy#anfrage" class="button special">Contact us</a></li>-->
-                        <li><a href="mailto:info@d9t.de?subject=backy2%20consulting" class="button special">Contact us ✉</a></li>
+                        <li><a href="mailto:info@d9t.de?subject=benji%20consulting" class="button special">Contact us ✉</a></li>
                         <!--<li><a href="#" class="button">Learn More</a></li>-->
                     </ul>
                 </div>
@@ -542,8 +542,8 @@ print 'It took ' + i + ' iterations to sort the deck.';</code></pre>
                     <!--<li><a href="#" class="icon alt fa-twitter"><span class="label">Twitter</span></a></li>-->
                     <!--<li><a href="#" class="icon alt fa-facebook"><span class="label">Facebook</span></a></li>-->
                     <!--<li><a href="#" class="icon alt fa-instagram"><span class="label">Instagram</span></a></li>-->
-                    <li><a href="https://github.com/wamdam/backy2" class="icon alt fa-github"><span class="label">GitHub</span></a></li>
-                    <li><a href="mailto:info@d9t.de?subject=backy2" class="icon alt fa-envelope"><span class="label">Email</span></a></li>
+                    <li><a href="https://github.com/wamdam/benji" class="icon alt fa-github"><span class="label">GitHub</span></a></li>
+                    <li><a href="mailto:info@d9t.de?subject=benji" class="icon alt fa-envelope"><span class="label">Email</span></a></li>
                 </ul>
                 <ul class="copyright">
                     <li>&copy; <a href="https://d9t.de/">D9T GmbH</a></li>

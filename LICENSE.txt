@@ -1,31 +1,56 @@
-Files: nbdserver.py
-Copyright:
-    2013-2015 Juan J. Martinez
-License: Expat http://directory.fsf.org/wiki/License:Expat
-
-Files: rados.py rbd.py
-Copyright:
-    2011: Hannu Valtonen
-License: LGPL 2.1
-
-Packages: prettytable psutil shortuuid setproctitle
+Packages: prettytable setproctitle zstandard
 License: BSD
 
-Packages: python-dateutil
-License: Simplified BSD
+Packages: pycryptodome
+License: BSD , Public Domain
 
-Packages: sqlalchemy boto alembic
-License: MIT License
-
-Packages: pex
-License: Apache2
+Packages: sqlalchemy boto3 alembic ruamel.yaml aes-keywrap
+License: MIT
 
 Packages: psycopg2
 License: LGPLv3
 
+Packages: python-dateutil
+Copyright:
+    See https://github.com/dateutil/dateutil/blob/master/LICENSE
+License: Apache 2.0, BSD License (Dual License)
+
+Packages: diskcache
+Copyright:
+    2016-2018 Grant Jenks
+License: Apache 2.0
+
+Files: src/benji/retentionfilter.py
+Copyright:
+    2014 Jan-Philip Gehrcke (http://gehrcke.de)
+    Modified work: 2018 Lars Fenneberg
+License: MIT
+
+Files: src/benji/nbd/nbdserver.py
+Copyright:
+    2013-2015 Juan J. Martinez
+    Modified work: 2016 Daniel Kraft
+    Modified work: 2018 Lars Fenneberg
+License: Expat http://directory.fsf.org/wiki/License:Expat
+
+Files: scripts/prometheus.sh
+Copyrigt:
+    2015 Adrian Colley <aecolley@gmail.com>
+License: Apache 2.0
+
+Files: scripts/tryCatch.sh
+Copyright:
+    2015 Bazyli Brzóska @ https://invent.life/
+    Modified work: 2018 Lars Fenneberg
+License: MIT
+
+Files: docs/source/_static/asciinema/asciinema-player.css, docs/source/_static/asciinema/asciinema-player.js
+License: Apache 2.0
+
 Files: *
 Copyright:
     2015-2017: Daniel Kraft
+    2018: Lars Fenneberg
 License: LGPLv3
 
 
