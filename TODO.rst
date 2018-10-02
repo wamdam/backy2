@@ -4,11 +4,21 @@ TODOs
 Probably soonish
 ----------------
 
-* Make it possible to import all version metadata from the data backend at once
-* Add script to generate hints from LVM usage bitmaps for classic and thin snapshots
+* Enhance metadata backup on data backend feature
+
+  * Implement bulk import of version metadata
+  * List version metadata
+
+* Move from tags to labels
+
+   * Filter version listings by label selector
+   * Do scrubbing and expiry in relation to a label selector
+
 * Finish key rotation support
-* Reimplement partial full cleanup
-* Update website (the thing in the website subdirectory)
+* Perform fsfreeze as part of script framework
+  (see https://gitlab.com/costrouc/kubernetes-rook-backup/blob/master/rook-backup.py#L115)
+* Work on database migration support (Alembic)
+* Move Rook image and scripts to a more generic but still Kubernetes centered solution
 
 Unsorted collection
 -------------------
@@ -27,7 +37,9 @@ Unsorted collection
 * Support for multiple data backends
 * Support for layering data backends to implement things like mirroring
 * Native Google Storage backend
-* alembic and database migrations probably need some work
 * Better NBD server performance (if possible)
 * Deduplication and sparse detection in NBD fixate()?
 * Make some more ASCIInema casts for the documentation
+* Update website (the thing in the website subdirectory)
+* Add script to generate hints from LVM usage bitmaps for classic and thin snapshots
+* Reimplement partial full cleanup
