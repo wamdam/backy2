@@ -149,6 +149,15 @@ class DataBackend(_DataBackend):
             except socket.timeout:
                 logger.error('Timeout while fetching from s3, trying again.')
                 pass
+            except OSError as e:
+                # TODO: This is new and currently untested code. I'm not sure
+                # why this happens in favour of socket.timeout and also if it
+                # might be better to abort the whole restore/backup/scrub if
+                # this happens, because I can't tell if the s3 lib is able to
+                # recover from this situation and continue or not. We will see
+                # this in the logs next time s3 is generating timeouts.
+                logger.error('Timeout while fetching from s3 - error is "{}", trying again.'.format(str(e)))
+                pass
             else:
                 break
         time.sleep(self.read_throttling.consume(len(data)))
