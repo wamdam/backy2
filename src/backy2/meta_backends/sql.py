@@ -113,7 +113,7 @@ def inttime():
 
 class DeletedBlock(Base):
     __tablename__ = 'deleted_blocks'
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
     uid = Column(String(32), nullable=True, index=True)
     size = Column(BigInteger, nullable=True)
     delete_candidate = Column(Integer, nullable=False)
