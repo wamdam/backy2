@@ -28,7 +28,9 @@ class IO(_IO):
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
-        self.cluster = rados.Rados(conffile=ceph_conffile)
+        cluster_name = config.get('cluster_name')
+        rados_name = config.get('rados.name')
+        self.cluster = rados.Rados(conffile=ceph_conffile, name=rados_name, clustername=cluster_name)
         self.cluster.connect()
         # create a bitwise or'd list of the configured features
         self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.getlist('new_image_features')])

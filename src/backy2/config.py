@@ -32,6 +32,8 @@ cachedir: /tmp
 simultaneous_reads: 1
 
 [io_rbd]
+rados_name: client.admin
+cluster_name. ceph
 simultaneous_reads: 1
 """
 
