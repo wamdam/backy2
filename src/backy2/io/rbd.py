@@ -29,7 +29,7 @@ class IO(_IO):
         self._inqueue = queue.Queue()  # infinite size for all the blocks
         self._outqueue = queue.Queue(self.simultaneous_reads)
         cluster_name = config.get('cluster_name')
-        rados_name = config.get('rados.name')
+        rados_name = config.get('rados_name')
         self.cluster = rados.Rados(conffile=ceph_conffile, name=rados_name, clustername=cluster_name)
         self.cluster.connect()
         # create a bitwise or'd list of the configured features
