@@ -51,6 +51,7 @@ class IO(_IO):
 
 
     def open_w(self, io_name, size=None, force=False):
+        # parameter size is version's size.
         self.mode = 'w'
         _s = re.match('^file://(.+)$', io_name)
         if not _s:
@@ -62,7 +63,7 @@ class IO(_IO):
                 logger.error('Target already exists: {}'.format(io_name))
                 exit('Error opening restore target. You must force the restore.')
             else:
-                if size < self.size():
+                if self.size() < size:
                     logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
                     exit('Error opening restore target.')
         else:
