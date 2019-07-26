@@ -1,3 +1,12 @@
+backy2 (2.9.18) unstable; urgency=low
+
+  * Allow for a large number of blocks to delete on cleanup (Fixes #26)
+  * Let rados name and cluster name for ceph be configurable
+  * Allow restore to volumes larger than backup (Fixes #34)
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 26 Jul 2019 13:40:05 +0200
+
+
 backy2 (2.9.17) unstable; urgency=low
 
   * Release automation
