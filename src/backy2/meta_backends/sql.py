@@ -3,7 +3,7 @@
 from backy2.logging import logger
 from backy2.meta_backends import MetaBackend as _MetaBackend
 from collections import namedtuple
-from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
+from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -30,7 +30,7 @@ class Stats(Base):
     __tablename__ = 'stats'
     date = Column("date", DateTime , default=func.now(), nullable=False)
     version_uid = Column(String(36), primary_key=True)
-    version_name = Column(String, nullable=False)
+    version_name = Column(String(512), nullable=False)
     version_size_bytes = Column(BigInteger, nullable=False)
     version_size_blocks = Column(BigInteger, nullable=False)
     bytes_read = Column(BigInteger, nullable=False)
@@ -48,8 +48,8 @@ class Version(Base):
     __tablename__ = 'versions'
     uid = Column(String(36), primary_key=True)
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    name = Column(String, nullable=False, default='')
-    snapshot_name = Column(String, nullable=False, server_default='', default='')
+    name = Column(String(512), nullable=False, default='')
+    snapshot_name = Column(String(512), nullable=False, server_default='', default='')
     size = Column(BigInteger, nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
@@ -68,7 +68,7 @@ class Version(Base):
 class Tag(Base):
     __tablename__ = 'tags'
     version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
-    name = Column(String, nullable=False, primary_key=True)
+    name = Column(String(512), nullable=False, primary_key=True)
 
     def __repr__(self):
        return "<Tag(version_uid='%s', name='%s')>" % (
@@ -80,7 +80,7 @@ class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
     version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
-    id = Column(Integer, primary_key=True, nullable=False)
+    id = Column(Integer, primary_key=True, nullable=False, autoincrement=False)
     date = Column("date", DateTime , default=func.now(), nullable=False)
     checksum = Column(String(128), index=True, nullable=True)
     size = Column(BigInteger, nullable=True)
