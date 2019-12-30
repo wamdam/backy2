@@ -470,7 +470,7 @@ class Commands():
             print('|'.join(map(str, values)))
 
 
-    def due(self, name, schedulers):
+    def due(self, name, schedulers, fields):
         schedulers = [s.strip() for s in list(csv.reader(StringIO(schedulers)))[0]]
         backy = self.backy()
         versions = backy.ls()
@@ -489,7 +489,7 @@ class Commands():
                 if _due_backup:
                     due_backups.setdefault(name, []).append(scheduler)
 
-        field_names = ['name', 'schedulers']
+        field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
         values = []
         for name, schedulers in due_backups.items():
             values.append({'name': name, 'schedulers': ",".join(schedulers)})
@@ -499,7 +499,7 @@ class Commands():
             self._tbl_output(field_names, values, alignments={'name': 'l', 'schedulers': 'l'})
 
 
-    def sla(self, name, schedulers):
+    def sla(self, name, schedulers, fields):
         schedulers = [s.strip() for s in list(csv.reader(StringIO(schedulers)))[0]]
         backy = self.backy()
         versions = backy.ls()
@@ -518,7 +518,7 @@ class Commands():
                 _sla_breaches = backy.get_sla_breaches(name, scheduler, interval, keep, sla)  # list of strings
                 sla_breaches.setdefault(name, []).extend(_sla_breaches)
 
-        field_names = ['name', 'breach']
+        field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
         values = []
         for name, breaches in sla_breaches.items():
             for breach in breaches:
@@ -763,6 +763,8 @@ def main():
     p.add_argument('name', nargs='?', default=None, help='Show due backups for this version name (optional, if not given, show due backups for all names).')
     p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
             help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
+    p.add_argument('-f', '--fields', default="name,schedulers",
+            help="Show these fields (comma separated). Available: name,schedulers")
     p.set_defaults(func='due')
 
     # SLA
@@ -772,6 +774,8 @@ def main():
     p.add_argument('name', nargs='?', default=None, help='Show SLA breaches for this version name (optional, if not given, show SLA breaches for all names).')
     p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
             help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
+    p.add_argument('-f', '--fields', default="name,breach",
+            help="Show these fields (comma separated). Available: name,breach")
     p.set_defaults(func='sla')
 
 
