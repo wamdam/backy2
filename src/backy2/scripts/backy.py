@@ -294,7 +294,7 @@ class Commands():
             version_uids = [v.uid for v in _versions]
 
         tbl = PrettyTable()
-        tbl.field_names = ['Real (GiB)', 'Null (GiB)', 'Dedup Own (GiB)', 'Dedup Others (GiB)', 'Est. Space (GiB)', 'Est. Space freed (GiB)']
+        tbl.field_names = ['Real (GiB)', 'Null (GiB)', 'Dedup Own (GiB)', 'Dedup Others (GiB)', 'Individual (GiB)', 'Est. Space (GiB)', 'Est. Space freed (GiB)']
         for fn in tbl.field_names:
             tbl.align[fn] = 'r'
         for version_uid in version_uids:
@@ -304,6 +304,7 @@ class Commands():
                 '{:.2f}'.format(stats['null_space']/1024/1024/1024),
                 '{:.2f}'.format(stats['dedup_own']/1024/1024/1024),
                 '{:.2f}'.format(stats['dedup_others']/1024/1024/1024),
+                '{:.2f}'.format(stats['nodedup']/1024/1024/1024),
                 '{:.2f}'.format(stats['backy_space']/1024/1024/1024),
                 '{:.2f}'.format(stats['space_freed']/1024/1024/1024),
                 ])

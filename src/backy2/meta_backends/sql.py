@@ -209,6 +209,7 @@ class MetaBackend(_MetaBackend):
         real_space = 0
         dedup_own = 0
         dedup_others = 0
+        nodedup = 0
         null_space = 0
         backy_space = 0
         space_freed = 0
@@ -252,8 +253,10 @@ class MetaBackend(_MetaBackend):
             # It doesn't matter how often it is used in other versions.
             if _block_count_in_other_versions:
                 dedup_others += row.size * _block_count_in_own_version
-            else:
+            elif _block_count_in_own_version > 1:
                 dedup_own += row.size * (_block_count_in_own_version - 1)  # 1 is real, the others are dedup'd
+            else:
+                nodedup += row.size
 
             backy_space += row.size / _block_count_in_all_versions  # partial size
 
@@ -262,9 +265,10 @@ class MetaBackend(_MetaBackend):
 
         ret = {
             'real_space': real_space,
+            'null_space': null_space,
             'dedup_own': dedup_own,
             'dedup_others': dedup_others,
-            'null_space': null_space,
+            'nodedup': nodedup,
             'backy_space': round(backy_space),
             'space_freed': space_freed,
         }
