@@ -1,3 +1,12 @@
+backy2 (2.10.1) unstable; urgency=low
+
+  * Add sqlite compatibility again
+  * Add backup expire feature
+  * Add `-s` toggle for simpliying parsing of machine output
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 30 Dec 2019 13:54:05 +0100
+
+
 backy2 (2.9.18) unstable; urgency=low
 
   * Allow for a large number of blocks to delete on cleanup (Fixes #26)
