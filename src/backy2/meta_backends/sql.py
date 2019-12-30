@@ -361,6 +361,7 @@ class MetaBackend(_MetaBackend):
 
 
     def get_versions(self):
+        """ Return versions, must be sorted by date ascending"""
         return self.session.query(Version).order_by(Version.name, Version.date).all()
 
 

@@ -3,7 +3,7 @@
 
 from backy2.config import Config as _Config
 from backy2.logging import logger, init_logging
-from backy2.utils import hints_from_rbd_diff, backy_from_config
+from backy2.utils import hints_from_rbd_diff, backy_from_config, convert_to_timedelta
 from datetime import date, datetime
 from functools import partial
 from io import StringIO
@@ -426,6 +426,132 @@ class Commands():
             logger.warn('Unable to expire version.')
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+    def _tbl_output(self, fields, data, alignments=None):
+        """
+        outputs data based on fields list.
+        fields: list(fieldnames)
+        data: list of dicts with keys containing field names
+        alignments: dict(name: direction)
+        """
+        tbl = PrettyTable()
+        tbl.field_names = fields
+        if alignments:
+            for key, value in alignments.items():
+                tbl.align[key] = value
+        for d in data:
+            values = []
+            for field_name in fields:
+                values.append(d[field_name])
+            tbl.add_row(values)
+        if self.skip_header:
+            tbl.header = False
+        print(tbl)
+
+
+    def _machine_output(self, fields, data):
+        if not self.skip_header:
+            print('|'.join(fields))
+        for d in data:
+            values = []
+            for field_name in fields:
+                values.append(d[field_name])
+            print('|'.join(map(str, values)))
+
+
+    def due(self, name, schedulers):
+        schedulers = [s.strip() for s in list(csv.reader(StringIO(schedulers)))[0]]
+        backy = self.backy()
+        versions = backy.ls()
+        if not name:
+            names = set([v.name for v in versions])
+        else:
+            names = [name]
+
+        due_backups = {}   # name: list of tags
+        for name in names:
+            for scheduler in schedulers:
+                interval = convert_to_timedelta(self.Config(section=scheduler).get('interval'))
+                sla = convert_to_timedelta(self.Config(section=scheduler).get('sla'))
+
+                _due_backup = backy.get_due_backups(name, scheduler, interval, sla)  # True/False
+                if _due_backup:
+                    due_backups.setdefault(name, []).append(scheduler)
+
+        field_names = ['name', 'schedulers']
+        values = []
+        for name, schedulers in due_backups.items():
+            values.append({'name': name, 'schedulers': ",".join(schedulers)})
+        if self.machine_output:
+            self._machine_output(field_names, values)
+        else:
+            self._tbl_output(field_names, values, alignments={'name': 'l', 'schedulers': 'l'})
+
+
+    def sla(self, name, schedulers):
+        schedulers = [s.strip() for s in list(csv.reader(StringIO(schedulers)))[0]]
+        backy = self.backy()
+        versions = backy.ls()
+        if not name:
+            names = set([v.name for v in versions])
+        else:
+            names = [name]
+
+        sla_breaches = {}  # name: list of breaches
+        for name in names:
+            for scheduler in schedulers:
+                interval = convert_to_timedelta(self.Config(section=scheduler).get('interval'))
+                keep = self.Config(section=scheduler).getint('keep')
+                sla = convert_to_timedelta(self.Config(section=scheduler).get('sla'))
+
+                _sla_breaches = backy.get_sla_breaches(name, scheduler, interval, keep, sla)  # list of strings
+                sla_breaches.setdefault(name, []).extend(_sla_breaches)
+
+        field_names = ['name', 'breach']
+        values = []
+        for name, breaches in sla_breaches.items():
+            for breach in breaches:
+                values.append({'name': name, 'breach': breach})
+        if self.machine_output:
+            self._machine_output(field_names, values)
+        else:
+            self._tbl_output(field_names, values, alignments={'name': 'l', 'breach': 'l'})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def initdb(self):
         self.backy(initdb=True)
 
@@ -629,6 +755,24 @@ def main():
     p.add_argument('version_uid')
     p.add_argument('expire')
     p.set_defaults(func='expire')
+
+    # DUE
+    p = subparsers.add_parser(
+        'due',
+        help="""Based on the schedulers in the config file, calculate the due backups including tags.""")
+    p.add_argument('name', nargs='?', default=None, help='Show due backups for this version name (optional, if not given, show due backups for all names).')
+    p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
+            help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
+    p.set_defaults(func='due')
+
+    # SLA
+    p = subparsers.add_parser(
+        'sla',
+        help="""Based on the schedulers in the config file, calculate the information about SLA.""")
+    p.add_argument('name', nargs='?', default=None, help='Show SLA breaches for this version name (optional, if not given, show SLA breaches for all names).')
+    p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
+            help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
+    p.set_defaults(func='sla')
 
 
     args = parser.parse_args()
