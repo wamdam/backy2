@@ -235,7 +235,7 @@ class MetaBackend(_MetaBackend):
             dedup_own += row.size * (row.own_shared - 1)
             dedup_others += row.size * row.other_shared
             backy_space += row.size / (row.own_shared + row.other_shared)  # partial size
-            if row.other_shared = 0:
+            if row.other_shared == 0:
                 space_freed += row.size
 
         ret = {
