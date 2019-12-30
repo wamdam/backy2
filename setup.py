@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 from setuptools import setup, find_packages
 
-version = '2.9.18'
+version = '2.10.1'
 
 setup(name='backy2',
     version=version,
@@ -37,7 +37,7 @@ Topic :: System :: Archiving :: Backup
     zip_safe=False,  # ONLY because of alembic.ini. The rest is zip-safe.
     install_requires=[
         'PrettyTable>=0.7.2',
-        'sqlalchemy>=1.0.8',
+        'sqlalchemy>=1.3.12',
         'psutil>=2.2.1',
         'shortuuid>=0.4.2',
         'setproctitle>=1.1.8',
