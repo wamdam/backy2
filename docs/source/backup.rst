@@ -48,16 +48,17 @@ fields:
   Scrubbing may set this to 0 if the backup is found invalid for any reason.
 * **protected**: boolean (1/0): Indicates if the version may be deleted by *rm*.
 * **tags**: A list of (string) tags for this version.
+* **expire**: An optional expiration date for the version.
 
 You can output this data with::
 
     $ backy2 ls
         INFO: $ /usr/bin/backy2 ls
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-    |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-    | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly |
-    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
+    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+------------+
+    |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |   expire   |
+    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+------------+
+    | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly | 2020-12-30 |
+    +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+------------+
         INFO: Backy complete.
 
 .. HINT::
@@ -272,6 +273,7 @@ automatically keep only one snapshot and create forward-differential backups.
 
 Tag backups
 -----------
+
 backy2 provides predefined backup tags: b_daily, b_weekly, b_monthly
 These tags are created automatically by compating the dates of version with the
 same name.
@@ -289,6 +291,34 @@ Later on you can modify tags with the commands 'add-tag' and 'remove-tag':
 
     $ backy2 add-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 mytag
     $ backy2 remove-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 anothertag
+
+
+Expire backups
+--------------
+
+Backup expiration is used to mark backups as obsolete automatically at a given
+date. The expiration can be set at backup time via '-e' or '--expire'::
+
+    $ backy2 backup file:///tmp/test test -e 2020-01-24
+
+You may also set or change the expiration date with the 'expire' command::
+
+    $ backy2 expire 93e01e08-2af9-11ea-8e38-dc53608da00e 2020-02-01
+
+Or you may remove the expiration date entirely by providing an empty string
+as input for the 'expire' command::
+
+    $ backy2 expire 93e01e08-2af9-11ea-8e38-dc53608da00e ''
+
+The expire date is shown in the 'ls' command. In addition, 'ls' is able to
+only show expired backups with its '-e' switch::
+
+    $ backy2 ls -e
+
+.. HINT::
+    When scripting the backup, that's how you might add the expiration date::
+
+        $ backy2 backup file:///tmp/test test -e `date +"%Y-%m-%d" -d "today + 7 days"`
 
 
 Export metadata
@@ -329,6 +359,10 @@ However, backy2 will ignore your request if the version uid is already in the da
     ERROR: 'Version 52da2130-2929-11e7-bde0-003048d74f6c already exists and cannot be imported.'
 
 Otherwise the version will show up after importing it when looking at ``backy2 ls``.
+
+.. HINT::
+    backy2 has compatibility layers for older backups, so imports from older
+    metadata versions should work without problems.
 
 
 Features

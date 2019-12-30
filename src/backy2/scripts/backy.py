@@ -4,6 +4,7 @@
 from backy2.config import Config as _Config
 from backy2.logging import logger, init_logging
 from backy2.utils import hints_from_rbd_diff, backy_from_config
+from datetime import date, datetime
 from functools import partial
 from io import StringIO
 from prettytable import PrettyTable
@@ -27,13 +28,21 @@ class Commands():
         self.backy = backy_from_config(Config)
 
 
-    def backup(self, name, snapshot_name, source, rbd, from_version, tag=None):
+    def backup(self, name, snapshot_name, source, rbd, from_version, tag=None, expire=None):
+        expire_date = None
+        if expire:
+            try:
+                expire_date = datetime.strptime(expire, '%Y-%m-%d').date()
+            except ValueError as e:
+                logger.error(str(e))
+                exit(1)
+
         backy = self.backy()
         hints = None
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        backy.backup(name, snapshot_name, source, hints, from_version, tag)
+        backy.backup(name, snapshot_name, source, hints, from_version, tag, expire_date)
         backy.close()
 
 
@@ -107,7 +116,7 @@ class Commands():
         tbl = PrettyTable()
         # TODO: number of invalid blocks, used disk space, shared disk space
         tbl.field_names = ['date', 'name', 'snapshot_name', 'size', 'size_bytes', 'uid',
-                'valid', 'protected', 'tags']
+                'valid', 'protected', 'tags', 'expire']
         tbl.align['name'] = 'l'
         tbl.align['snapshot_name'] = 'l'
         tbl.align['tags'] = 'l'
@@ -124,13 +133,14 @@ class Commands():
                 int(version.valid),
                 int(version.protected),
                 ",".join(sorted([t.name for t in version.tags])),
+                version.expire if version.expire else '',
                 ])
         print(tbl)
 
 
     def _ls_versions_machine_output(self, versions):
         field_names = ['type', 'date', 'name', 'snapshot_name', 'size',
-                'size_bytes', 'uid', 'valid', 'protected', 'tags']
+                'size_bytes', 'uid', 'valid', 'protected', 'tags', 'expire']
         print('|'.join(field_names))
         for version in versions:
             print('|'.join(map(str, [
@@ -144,6 +154,7 @@ class Commands():
                 int(version.valid),
                 int(version.protected),
                 ",".join([t.name for t in version.tags]),
+                version.expire if version.expire else '',
                 ])))
 
 
@@ -211,7 +222,7 @@ class Commands():
                 ])))
 
 
-    def ls(self, name, snapshot_name, tag):
+    def ls(self, name, snapshot_name, tag, expired):
         backy = self.backy()
         versions = backy.ls()
         if name:
@@ -220,6 +231,8 @@ class Commands():
             versions = [v for v in versions if v.snapshot_name == snapshot_name]
         if tag:
             versions = [v for v in versions if tag in [t.name for t in v.tags]]
+        if expired:
+            versions = [v for v in versions if v.expire and v.expire < date.today()]
 
         if self.machine_output:
             self._ls_versions_machine_output(versions)
@@ -352,6 +365,23 @@ class Commands():
         backy.close()
 
 
+    def expire(self, version_uid, expire):
+        if not expire:  # empty string
+            expire_date = None
+        else:
+            try:
+                expire_date = datetime.strptime(expire, '%Y-%m-%d').date()
+            except ValueError as e:
+                logger.error(str(e))
+                exit(1)
+        try:
+            backy = self.backy()
+            backy.expire_version(version_uid, expire_date)
+            backy.close()
+        except:
+            logger.warn('Unable to expire version.')
+
+
     def initdb(self):
         self.backy(initdb=True)
 
@@ -395,6 +425,7 @@ def main():
     p.add_argument(
         '-t', '--tag', action='append',  dest='tag', default=None,
         help='Use a specific tag for the target backup version-uid')
+    p.add_argument('-e', '--expire', default='', help='Expiration date (yyyy-mm-dd) (optional)')
     p.set_defaults(func='backup')
 
     # RESTORE
@@ -483,6 +514,8 @@ def main():
             help="Limit output to this snapshot name")
     p.add_argument('-t', '--tag', default=None,
             help="Limit output to this tag")
+    p.add_argument('-e', '--expired', action='store_true', default=False,
+            help="Only list expired versions (expired < today)")
     p.set_defaults(func='ls')
 
     # STATS
@@ -531,6 +564,14 @@ def main():
     p.add_argument('version_uid')
     p.add_argument('name')
     p.set_defaults(func='remove_tag')
+
+    # EXPIRE
+    p = subparsers.add_parser(
+        'expire',
+        help="""Set expiration date for a backup version. Date format is yyyy-mm-dd (e.g. 2020-01-23). HINT: Create with 'date +"%%Y-%%m-%%d" -d "today + 7 days"'""")
+    p.add_argument('version_uid')
+    p.add_argument('expire')
+    p.set_defaults(func='expire')
 
 
     args = parser.parse_args()

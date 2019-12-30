@@ -384,7 +384,7 @@ class Backy():
         return tags
 
 
-    def backup(self, name, snapshot_name, source, hints, from_version, tag=None):
+    def backup(self, name, snapshot_name, source, hints, from_version, tag=None, expire=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -571,6 +571,10 @@ class Backy():
             )
         logger.info('New version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
         self.locking.unlock(version_uid)
+
+        if expire:
+            self.meta_backend.expire_version(version_uid, expire)
+
         return version_uid
 
 
@@ -617,6 +621,10 @@ class Backy():
 
     def remove_tag(self, version_uid, name):
         self.meta_backend.remove_tag(version_uid, name)
+
+
+    def expire_version(self, version_uid, expire):
+        self.meta_backend.expire_version(version_uid, expire)
 
 
     def close(self):

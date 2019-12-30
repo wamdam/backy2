@@ -50,6 +50,20 @@ In order to really delete blocks from the backup target, you'll need ``backy2
 cleanup``.
 
 
+Using the expire feature
+------------------------
+
+If you have added expiration to your versions as shown in the backup section,
+you can get the expired versions (based on you server time) via::
+
+    $ backy2 ls -e
+
+.. HINT::
+    If you want to remove versions automatically by scripting, you might use this::
+
+        $ for version in `backy2 -m ls -e | tail -n+2 | awk -F'|' '{ print $7 }'`; do backy2 rm $version; done
+
+
 backy2 cleanup
 --------------
 

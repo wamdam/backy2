@@ -124,11 +124,11 @@ backup
 
         $ backy2 ls
             INFO: $ /usr/bin/backy2 ls
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
-        | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly |
-        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+
+        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+------------+
+        |         date        | name              | snapshot_name | size | size_bytes |                 uid                  | valid | protected | tags                       |   expire   |
+        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+------------+
+        | 2017-04-17 11:54:07 | myfirsttestbackup |               |   10 |   41943040 | 8fd42f1a-2364-11e7-8594-00163e8c0370 |   1   |     0     | b_daily,b_monthly,b_weekly | 2019-11-11 |
+        +---------------------+-------------------+---------------+------+------------+--------------------------------------+-------+-----------+----------------------------+------------+
             INFO: Backy complete.
 
 
@@ -203,6 +203,18 @@ If you want to overwrite data, you must ``--force``.
 
 .. NOTE:: For more (and possibly faster) restore methods, please refer to the
     section :ref:`restore`.
+
+
+expire
+------
+
+Usually you know when to expire a backup at backup time. So when creating a backup you may
+also add the expiration date::
+
+    $ backy2 backup file://tmp/test test -e 2020-01-24
+
+The expiration date can be shown in ``backy2 ls`` and you may also show expired
+versions only via ``backy2 ls -e``.
 
 
 version rm and cleanup
