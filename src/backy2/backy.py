@@ -161,6 +161,15 @@ class Backy():
                 )
 
 
+    def du(self, version_uid):
+        """ Returns disk usage statistics for a version.
+        """
+        if not self.locking.lock(version_uid):
+            raise LockError('Version {} is locked.'.format(version_uid))
+        self.meta_backend.get_version(version_uid)  # raise if version not exists
+        return self.meta_backend.du(version_uid)
+
+
     def scrub(self, version_uid, source=None, percentile=100):
         """ Returns a boolean (state). If False, there were errors, if True
         all was ok

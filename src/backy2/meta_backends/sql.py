@@ -6,7 +6,8 @@ from collections import namedtuple
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
 from sqlalchemy import func, distinct, desc
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, query
+from sqlalchemy.sql import text
 from sqlalchemy.types import DateTime, Date
 import csv
 import datetime
@@ -60,6 +61,7 @@ class Version(Base):
             backref="version",
             cascade="all, delete, delete-orphan",  # i.e. delete when version is deleted
             )
+
 
     def __repr__(self):
        return "<Version(uid='%s', name='%s', snapshot_name='%s', date='%s')>" % (
@@ -200,6 +202,49 @@ class MetaBackend(_MetaBackend):
         self.session.add(version)
         self.session.commit()
         return uid
+
+
+    def du(self, version_uid):
+        virtual_space = 0
+        real_space = 0
+        dedup_own = 0
+        dedup_others = 0
+        null_space = 0
+        backy_space = 0
+
+        # find null blocks
+        blocks = self.session.query(Block).filter_by(version_uid=version_uid, uid=None).all()
+        for block in blocks:
+            virtual_space += block.size
+            null_space += block.size
+
+        # find real blocks
+        statement = text("""
+                select a.version_uid, a.uid, a.size,
+                    (select count(*) cnt from blocks where version_uid=a.version_uid and uid=a.uid) own_shared,
+                    (select count(*) cnt from blocks where version_uid!=a.version_uid and uid=a.uid) other_shared
+                from blocks a
+                    where a.version_uid=:version_uid
+                    and a.uid is not NULL
+                """)
+        result = self.session.execute(statement, params={'version_uid': version_uid})
+        for row in result:
+            virtual_space += row.size * row.own_shared
+            real_space += row.size
+            dedup_own += row.size * (row.own_shared - 1)
+            dedup_others += row.size * row.other_shared
+            backy_space += row.size / (row.own_shared + row.other_shared)  # partial size
+
+        ret = {
+            'virtual_space': virtual_space,
+            'real_space': real_space,
+            'dedup_own': dedup_own,
+            'dedup_others': dedup_others,
+            'null_space': null_space,
+            'backy_space': round(backy_space),
+        }
+
+        return ret
 
 
     def set_stats(self, version_uid, version_name, version_size_bytes,

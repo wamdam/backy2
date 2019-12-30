@@ -283,6 +283,37 @@ class Commands():
         backy.close()
 
 
+    def du(self, version_uid=None):
+        """ Output disk usage for a version
+        """
+        backy = self.backy()
+        if version_uid:
+            version_uids = [version_uid]
+        else:
+            _versions = backy.ls()
+            version_uids = [v.uid for v in _versions]
+
+        tbl = PrettyTable()
+        tbl.field_names = ['Virtual', 'Real', 'Dedup Own', 'Dedup Others', 'Null', 'Est. Space']
+        tbl.align['Virtual'] = 'r'
+        tbl.align['Real'] = 'r'
+        tbl.align['Dedup Own'] = 'r'
+        tbl.align['Dedup Others'] = 'r'
+        tbl.align['Null'] = 'r'
+        tbl.align['Est. Space'] = 'r'
+        for version_uid in version_uids:
+            stats = backy.du(version_uid)
+            tbl.add_row([
+                stats['virtual_space'],
+                stats['real_space'],
+                stats['dedup_own'],
+                stats['dedup_others'],
+                stats['null_space'],
+                stats['backy_space'],
+                ])
+        print(tbl)
+
+
     def stats(self, version_uid, limit=None):
         backy = self.backy()
         if limit is not None:
@@ -544,6 +575,13 @@ def main():
     p.add_argument('version_uid1', help='Left version')
     p.add_argument('version_uid2', help='Right version')
     p.set_defaults(func='diff_meta')
+
+    # disk usage
+    p = subparsers.add_parser(
+        'du',
+        help="Get disk usage for a version or for all versions")
+    p.add_argument('version_uid', nargs='?', default=None, help='Show disk usage for this version')
+    p.set_defaults(func='du')
 
     # NBD
     p = subparsers.add_parser(
