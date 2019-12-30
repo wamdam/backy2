@@ -165,6 +165,12 @@ what backy.cfg says.
 
         awk -F '|' '{ print $3 }'
 
+.. HINT::
+    For simplicity you can skip the header with the ``-s`` switch::
+
+        $ backy2 -ms ls
+
+
 Debugging
 ~~~~~~~~~
 

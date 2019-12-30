@@ -385,6 +385,13 @@ Example::
 
         awk -F '|' '{ print $3 }'
 
+.. HINT::
+    For simplicity you can skip the header with the ``-s`` switch::
+
+        $ backy2 -ms ls
+
+
+
 
 Progress in process tree
 ~~~~~~~~~~~~~~~~~~~~~~~~

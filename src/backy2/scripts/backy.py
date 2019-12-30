@@ -22,8 +22,9 @@ __version__ = pkg_resources.get_distribution('backy2').version
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, machine_output, Config):
+    def __init__(self, machine_output, skip_header, Config):
         self.machine_output = machine_output
+        self.skip_header = skip_header
         self.Config = Config
         self.backy = backy_from_config(Config)
 
@@ -100,7 +101,8 @@ class Commands():
 
     def _ls_blocks_machine_output(self, blocks):
         field_names = ['type', 'id', 'date', 'uid', 'size', 'valid']
-        print('|'.join(field_names))
+        if not self.skip_header:
+            print('|'.join(field_names))
         for block in blocks:
             print('|'.join(map(str, [
                 'block',
@@ -135,13 +137,16 @@ class Commands():
                 ",".join(sorted([t.name for t in version.tags])),
                 version.expire if version.expire else '',
                 ])
+        if self.skip_header:
+            tbl.header = False
         print(tbl)
 
 
     def _ls_versions_machine_output(self, versions):
         field_names = ['type', 'date', 'name', 'snapshot_name', 'size',
                 'size_bytes', 'uid', 'valid', 'protected', 'tags', 'expire']
-        print('|'.join(field_names))
+        if not self.skip_header:
+            print('|'.join(field_names))
         for version in versions:
             print('|'.join(map(str, [
                 'version',
@@ -193,6 +198,8 @@ class Commands():
                 stat.blocks_sparse,
                 stat.duration_seconds,
                 ])
+        if self.skip_header:
+            tbl.header = False
         print(tbl)
 
 
@@ -201,7 +208,8 @@ class Commands():
                 'bytes read', 'blocks read', 'bytes written', 'blocks written',
                 'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
                 'duration (s)']
-        print('|'.join(field_names))
+        if not self.skip_header:
+            print('|'.join(field_names))
         for stat in stats:
             print('|'.join(map(str, [
                 'statistics',
@@ -396,6 +404,8 @@ def main():
         '-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument(
         '-m', '--machine-output', action='store_true', default=False)
+    parser.add_argument(
+        '-s', '--skip-header', action='store_true', default=False)
     parser.add_argument(
         '-V', '--version', action='store_true', help='Show version')
     parser.add_argument(
@@ -608,7 +618,7 @@ def main():
     else:
         init_logging(config.get('logfile'), console_level)
 
-    commands = Commands(args.machine_output, Config)
+    commands = Commands(args.machine_output, args.skip_header, Config)
     func = getattr(commands, args.func)
 
     # Pass over to function
@@ -618,6 +628,7 @@ def main():
     del func_args['verbose']
     del func_args['version']
     del func_args['machine_output']
+    del func_args['skip_header']
 
     try:
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
