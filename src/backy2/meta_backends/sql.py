@@ -248,10 +248,15 @@ class MetaBackend(_MetaBackend):
             _block_count_in_all_versions = row.shared
             _block_count_in_other_versions = _block_count_in_all_versions - _block_count_in_own_version
 
-            dedup_own += row.size * (_block_count_in_own_version - 1)  # 1 is real, the others are dedup'd
-            dedup_others += row.size * _block_count_in_other_versions
+            # if the block is in other versions, only account it as dedup_others.
+            # It doesn't matter how often it is used in other versions.
+            if _block_count_in_other_versions:
+                dedup_others += row.size * _block_count_in_own_versions
+            else:
+                dedup_own += row.size * (_block_count_in_own_version - 1)  # 1 is real, the others are dedup'd
 
             backy_space += row.size / _block_count_in_all_versions  # partial size
+
             if _block_count_in_other_versions == 0:  # only in this version
                 space_freed += row.size
 
