@@ -241,11 +241,18 @@ class MetaBackend(_MetaBackend):
         #    """)
         result = self.session.execute(statement, params={'version_uid': version_uid})
         for row in result:
+            # calculations are based on part of real.
             real_space += row.size * row.own_shared
-            dedup_own += row.size * (row.own_shared - 1)
-            dedup_others += row.size * (row.shared - row.own_shared)
-            backy_space += row.size / (row.shared)  # partial size
-            if (row.shared - row.own_shared) == 0:
+
+            _block_count_in_own_version = row.own_shared
+            _block_count_in_all_versions = row.shared
+            _block_count_in_other_versions = _block_count_in_all_versions - _block_count_in_own_version
+
+            dedup_own += row.size * (_block_count_in_own_version - 1)  # 1 is real, the others are dedup'd
+            dedup_others += row.size * _block_count_in_other_versions
+
+            backy_space += row.size / _block_count_in_all_versions  # partial size
+            if _block_count_in_other_versions == 0:  # only in this version
                 space_freed += row.size
 
         ret = {
