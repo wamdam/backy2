@@ -220,14 +220,6 @@ class MetaBackend(_MetaBackend):
             null_space += block.size
 
         # find real blocks
-        #statement = text("""
-        #        select a.version_uid, a.uid, a.size,
-        #            (select count(*) cnt from blocks where version_uid=a.version_uid and uid=a.uid) shared,
-        #            (select count(*) cnt from blocks where version_uid!=a.version_uid and uid=a.uid) other_shared
-        #        from blocks a
-        #            where a.version_uid=:version_uid
-        #            and a.uid is not NULL
-        #        """)
         statement = text("""
             select a.uid, a.size, count(a.*) own_shared,
                 (select count(*) cnt from blocks where uid=a.uid) shared
@@ -236,6 +228,17 @@ class MetaBackend(_MetaBackend):
                 and a.uid is not NULL
             group by a.uid, a.size
             """)
+
+        # Alternative, probably more compatible but not really faster.
+        #statement = text("""
+        #    select
+        #        a.uid, a.size, sum(case when a.version_uid=b.version_uid then 1 else 0 end) own_shared,
+        #        count(b.*) shared
+        #    from blocks a
+        #    left join blocks b on a.uid=b.uid
+        #        where a.version_uid=:version_uid
+        #    group by a.uid, a.size
+        #    """)
         result = self.session.execute(statement, params={'version_uid': version_uid})
         for row in result:
             real_space += row.size * row.own_shared
