@@ -294,8 +294,7 @@ class Commands():
             version_uids = [v.uid for v in _versions]
 
         tbl = PrettyTable()
-        tbl.field_names = ['Virtual (MB)', 'Real (MB)', 'Dedup Own (MB)', 'Dedup Others (MB)', 'Null (MB)', 'Est. Space (MB)', 'Est. Space freed (MB)']
-        tbl.align['Virtual'] = 'r'
+        tbl.field_names = ['Real (MB)', 'Dedup Own (MB)', 'Dedup Others (MB)', 'Null (MB)', 'Est. Space (MB)', 'Est. Space freed (MB)']
         tbl.align['Real'] = 'r'
         tbl.align['Dedup Own'] = 'r'
         tbl.align['Dedup Others'] = 'r'
@@ -305,7 +304,6 @@ class Commands():
         for version_uid in version_uids:
             stats = backy.du(version_uid)
             tbl.add_row([
-                stats['virtual_space']//1024//1024,
                 stats['real_space']//1024//1024,
                 stats['dedup_own']//1024//1024,
                 stats['dedup_others']//1024//1024,

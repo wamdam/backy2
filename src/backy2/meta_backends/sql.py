@@ -220,26 +220,32 @@ class MetaBackend(_MetaBackend):
             null_space += block.size
 
         # find real blocks
+        #statement = text("""
+        #        select a.version_uid, a.uid, a.size,
+        #            (select count(*) cnt from blocks where version_uid=a.version_uid and uid=a.uid) shared,
+        #            (select count(*) cnt from blocks where version_uid!=a.version_uid and uid=a.uid) other_shared
+        #        from blocks a
+        #            where a.version_uid=:version_uid
+        #            and a.uid is not NULL
+        #        """)
         statement = text("""
-                select a.version_uid, a.uid, a.size,
-                    (select count(*) cnt from blocks where version_uid=a.version_uid and uid=a.uid) own_shared,
-                    (select count(*) cnt from blocks where version_uid!=a.version_uid and uid=a.uid) other_shared
-                from blocks a
-                    where a.version_uid=:version_uid
-                    and a.uid is not NULL
-                """)
+            select a.uid, a.size, count(a.*) own_shared,
+                (select count(*) cnt from blocks where uid=a.uid) shared
+            from blocks a
+                where a.version_uid=:version_uid
+                and a.uid is not NULL
+            group by a.uid, a.size
+            """)
         result = self.session.execute(statement, params={'version_uid': version_uid})
         for row in result:
-            virtual_space += row.size * row.own_shared
             real_space += row.size
             dedup_own += row.size * (row.own_shared - 1)
-            dedup_others += row.size * row.other_shared
-            backy_space += row.size / (row.own_shared + row.other_shared)  # partial size
-            if row.other_shared == 0:
+            dedup_others += row.size * (row.shared - row.own_shared)
+            backy_space += row.size / (row.shared)  # partial size
+            if (row.shared - row.own_shared) == 0:
                 space_freed += row.size
 
         ret = {
-            'virtual_space': virtual_space,
             'real_space': real_space,
             'dedup_own': dedup_own,
             'dedup_others': dedup_others,
