@@ -84,93 +84,6 @@ class Commands():
             exit(20)
 
 
-    def _ls_blocks_tbl_output(self, blocks):
-        tbl = PrettyTable()
-        tbl.field_names = ['id', 'date', 'uid', 'size', 'valid']
-        tbl.align['id'] = 'r'
-        tbl.align['size'] = 'r'
-        for block in blocks:
-            tbl.add_row([
-                block.id,
-                block.date,
-                block.uid,
-                block.size,
-                int(block.valid),
-                ])
-        print(tbl)
-
-
-    def _ls_blocks_machine_output(self, blocks):
-        field_names = ['type', 'id', 'date', 'uid', 'size', 'valid']
-        if not self.skip_header:
-            print('|'.join(field_names))
-        for block in blocks:
-            print('|'.join(map(str, [
-                'block',
-                block.id,
-                block.date,
-                block.uid,
-                block.size,
-                int(block.valid),
-                ])))
-
-
-    def _ls_versions_tbl_output(self, versions, fields):
-        tbl = PrettyTable()
-        # TODO: number of invalid blocks
-        tbl.field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
-        tbl.align['name'] = 'l'
-        tbl.align['snapshot_name'] = 'l'
-        tbl.align['tags'] = 'l'
-        tbl.align['size'] = 'r'
-        tbl.align['size_bytes'] = 'r'
-        for version in versions:
-            data = {
-                'date': version.date,
-                'name': version.name,
-                'snapshot_name': version.snapshot_name,
-                'size': version.size,
-                'size_bytes': version.size_bytes,
-                'uid': version.uid,
-                'valid': int(version.valid),
-                'protected': int(version.protected),
-                'tags': ",".join([t.name for t in version.tags]),
-                'expire': version.expire if version.expire else '',
-            }
-            values = []
-            for field_name in tbl.field_names:
-                values.append(data[field_name])
-            tbl.add_row(values)
-        if self.skip_header:
-            tbl.header = False
-        print(tbl)
-
-
-    def _ls_versions_machine_output(self, versions, fields):
-        field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
-        #field_names.insert(0, 'type')  # OOO
-
-        if not self.skip_header:
-            print('|'.join(field_names))
-        for version in versions:
-            data = {
-                'date': version.date,
-                'name': version.name,
-                'snapshot_name': version.snapshot_name,
-                'size': version.size,
-                'size_bytes': version.size_bytes,
-                'uid': version.uid,
-                'valid': int(version.valid),
-                'protected': int(version.protected),
-                'tags': ",".join([t.name for t in version.tags]),
-                'expire': version.expire if version.expire else '',
-            }
-            values = []
-            for field_name in field_names:
-                values.append(data[field_name])
-            print('|'.join(map(str, values)))
-
-
     def _stats_tbl_output(self, stats):
         tbl = PrettyTable()
         tbl.field_names = ['date', 'uid', 'name', 'size bytes', 'size blocks',
@@ -250,10 +163,25 @@ class Commands():
         if expired:
             versions = [v for v in versions if v.expire and v.expire < date.today()]
 
+        fields = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
+        values = []
+        for version in versions:
+            values.append({
+                'date': version.date,
+                'name': version.name,
+                'snapshot_name': version.snapshot_name,
+                'size': version.size,
+                'size_bytes': version.size_bytes,
+                'uid': version.uid,
+                'valid': int(version.valid),
+                'protected': int(version.protected),
+                'tags': ",".join([t.name for t in version.tags]),
+                'expire': version.expire if version.expire else '',
+            })
         if self.machine_output:
-            self._ls_versions_machine_output(versions, fields)
+            self._machine_output(fields, values)
         else:
-            self._ls_versions_tbl_output(versions, fields)
+            self._tbl_output(fields, values, alignments={'name': 'l', 'snapshot_name': 'l', 'tags': 'l', 'size': 'r', 'size_bytes': 'r'})
         backy.close()
 
 
