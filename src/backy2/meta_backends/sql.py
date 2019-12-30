@@ -251,7 +251,7 @@ class MetaBackend(_MetaBackend):
             # if the block is in other versions, only account it as dedup_others.
             # It doesn't matter how often it is used in other versions.
             if _block_count_in_other_versions:
-                dedup_others += row.size * _block_count_in_own_versions
+                dedup_others += row.size * _block_count_in_own_version
             else:
                 dedup_own += row.size * (_block_count_in_own_version - 1)  # 1 is real, the others are dedup'd
 
