@@ -211,6 +211,7 @@ class MetaBackend(_MetaBackend):
         dedup_others = 0
         null_space = 0
         backy_space = 0
+        space_freed = 0
 
         # find null blocks
         blocks = self.session.query(Block).filter_by(version_uid=version_uid, uid=None).all()
@@ -234,6 +235,8 @@ class MetaBackend(_MetaBackend):
             dedup_own += row.size * (row.own_shared - 1)
             dedup_others += row.size * row.other_shared
             backy_space += row.size / (row.own_shared + row.other_shared)  # partial size
+            if row.other_shared = 0:
+                space_freed += row.size
 
         ret = {
             'virtual_space': virtual_space,
@@ -242,6 +245,7 @@ class MetaBackend(_MetaBackend):
             'dedup_others': dedup_others,
             'null_space': null_space,
             'backy_space': round(backy_space),
+            'space_freed': space_freed,
         }
 
         return ret
