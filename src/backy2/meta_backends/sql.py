@@ -238,7 +238,7 @@ class MetaBackend(_MetaBackend):
             """)
         result = self.session.execute(statement, params={'version_uid': version_uid})
         for row in result:
-            real_space += row.size
+            real_space += row.size * row.own_shared
             dedup_own += row.size * (row.own_shared - 1)
             dedup_others += row.size * (row.shared - row.own_shared)
             backy_space += row.size / (row.shared)  # partial size
