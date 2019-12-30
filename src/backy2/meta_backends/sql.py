@@ -47,7 +47,8 @@ class Stats(Base):
 class Version(Base):
     __tablename__ = 'versions'
     uid = Column(String(36), primary_key=True)
-    date = Column("date", DateTime , default=func.now(), nullable=False)
+    date = Column("date", DateTime, default=func.now(), nullable=False)
+    expire = Column(DateTime, nullable=True)
     name = Column(String, nullable=False, default='')
     snapshot_name = Column(String, nullable=False, server_default='', default='')
     size = Column(BigInteger, nullable=False)
