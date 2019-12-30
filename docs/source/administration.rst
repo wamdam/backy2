@@ -170,6 +170,15 @@ what backy.cfg says.
 
         $ backy2 -ms ls
 
+In ``ls`` machine output also accepts a fields list via ``--fields`` or ``-f``. For example you could output
+only the uid column skipping headers in machine output::
+
+    $backy2 -ms ls -f uid
+
+Or if you want to output date, name, valid and tags e.g. for monitoring::
+
+    $backy2 -ms ls -f date,name,valid,tags
+
 
 Debugging
 ~~~~~~~~~

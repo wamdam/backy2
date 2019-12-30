@@ -61,7 +61,7 @@ you can get the expired versions (based on you server time) via::
 .. HINT::
     If you want to remove versions automatically by scripting, you might use this::
 
-        $ for version in `backy2 -m ls -e | tail -n+2 | awk -F'|' '{ print $7 }'`; do backy2 rm $version; done
+        $ for version in `backy2 -ms ls -e -f uid`; do backy2 rm $version; done
 
 
 backy2 cleanup
