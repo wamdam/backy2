@@ -376,7 +376,7 @@ class Commands():
         due_backups = {}   # name: list of tags
         for name in names:
             _due_schedulers = set()
-            _due_backup_expire_date = datetime.now()
+            _due_backup_expire_date = datetime.utcnow()
             for scheduler in schedulers:
                 interval = convert_to_timedelta(self.Config(section=scheduler).get('interval'))
                 keep = self.Config(section=scheduler).getint('keep')
@@ -385,7 +385,7 @@ class Commands():
                 _due_backup = backy.get_due_backups(name, scheduler, interval, keep, sla)  # True/False
                 if _due_backup:
                     _due_schedulers.add(scheduler)
-                    _due_backup_expire_date = max(_due_backup_expire_date, datetime.now() + keep * interval)
+                    _due_backup_expire_date = max(_due_backup_expire_date, datetime.utcnow() + keep * interval)
             if _due_schedulers:
                 due_backups[name] = {'schedulers': _due_schedulers, 'due_backup_expire_date': _due_backup_expire_date}
 
