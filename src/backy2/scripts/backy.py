@@ -30,6 +30,38 @@ class Commands():
         self.backy = backy_from_config(Config)
 
 
+    def _tbl_output(self, fields, data, alignments=None):
+        """
+        outputs data based on fields list.
+        fields: list(fieldnames)
+        data: list of dicts with keys containing field names
+        alignments: dict(name: direction)
+        """
+        tbl = PrettyTable()
+        tbl.field_names = fields
+        if alignments:
+            for key, value in alignments.items():
+                tbl.align[key] = value
+        for d in data:
+            values = []
+            for field_name in fields:
+                values.append(d[field_name])
+            tbl.add_row(values)
+        if self.skip_header:
+            tbl.header = False
+        print(tbl)
+
+
+    def _machine_output(self, fields, data):
+        if not self.skip_header:
+            print('|'.join(fields))
+        for d in data:
+            values = []
+            for field_name in fields:
+                values.append(d[field_name])
+            print('|'.join(map(str, values)))
+
+
     def backup(self, name, snapshot_name, source, rbd, from_version, tag=None, expire=None):
         expire_date = None
         if expire:
@@ -321,50 +353,6 @@ class Commands():
             logger.warn('Unable to expire version.')
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-    def _tbl_output(self, fields, data, alignments=None):
-        """
-        outputs data based on fields list.
-        fields: list(fieldnames)
-        data: list of dicts with keys containing field names
-        alignments: dict(name: direction)
-        """
-        tbl = PrettyTable()
-        tbl.field_names = fields
-        if alignments:
-            for key, value in alignments.items():
-                tbl.align[key] = value
-        for d in data:
-            values = []
-            for field_name in fields:
-                values.append(d[field_name])
-            tbl.add_row(values)
-        if self.skip_header:
-            tbl.header = False
-        print(tbl)
-
-
-    def _machine_output(self, fields, data):
-        if not self.skip_header:
-            print('|'.join(fields))
-        for d in data:
-            values = []
-            for field_name in fields:
-                values.append(d[field_name])
-            print('|'.join(map(str, values)))
-
-
     def due(self, name, schedulers, fields):
         schedulers = [s.strip() for s in list(csv.reader(StringIO(schedulers)))[0]]
         backy = self.backy()
@@ -422,29 +410,6 @@ class Commands():
             self._machine_output(field_names, values)
         else:
             self._tbl_output(field_names, values, alignments={'name': 'l', 'breach': 'l'})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     def initdb(self):
