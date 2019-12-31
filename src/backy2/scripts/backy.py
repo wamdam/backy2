@@ -76,7 +76,8 @@ class Commands():
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        backy.backup(name, snapshot_name, source, hints, from_version, tag, expire_date)
+        tags = [t.strip() for t in list(csv.reader(StringIO(tag)))[0]]
+        backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date)
         backy.close()
 
 
@@ -324,7 +325,9 @@ class Commands():
     def add_tag(self, version_uid, name):
         try:
             backy = self.backy()
-            backy.add_tag(version_uid, name)
+            tags = [t.strip() for t in list(csv.reader(StringIO(name)))[0]]
+            for tag in tags:
+                backy.add_tag(version_uid, tag)
             backy.close()
         except:
             logger.warn('Unable to add tag.')
@@ -332,7 +335,9 @@ class Commands():
 
     def remove_tag(self, version_uid, name):
         backy = self.backy()
-        backy.remove_tag(version_uid, name)
+        tags = [t.strip() for t in list(csv.reader(StringIO(name)))[0]]
+        for tag in tags:
+            backy.remove_tag(version_uid, tag)
         backy.close()
 
 
@@ -455,8 +460,8 @@ def main():
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
     p.add_argument(
-        '-t', '--tag', action='append',  dest='tag', default=None,
-        help='Use a specific tag for the target backup version-uid')
+        '-t', '--tag', default=None,
+        help='Use a specific tag (or multiple comma-separated tags) for the target backup version-uid')
     p.add_argument('-e', '--expire', default='', help='Expiration date (yyyy-mm-dd) (optional)')
     p.set_defaults(func='backup')
 
@@ -597,7 +602,7 @@ def main():
     # ADD TAG
     p = subparsers.add_parser(
         'add-tag',
-        help="Add a named tag to a backup version.")
+        help="Add a named tag (or many comma-separated tags) to a backup version.")
     p.add_argument('version_uid')
     p.add_argument('name')
     p.set_defaults(func='add_tag')
@@ -605,7 +610,7 @@ def main():
     # REMOVE TAG
     p = subparsers.add_parser(
         'remove-tag',
-        help="Remove a named tag from a backup version.")
+        help="Remove a named tag (or many comma-separated tags) from a backup version.")
     p.add_argument('version_uid')
     p.add_argument('name')
     p.set_defaults(func='remove_tag')

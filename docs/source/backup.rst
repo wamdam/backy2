@@ -283,14 +283,16 @@ command provides the command line switch '-t' or '--tag':
 
     $ backy2 backup -t mytag rbd://cephstorage/test_vm test_vm
 
-You can also use multiple tags for one revision:
+You can also use multiple tags for one revision, separated by comma:
 
-    $ backy2 backup -t mytag -t anothertag rbd://cephstorage/test_vm test_vm
+    $ backy2 backup -t mytag,anothertag rbd://cephstorage/test_vm test_vm
 
 Later on you can modify tags with the commands 'add-tag' and 'remove-tag':
 
     $ backy2 add-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 mytag
     $ backy2 remove-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 anothertag
+    $ backy2 add-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 a,b,c,d
+    $ backy2 remove-tag ea6faa64-6818-11e7-9a92-a0369f78d9c8 c,b
 
 
 Expire backups
