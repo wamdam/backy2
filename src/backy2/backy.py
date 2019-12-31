@@ -367,9 +367,17 @@ class Backy():
         # They're already sorted by date so the newest is at the end of the list.
         _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         sla_breaches = []  # name: list of breaches
+
         # Check SLA for number of versions to keep for this scheduler
         if len(_last_versions_for_name_and_scheduler) < keep:
-            sla_breaches.append('Missing backups for scheduler {}. Too few backups. Found {}, should be {}.'.format(
+            sla_breaches.append('{}: Too few backups. Found {}, should be {}.'.format(
+                scheduler,
+                len(_last_versions_for_name_and_scheduler),
+                keep,
+            ))
+
+        if len(_last_versions_for_name_and_scheduler) > keep + 2:  # allow two more during delete time
+            sla_breaches.append('{}: Too many backups. Found {}, should be {}.'.format(
                 scheduler,
                 len(_last_versions_for_name_and_scheduler),
                 keep,
@@ -382,7 +390,7 @@ class Backy():
                 _last_version = version.date
                 continue
             if version.date < _last_version + interval - sla or version.date > _last_version + interval + sla:
-                sla_breaches.append('SLA not met for scheduler {}. Version date not in SLA range. Version {} is created at {} and shoud be between {} and {}.'.format(
+                sla_breaches.append('{}: Version {} is not in SLA range. It was created at {} and shoud be between {} and {}.'.format(
                     scheduler,
                     version.uid,
                     version.date,
@@ -390,6 +398,16 @@ class Backy():
                     _last_version + interval + sla,
                 ))
             _last_version = version.date
+
+        # Check if oldest backup is not older than allowed
+        _oldest_allowed = datetime.datetime.now() - keep*interval - sla
+        if _last_versions_for_name_and_scheduler and _last_versions_for_name_and_scheduler[0].date < _oldest_allowed:
+            sla_breaches.append('{}: Backup too old. Found version_uid {} with backup date {}. Oldest allowed date is {}.'.format(
+                scheduler,
+                _last_versions_for_name_and_scheduler[0].uid,
+                _last_versions_for_name_and_scheduler[0].date,
+                _oldest_allowed,
+            ))
 
         return sla_breaches
 
