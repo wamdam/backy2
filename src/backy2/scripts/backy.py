@@ -3,7 +3,7 @@
 
 from backy2.config import Config as _Config
 from backy2.logging import logger, init_logging
-from backy2.utils import hints_from_rbd_diff, backy_from_config, convert_to_timedelta
+from backy2.utils import hints_from_rbd_diff, backy_from_config, convert_to_timedelta, parse_expire_date
 from datetime import date, datetime
 from functools import partial
 from io import StringIO
@@ -45,7 +45,10 @@ class Commands():
         for d in data:
             values = []
             for field_name in fields:
-                values.append(d[field_name])
+                if type(d[field_name]) is datetime:
+                    values.append(d[field_name].strftime('%Y-%m-%d %H:%M:%S'))
+                else:
+                    values.append(d[field_name])
             tbl.add_row(values)
         if self.skip_header:
             tbl.header = False
@@ -58,7 +61,10 @@ class Commands():
         for d in data:
             values = []
             for field_name in fields:
-                values.append(d[field_name])
+                if type(d[field_name]) is datetime:
+                    values.append(d[field_name].strftime('%Y-%m-%d %H:%M:%S'))
+                else:
+                    values.append(d[field_name])
             print('|'.join(map(str, values)))
 
 
@@ -66,7 +72,7 @@ class Commands():
         expire_date = None
         if expire:
             try:
-                expire_date = datetime.strptime(expire, '%Y-%m-%d').date()
+                expire_date = parse_expire_date(expire)
             except ValueError as e:
                 logger.error(str(e))
                 exit(1)
@@ -127,7 +133,7 @@ class Commands():
         if tag:
             versions = [v for v in versions if tag in [t.name for t in v.tags]]
         if expired:
-            versions = [v for v in versions if v.expire and v.expire < date.today()]
+            versions = [v for v in versions if v.expire and v.expire < datetime.utcnow()]
 
         fields = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
         values = []
@@ -346,7 +352,7 @@ class Commands():
             expire_date = None
         else:
             try:
-                expire_date = datetime.strptime(expire, '%Y-%m-%d').date()
+                expire_date = parse_expire_date(expire)
             except ValueError as e:
                 logger.error(str(e))
                 exit(1)
@@ -381,7 +387,7 @@ class Commands():
                     _due_schedulers.add(scheduler)
                     _due_backup_expire_date = max(_due_backup_expire_date, datetime.now() + keep * interval)
             if _due_schedulers:
-                due_backups[name] = {'schedulers': schedulers, 'due_backup_expire_date': _due_backup_expire_date.date()}
+                due_backups[name] = {'schedulers': _due_schedulers, 'due_backup_expire_date': _due_backup_expire_date}
 
         field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
         values = []
@@ -468,7 +474,7 @@ def main():
     p.add_argument(
         '-t', '--tag', default=None,
         help='Use a specific tag (or multiple comma-separated tags) for the target backup version-uid')
-    p.add_argument('-e', '--expire', default='', help='Expiration date (yyyy-mm-dd) (optional)')
+    p.add_argument('-e', '--expire', default='', help='Expiration date (yyyy-mm-dd or "yyyy-mm-dd HH-MM-SS") (optional)')
     p.set_defaults(func='backup')
 
     # RESTORE
@@ -558,7 +564,7 @@ def main():
     p.add_argument('-t', '--tag', default=None,
             help="Limit output to this tag")
     p.add_argument('-e', '--expired', action='store_true', default=False,
-            help="Only list expired versions (expired < today)")
+            help="Only list expired versions (expired < now)")
     p.add_argument('-f', '--fields', default="date,name,snapshot_name,size,size_bytes,uid,valid,protected,tags,expire",
             help="Show these fields (comma separated). Available: date,name,snapshot_name,size,size_bytes,uid,valid,protected,tags,expire")
 
@@ -624,7 +630,7 @@ def main():
     # EXPIRE
     p = subparsers.add_parser(
         'expire',
-        help="""Set expiration date for a backup version. Date format is yyyy-mm-dd (e.g. 2020-01-23). HINT: Create with 'date +"%%Y-%%m-%%d" -d "today + 7 days"'""")
+        help="""Set expiration date for a backup version. Date format is yyyy-mm-dd or "yyyy-mm-dd HH:MM:SS" (e.g. 2020-01-23). HINT: Create with 'date +"%%Y-%%m-%%d" -d "today + 7 days"'""")
     p.add_argument('version_uid')
     p.add_argument('expire')
     p.set_defaults(func='expire')

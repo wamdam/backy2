@@ -8,7 +8,7 @@ import itertools
 import hashlib
 import importlib
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 
 def convert_to_timedelta(time_val):
@@ -48,6 +48,17 @@ def convert_to_timedelta(time_val):
         return timedelta(days=num)
     else:
         raise ValueError('Unknown timedelta format: {}'.format(time_val))
+
+
+def parse_expire_date(date_string):
+    try:
+        date = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        try:
+            date = datetime.strptime(date_string, '%Y-%m-%d')
+        except ValueError:
+            raise
+    return date
 
 
 def hints_from_rbd_diff(rbd_diff):

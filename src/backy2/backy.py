@@ -347,7 +347,7 @@ class Backy():
             raise ValueError('Version {} is protected. Will not delete.'.format(version_uid))
         if not force:
             # check if disallow_rm_when_younger_than_days allows deletion
-            age_days = (datetime.datetime.now() - version.date).days
+            age_days = (datetime.datetime.utcnow() - version.date).days
             if disallow_rm_when_younger_than_days > age_days:
                 raise LockError('Version {} is too young. Will not delete.'.format(version_uid))
 
@@ -383,6 +383,16 @@ class Backy():
                 keep,
             ))
 
+        # Check SLA for age of newest backup
+        if _last_versions_for_name_and_scheduler and _last_versions_for_name_and_scheduler[-1].date + interval + sla < datetime.datetime.utcnow():
+            sla_breaches.append('{}: Latest backup is too old. Version {} has date {}, new backup due since {}.'.format(
+                scheduler,
+                _last_versions_for_name_and_scheduler[-1].uid,
+                _last_versions_for_name_and_scheduler[-1].date,
+                _last_versions_for_name_and_scheduler[-1].date + interval + sla,
+            ))
+
+
         # Check SLA for delta time between versions for this scheduler
         _last_version = 0
         for version in _last_versions_for_name_and_scheduler:
@@ -400,7 +410,7 @@ class Backy():
             _last_version = version.date
 
         # Check if oldest backup is not older than allowed
-        _oldest_allowed = datetime.datetime.now() - keep*interval - sla - relativedelta(days=1)  # always allow 1 day lazy delete time.
+        _oldest_allowed = datetime.datetime.utcnow() - keep*interval - sla - relativedelta(days=1)  # always allow 1 day lazy delete time.
         if _last_versions_for_name_and_scheduler and _last_versions_for_name_and_scheduler[0].date < _oldest_allowed:
             sla_breaches.append('{}: Backup too old. Found version_uid {} with backup date {}. Oldest allowed date is {}.'.format(
                 scheduler,
@@ -420,7 +430,7 @@ class Backy():
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
             return True
-        elif datetime.datetime.now() > (_last_versions_for_name_and_scheduler[-1].date + interval):   # no backup within interval exists, so require one
+        elif datetime.datetime.utcnow() > (_last_versions_for_name_and_scheduler[-1].date + interval):   # no backup within interval exists, so require one
             return True
         return False
 
