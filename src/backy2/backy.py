@@ -400,7 +400,7 @@ class Backy():
             _last_version = version.date
 
         # Check if oldest backup is not older than allowed
-        _oldest_allowed = datetime.datetime.now() - keep*interval - sla
+        _oldest_allowed = datetime.datetime.now() - keep*interval - sla - relativedelta(days=1)  # always allow 1 day lazy delete time.
         if _last_versions_for_name_and_scheduler and _last_versions_for_name_and_scheduler[0].date < _oldest_allowed:
             sla_breaches.append('{}: Backup too old. Found version_uid {} with backup date {}. Oldest allowed date is {}.'.format(
                 scheduler,
@@ -412,13 +412,15 @@ class Backy():
         return sla_breaches
 
 
-    def get_due_backups(self, name, scheduler, interval, sla):
+    def get_due_backups(self, name, scheduler, interval, keep, sla):
+        """
+        Returns True if a backup is due for a given scheduler
+        """
         _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
             return True
-        # TODO: Really substract the SLA here? That might be way to early.
-        elif datetime.datetime.now() > (_last_versions_for_name_and_scheduler[-1].date + interval - sla):   # no backup within interval +- sla exists, so require one
+        elif datetime.datetime.now() > (_last_versions_for_name_and_scheduler[-1].date + interval):   # no backup within interval exists, so require one
             return True
         return False
 

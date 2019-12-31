@@ -369,18 +369,24 @@ class Commands():
 
         due_backups = {}   # name: list of tags
         for name in names:
+            _due_schedulers = set()
+            _due_backup_expire_date = datetime.now()
             for scheduler in schedulers:
                 interval = convert_to_timedelta(self.Config(section=scheduler).get('interval'))
+                keep = self.Config(section=scheduler).getint('keep')
                 sla = convert_to_timedelta(self.Config(section=scheduler).get('sla'))
 
-                _due_backup = backy.get_due_backups(name, scheduler, interval, sla)  # True/False
+                _due_backup = backy.get_due_backups(name, scheduler, interval, keep, sla)  # True/False
                 if _due_backup:
-                    due_backups.setdefault(name, []).append(scheduler)
+                    _due_schedulers.add(scheduler)
+                    _due_backup_expire_date = max(_due_backup_expire_date, datetime.now() + keep * interval)
+            if _due_schedulers:
+                due_backups[name] = {'schedulers': schedulers, 'due_backup_expire_date': _due_backup_expire_date.date()}
 
         field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
         values = []
-        for name, schedulers in due_backups.items():
-            values.append({'name': name, 'schedulers': ",".join(schedulers)})
+        for name, backup_info in due_backups.items():
+            values.append({'name': name, 'schedulers': ",".join(backup_info['schedulers']), 'expire_date': backup_info['due_backup_expire_date']})
         if self.machine_output:
             self._machine_output(field_names, values)
         else:
@@ -630,8 +636,8 @@ def main():
     p.add_argument('name', nargs='?', default=None, help='Show due backups for this version name (optional, if not given, show due backups for all names).')
     p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
             help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
-    p.add_argument('-f', '--fields', default="name,schedulers",
-            help="Show these fields (comma separated). Available: name,schedulers")
+    p.add_argument('-f', '--fields', default="name,schedulers,expire_date",
+            help="Show these fields (comma separated). Available: name,schedulers,expire_date")
     p.set_defaults(func='due')
 
     # SLA
