@@ -84,73 +84,6 @@ class Commands():
             exit(20)
 
 
-    def _stats_tbl_output(self, stats):
-        tbl = PrettyTable()
-        tbl.field_names = ['date', 'uid', 'name', 'size bytes', 'size blocks',
-                'bytes read', 'blocks read', 'bytes written', 'blocks written',
-                'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
-                'duration (s)']
-        tbl.align['name'] = 'l'
-        tbl.align['size bytes'] = 'r'
-        tbl.align['size blocks'] = 'r'
-        tbl.align['bytes read'] = 'r'
-        tbl.align['blocks read'] = 'r'
-        tbl.align['bytes written'] = 'r'
-        tbl.align['blocks written'] = 'r'
-        tbl.align['bytes dedup'] = 'r'
-        tbl.align['blocks dedup'] = 'r'
-        tbl.align['bytes sparse'] = 'r'
-        tbl.align['blocks sparse'] = 'r'
-        tbl.align['duration (s)'] = 'r'
-        for stat in stats:
-            tbl.add_row([
-                stat.date,
-                stat.version_uid,
-                stat.version_name,
-                stat.version_size_bytes,
-                stat.version_size_blocks,
-                stat.bytes_read,
-                stat.blocks_read,
-                stat.bytes_written,
-                stat.blocks_written,
-                stat.bytes_found_dedup,
-                stat.blocks_found_dedup,
-                stat.bytes_sparse,
-                stat.blocks_sparse,
-                stat.duration_seconds,
-                ])
-        if self.skip_header:
-            tbl.header = False
-        print(tbl)
-
-
-    def _stats_machine_output(self, stats):
-        field_names = ['type', 'date', 'uid', 'name', 'size bytes', 'size blocks',
-                'bytes read', 'blocks read', 'bytes written', 'blocks written',
-                'bytes dedup', 'blocks dedup', 'bytes sparse', 'blocks sparse',
-                'duration (s)']
-        if not self.skip_header:
-            print('|'.join(field_names))
-        for stat in stats:
-            print('|'.join(map(str, [
-                'statistics',
-                stat.date,
-                stat.version_uid,
-                stat.version_name,
-                stat.version_size_bytes,
-                stat.version_size_blocks,
-                stat.bytes_read,
-                stat.blocks_read,
-                stat.bytes_written,
-                stat.blocks_written,
-                stat.bytes_found_dedup,
-                stat.blocks_found_dedup,
-                stat.bytes_sparse,
-                stat.blocks_sparse,
-                stat.duration_seconds,
-                ])))
-
-
     def ls(self, name, snapshot_name, tag, expired, fields):
         backy = self.backy()
         versions = backy.ls()
@@ -247,15 +180,49 @@ class Commands():
         print(tbl)
 
 
-    def stats(self, version_uid, limit=None):
+    def stats(self, version_uid, fields, limit=None):
         backy = self.backy()
         if limit is not None:
             limit = int(limit)
         stats = backy.stats(version_uid, limit)
+        fields = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
+
+        values = []
+        for stat in stats:
+            values.append({
+                'blocks dedup': stat.blocks_found_dedup,
+                'blocks read': stat.blocks_read,
+                'blocks sparse': stat.blocks_sparse,
+                'blocks written': stat.blocks_written,
+                'bytes dedup': stat.bytes_found_dedup,
+                'bytes read': stat.bytes_read,
+                'bytes sparse': stat.bytes_sparse,
+                'bytes written': stat.bytes_written,
+                'date': stat.date,
+                'duration (s)': stat.duration_seconds,
+                'metadata': stat.metadata,
+                'name': stat.version_name,
+                'size blocks': stat.version_size_blocks,
+                'size bytes': stat.version_size_bytes,
+                'uid': stat.version_uid,
+            })
         if self.machine_output:
-            self._stats_machine_output(stats)
+            self._machine_output(fields, values)
         else:
-            self._stats_tbl_output(stats)
+            self._tbl_output(fields, values, alignments={
+                'name': 'l',
+                'size bytes': 'r',
+                'size blocks': 'r',
+                'bytes read': 'r',
+                'blocks read': 'r',
+                'bytes written': 'r',
+                'blocks written': 'r',
+                'bytes dedup': 'r',
+                'blocks dedup': 'r',
+                'bytes sparse': 'r',
+                'blocks sparse': 'r',
+                'duration (s)': 'r',
+            })
         backy.close()
 
 
@@ -627,6 +594,8 @@ def main():
         'stats',
         help="Show statistics")
     p.add_argument('version_uid', nargs='?', default=None, help='Show statistics for this version')
+    p.add_argument('-f', '--fields', default="date,uid,name,size bytes,size blocks,bytes read,blocks read,bytes written,blocks written,bytes dedup,blocks dedup,bytes sparse,blocks sparse,duration (s)",
+            help="Show these fields (comma separated). Available: date,uid,name,size bytes,size blocks,bytes read,blocks read,bytes written,blocks written,bytes dedup,blocks dedup,bytes sparse,blocks sparse,duration (s)")
     p.add_argument('-l', '--limit', default=None,
             help="Limit output to this number (default: unlimited)")
     p.set_defaults(func='stats')
