@@ -365,7 +365,7 @@ class Backy():
         """
         # version's name must match and also the scheduler's name must be in tags.
         # They're already sorted by date so the newest is at the end of the list.
-        _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.name == name and scheduler in [t.name for t in v.tags]]
+        _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         sla_breaches = []  # name: list of breaches
         # Check SLA for number of versions to keep for this scheduler
         if len(_last_versions_for_name_and_scheduler) < keep:
@@ -395,11 +395,12 @@ class Backy():
 
 
     def get_due_backups(self, name, scheduler, interval, sla):
-        _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.name == name and scheduler in [t.name for t in v.tags]]
+        _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
             return True
-        elif _last_versions_for_name_and_scheduler[-1].date > (datetime.datetime.now() + interval - sla):   # no backup within interval +- sla exists, so require one
+        # TODO: Really substract the SLA here? That might be way to early.
+        elif datetime.datetime.now() > (_last_versions_for_name_and_scheduler[-1].date + interval - sla):   # no backup within interval +- sla exists, so require one
             return True
         return False
 
