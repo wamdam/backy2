@@ -50,6 +50,17 @@ def convert_to_timedelta(time_val):
         raise ValueError('Unknown timedelta format: {}'.format(time_val))
 
 
+# Credits: https://stackoverflow.com/questions/1094841/reusable-library-to-get-human-readable-version-of-file-size
+def humanize(num, suffix='B'):
+    if num == 0:
+        return '0'
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%.0f %s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.0f %s%s" % (num, 'Yi', suffix)
+
+
 def parse_expire_date(date_string):
     try:
         date = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')

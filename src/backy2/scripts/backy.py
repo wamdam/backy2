@@ -3,7 +3,7 @@
 
 from backy2.config import Config as _Config
 from backy2.logging import logger, init_logging
-from backy2.utils import hints_from_rbd_diff, backy_from_config, convert_to_timedelta, parse_expire_date
+from backy2.utils import hints_from_rbd_diff, backy_from_config, convert_to_timedelta, parse_expire_date, humanize
 from datetime import date, datetime
 from functools import partial
 from io import StringIO
@@ -23,19 +23,21 @@ __version__ = pkg_resources.get_distribution('backy2').version
 class Commands():
     """Proxy between CLI calls and actual backup code."""
 
-    def __init__(self, machine_output, skip_header, Config):
+    def __init__(self, machine_output, skip_header, human_readable, Config):
         self.machine_output = machine_output
         self.skip_header = skip_header
+        self.human_readable = human_readable
         self.Config = Config
         self.backy = backy_from_config(Config)
 
 
-    def _tbl_output(self, fields, data, alignments=None):
+    def _tbl_output(self, fields, data, alignments=None, humanize_columns=None):
         """
         outputs data based on fields list.
         fields: list(fieldnames)
         data: list of dicts with keys containing field names
         alignments: dict(name: direction)
+        humanize_columns: List of columns of file sizes
         """
         tbl = PrettyTable()
         tbl.field_names = fields
@@ -47,6 +49,8 @@ class Commands():
             for field_name in fields:
                 if type(d[field_name]) is datetime:
                     values.append(d[field_name].strftime('%Y-%m-%d %H:%M:%S'))
+                elif self.human_readable and humanize_columns and field_name in humanize_columns:
+                    values.append(humanize(d[field_name]))
                 else:
                     values.append(d[field_name])
             tbl.add_row(values)
@@ -55,7 +59,7 @@ class Commands():
         print(tbl)
 
 
-    def _machine_output(self, fields, data):
+    def _machine_output(self, fields, data, humanize_columns=None):
         if not self.skip_header:
             print('|'.join(fields))
         for d in data:
@@ -63,6 +67,8 @@ class Commands():
             for field_name in fields:
                 if type(d[field_name]) is datetime:
                     values.append(d[field_name].strftime('%Y-%m-%d %H:%M:%S'))
+                elif self.human_readable and humanize_columns and field_name in humanize_columns:
+                    values.append(humanize(d[field_name]))
                 else:
                     values.append(d[field_name])
             print('|'.join(map(str, values)))
@@ -151,9 +157,14 @@ class Commands():
                 'expire': version.expire if version.expire else '',
             })
         if self.machine_output:
-            self._machine_output(fields, values)
+            self._machine_output(fields, values, humanize_columns=('size_bytes',))
         else:
-            self._tbl_output(fields, values, alignments={'name': 'l', 'snapshot_name': 'l', 'tags': 'l', 'size': 'r', 'size_bytes': 'r'})
+            self._tbl_output(
+                    fields,
+                    values,
+                    alignments={'name': 'l', 'snapshot_name': 'l', 'tags': 'l', 'size': 'r', 'size_bytes': 'r'},
+                    humanize_columns=('size_bytes',),
+                    )
         backy.close()
 
 
@@ -191,7 +202,7 @@ class Commands():
         backy.close()
 
 
-    def du(self, version_uid=None):
+    def du(self, version_uid=None, fields=None):
         """ Output disk usage for a version
         """
         backy = self.backy()
@@ -201,22 +212,33 @@ class Commands():
             _versions = backy.ls()
             version_uids = [v.uid for v in _versions]
 
-        tbl = PrettyTable()
-        tbl.field_names = ['Real (GiB)', 'Null (GiB)', 'Dedup Own (GiB)', 'Dedup Others (GiB)', 'Individual (GiB)', 'Est. Space (GiB)', 'Est. Space freed (GiB)']
-        for fn in tbl.field_names:
-            tbl.align[fn] = 'r'
+        fields = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
+        values = []
         for version_uid in version_uids:
             stats = backy.du(version_uid)
-            tbl.add_row([
-                '{:.2f}'.format(stats['real_space']/1024/1024/1024),
-                '{:.2f}'.format(stats['null_space']/1024/1024/1024),
-                '{:.2f}'.format(stats['dedup_own']/1024/1024/1024),
-                '{:.2f}'.format(stats['dedup_others']/1024/1024/1024),
-                '{:.2f}'.format(stats['nodedup']/1024/1024/1024),
-                '{:.2f}'.format(stats['backy_space']/1024/1024/1024),
-                '{:.2f}'.format(stats['space_freed']/1024/1024/1024),
-                ])
-        print(tbl)
+            values.append({
+                'Real': stats['real_space'],
+                'Null': stats['null_space'],
+                'Dedup Own': stats['dedup_own'],
+                'Dedup Others': stats['dedup_others'],
+                'Individual': stats['nodedup'],
+                'Est. Space': stats['backy_space'],
+                'Est. Space freed': stats['space_freed'],
+                })
+
+        if self.machine_output:
+            self._machine_output(fields, values, humanize_columns=('Real', 'Null', 'Dedup Own', 'Dedup Others', 'Individual', 'Est. Space', 'Est. Space freed'))
+        else:
+            self._tbl_output(fields, values, alignments={
+                'Real': 'r',
+                'Null': 'r',
+                'Dedup Own': 'r',
+                'Dedup Others': 'r',
+                'Individual': 'r',
+                'Est. Space': 'r',
+                'Est. Space freed': 'r',
+                }, humanize_columns=('Real', 'Null', 'Dedup Own', 'Dedup Others', 'Individual', 'Est. Space', 'Est. Space freed'),
+            )
 
 
     def stats(self, version_uid, fields, limit=None):
@@ -246,7 +268,7 @@ class Commands():
                 'uid': stat.version_uid,
             })
         if self.machine_output:
-            self._machine_output(fields, values)
+            self._machine_output(fields, values, humanize_columns=('size bytes', 'bytes read', 'bytes written', 'bytes dedup', 'bytes sparse'))
         else:
             self._tbl_output(fields, values, alignments={
                 'name': 'l',
@@ -261,7 +283,8 @@ class Commands():
                 'bytes sparse': 'r',
                 'blocks sparse': 'r',
                 'duration (s)': 'r',
-            })
+                }, humanize_columns=('size bytes', 'bytes read', 'bytes written', 'bytes dedup', 'bytes sparse'),
+            )
         backy.close()
 
 
@@ -446,6 +469,8 @@ def main():
     parser.add_argument(
         '-s', '--skip-header', action='store_true', default=False)
     parser.add_argument(
+        '-r', '--human-readable', action='store_true', default=False)
+    parser.add_argument(
         '-V', '--version', action='store_true', help='Show version')
     parser.add_argument(
         '-c', '--configfile', default=None, type=str)
@@ -595,6 +620,8 @@ def main():
         'du',
         help="Get disk usage for a version or for all versions")
     p.add_argument('version_uid', nargs='?', default=None, help='Show disk usage for this version')
+    p.add_argument('-f', '--fields', default="Real,Null,Dedup Own,Dedup Others,Individual,Est. Space,Est. Space freed",
+            help="Show these fields (comma separated). Available: Real,Null,Dedup Own,Dedup Others,Individual,Est. Space,Est. Space freed)")
     p.set_defaults(func='du')
 
     # NBD
@@ -692,7 +719,7 @@ def main():
     else:
         init_logging(config.get('logfile'), console_level)
 
-    commands = Commands(args.machine_output, args.skip_header, Config)
+    commands = Commands(args.machine_output, args.skip_header, args.human_readable, Config)
     func = getattr(commands, args.func)
 
     # Pass over to function
@@ -703,6 +730,7 @@ def main():
     del func_args['version']
     del func_args['machine_output']
     del func_args['skip_header']
+    del func_args['human_readable']
 
     try:
         logger.debug('backup.{0}(**{1!r})'.format(args.func, func_args))
