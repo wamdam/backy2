@@ -37,7 +37,7 @@ Topic :: System :: Archiving :: Backup
     zip_safe=False,  # ONLY because of alembic.ini. The rest is zip-safe.
     install_requires=[
         'PrettyTable>=0.7.2',
-        'sqlalchemy>=1.3.12',
+        'sqlalchemy>=1.1.11',  # 1.1.11 is on ubuntu 18.04
         'psutil>=2.2.1',
         'shortuuid>=0.4.2',
         'setproctitle>=1.1.8',
