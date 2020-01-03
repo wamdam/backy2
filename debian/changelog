@@ -1,3 +1,15 @@
+backy2 (2.10.2) unstable; urgency=low
+
+  * Add disk usage report for versions
+  * Add schedulers with due dates and sla
+  * Add -f parameter for field selection on several commands
+  * Fixed a time / utc glitch in expire dates
+  * Including time in expire to support hourly or even minutely backups
+  * Added demo scripts
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 03 Jan 2020 11:11:11 +0100
+
+
 backy2 (2.10.1) unstable; urgency=low
 
   * Add sqlite compatibility again
