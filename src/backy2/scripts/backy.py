@@ -88,7 +88,10 @@ class Commands():
         if rbd:
             data = ''.join([line for line in fileinput.input(rbd).readline()])
             hints = hints_from_rbd_diff(data)
-        tags = [t.strip() for t in list(csv.reader(StringIO(tag)))[0]]
+        if tag:
+            tags = [t.strip() for t in list(csv.reader(StringIO(tag)))[0]]
+        else:
+            tags = []
         backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date)
         backy.close()
 
