@@ -17,7 +17,7 @@ deb:
 	ln -f ../backy2_$(CURRENT_VERSION)_all.deb dist
 
 env: setup.py
-	virtualenv -p python3 env
+	python3 -mvenv env
 	$(PYTHON) setup.py develop
 	$(PIP) install pex==1.2.13
 	$(PIP) install -r requirements_tests.txt
