@@ -91,7 +91,7 @@ class Commands():
         if tag:
             tags = [t.strip() for t in list(csv.reader(StringIO(tag)))[0]]
         else:
-            tags = []
+            tags = None
         backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date)
         backy.close()
 
