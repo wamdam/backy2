@@ -1,3 +1,10 @@
+backy2 (2.10.4) unstable; urgency=low
+
+  * Bugfix: Backup without tags was not possible
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 04 Jan 2020 23:00:11 +0100
+
+
 backy2 (2.10.3) unstable; urgency=low
 
   * Change du to bytes output
