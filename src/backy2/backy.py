@@ -388,9 +388,10 @@ class Backy():
             sla_breaches.append('{}: Latest backup is too old. Version {} has date {}, new backup due since {}.'.format(
                 scheduler,
                 _last_versions_for_name_and_scheduler[-1].uid,
-                _last_versions_for_name_and_scheduler[-1].date,
-                _last_versions_for_name_and_scheduler[-1].date + interval + sla,
+                _last_versions_for_name_and_scheduler[-1].date.strftime('%Y-%m-%d %H:%M:%S'),
+                (_last_versions_for_name_and_scheduler[-1].date + interval + sla).strftime('%Y-%m-%d %H:%M:%S'),
             ))
+
 
 
         # Check SLA for delta time between versions for this scheduler
@@ -403,9 +404,9 @@ class Backy():
                 sla_breaches.append('{}: Version {} is not in SLA range. It was created at {} and shoud be between {} and {}.'.format(
                     scheduler,
                     version.uid,
-                    version.date,
-                    _last_version + interval - sla,
-                    _last_version + interval + sla,
+                    version.date.strftime('%Y-%m-%d %H:%M:%S'),
+                    (_last_version + interval - sla).strftime('%Y-%m-%d %H:%M:%S'),
+                    (_last_version + interval + sla).strftime('%Y-%m-%d %H:%M:%S'),
                 ))
             _last_version = version.date
 
@@ -415,8 +416,8 @@ class Backy():
             sla_breaches.append('{}: Backup too old. Found version_uid {} with backup date {}. Oldest allowed date is {}.'.format(
                 scheduler,
                 _last_versions_for_name_and_scheduler[0].uid,
-                _last_versions_for_name_and_scheduler[0].date,
-                _oldest_allowed,
+                _last_versions_for_name_and_scheduler[0].date.strftime('%Y-%m-%d %H:%M:%S'),
+                _oldest_allowed.strftime('%Y-%m-%d %H:%M:%S'),
             ))
 
         return sla_breaches
