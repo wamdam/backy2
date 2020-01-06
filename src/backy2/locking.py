@@ -1,7 +1,12 @@
 import ctypes
 import fcntl
 import os
-import psutil
+try:
+    open('/proc/stat')
+except PermissionError:
+    psutil = None
+else:
+    import psutil
 import sys
 
 
@@ -57,5 +62,7 @@ class Locking:
 
 def find_other_procs(name):
     """ returns other processes by given name """
-    return [p for p in psutil.process_iter() if p.name().split()[0] == name]
-
+    if psutil:
+        return [p for p in psutil.process_iter() if p.name().split()[0] == name]
+    else:
+        return []

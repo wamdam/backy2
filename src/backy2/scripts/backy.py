@@ -670,8 +670,8 @@ def main():
         'due',
         help="""Based on the schedulers in the config file, calculate the due backups including tags.""")
     p.add_argument('name', nargs='?', default=None, help='Show due backups for this version name (optional, if not given, show due backups for all names).')
-    p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
-            help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
+    p.add_argument('-s', '--schedulers',default="daily,weekly,monthly",
+            help="Use these schedulers as defined in backy.cfg (default: daily,weekly,monthly)")
     p.add_argument('-f', '--fields', default="name,schedulers,expire_date",
             help="Show these fields (comma separated). Available: name,schedulers,expire_date")
     p.set_defaults(func='due')
@@ -681,8 +681,8 @@ def main():
         'sla',
         help="""Based on the schedulers in the config file, calculate the information about SLA.""")
     p.add_argument('name', nargs='?', default=None, help='Show SLA breaches for this version name (optional, if not given, show SLA breaches for all names).')
-    p.add_argument('-s', '--schedulers',default="scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly",
-            help="Use these schedulers as defined in backy.cfg (default: scheduler_default_daily,scheduler_default_weekly,scheduler_default_monthly)")
+    p.add_argument('-s', '--schedulers',default="daily,weekly,monthly",
+            help="Use these schedulers as defined in backy.cfg (default: daily,weekly,monthly)")
     p.add_argument('-f', '--fields', default="name,breach",
             help="Show these fields (comma separated). Available: name,breach")
     p.set_defaults(func='sla')
