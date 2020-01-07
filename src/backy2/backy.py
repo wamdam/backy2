@@ -427,6 +427,8 @@ class Backy():
         """
         Returns True if a backup is due for a given scheduler
         """
+        if keep == 0:
+            return False
         _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
