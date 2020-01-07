@@ -57,6 +57,7 @@ class DataBackend(_DataBackend):
             self.bucket = self.conn.create_bucket(bucket_name)
         except boto.exception.S3CreateError:
             # exists...
+            self.bucket = self.conn.get_bucket(bucket_name)
             pass
         except OSError as e:
             # no route to host
