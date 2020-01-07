@@ -192,6 +192,7 @@ class MetaBackend(_MetaBackend):
         uid = self._uid()
         version = Version(
             uid=uid,
+            date=datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),  # as func.now creates timezone stamps...
             name=version_name,
             snapshot_name=snapshot_name,
             size=size,
