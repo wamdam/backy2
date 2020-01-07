@@ -409,6 +409,7 @@ class MetaBackend(_MetaBackend):
             block = Block(
                 id=id,
                 version_uid=version_uid,
+                date=datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),  # as func.now creates timezone stamps...
                 uid=block_uid,
                 checksum=checksum,
                 size=size,
