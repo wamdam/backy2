@@ -411,7 +411,7 @@ class Commands():
                 _due_backup = backy.get_due_backups(name, scheduler, interval, keep, sla)  # True/False
                 if _due_backup:
                     _due_schedulers.add(scheduler)
-                    _due_backup_expire_date = max(_due_backup_expire_date, datetime.utcnow() + keep * interval)
+                    _due_backup_expire_date = max(_due_backup_expire_date, datetime.utcnow() + keep * (interval + 1))
             if _due_schedulers:
                 due_backups[name] = {'schedulers': _due_schedulers, 'due_backup_expire_date': _due_backup_expire_date}
 
