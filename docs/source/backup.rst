@@ -227,7 +227,7 @@ initial backups where necessary::
             initial_backup "$POOL" "$VM"
         else
             # check if this snapshot exists in backy2
-            BACKY_SNAP_VERSION_UID=$(backy2 -m ls -s "$LAST_RBD_SNAP" "$VM"|grep -e '^version'|awk -F '|' '{ print $7 }')
+            BACKY_SNAP_VERSION_UID=$(backy2 -m ls -s "$LAST_RBD_SNAP" "$VM"|awk -F '|' '{ print $6 }')
             if [ -z $BACKY_SNAP_VERSION_UID ]; then
                 echo "Existing rbd snapshot not found in backy2, reverting to initial backup."
                 initial_backup "$POOL" "$VM"
