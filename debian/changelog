@@ -1,3 +1,10 @@
+backy2 (2.10.7) unstable; urgency=low
+
+  * Making it ubuntu 16.04 compatible (again)
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 27 Jan 2020 10:10:11 +0100
+
+
 backy2 (2.10.6) unstable; urgency=low
 
   * Simplifying config and schedulers (step one)
