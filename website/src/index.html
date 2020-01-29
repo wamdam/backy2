@@ -198,6 +198,13 @@
                             </ul>
                         </div>
                     </div>
+                    <a name="donate"></a>
+                    <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+                        <input type="hidden" name="cmd" value="_s-xclick" />
+                        <input type="hidden" name="hosted_button_id" value="A2Y89JGHNZGAG" />
+                        <input type="image" src="https://www.paypalobjects.com/en_US/DK/i/btn/btn_donateCC_LG.gif" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
+                        <img alt="" border="0" src="https://www.paypal.com/en_DE/i/scr/pixel.gif" width="1" height="1" />
+                    </form>
                 </div>
             </section>
 
@@ -560,5 +567,13 @@ print 'It took ' + i + ' iterations to sort the deck.';</code></pre>
             <script src="assets/js/util.js"></script>
             <!--[if lte IE 8]><script src="assets/js/ie/respond.min.js"></script><![endif]-->
             <script src="assets/js/main.js"></script>
+            <script>
+                if (window.location.hash == '#donationcancelled') {
+                    alert("Your payment has been cancelled.");
+                }
+                if (window.location.hash == '#dontaioncompleted') {
+                    alert("Thank you! Your donation will help us to develop backy2.");
+                }
+            </script>
     </body>
 </html>
