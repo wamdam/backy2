@@ -427,13 +427,14 @@ class Backy():
         """
         Returns True if a backup is due for a given scheduler
         """
+        RANGE = datetime.timedelta(seconds=30)  # be unsharp when searching and also find backups that will be due in RANGE seconds.
         if keep == 0:
             return False
         _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
             return True
-        elif datetime.datetime.utcnow() > (_last_versions_for_name_and_scheduler[-1].date + interval):   # no backup within interval exists, so require one
+        elif datetime.datetime.utcnow() > (_last_versions_for_name_and_scheduler[-1].date + interval - RANGE):   # no backup within interval exists, so require one
             return True
         return False
 
