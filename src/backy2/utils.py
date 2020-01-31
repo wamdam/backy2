@@ -66,9 +66,12 @@ def parse_expire_date(date_string):
         date = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S')
     except ValueError:
         try:
-            date = datetime.strptime(date_string, '%Y-%m-%d')
+            date = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
         except ValueError:
-            raise
+            try:
+                date = datetime.strptime(date_string, '%Y-%m-%d')
+            except ValueError:
+                raise
     return date
 
 
