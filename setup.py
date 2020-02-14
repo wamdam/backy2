@@ -42,7 +42,7 @@ Topic :: System :: Archiving :: Backup
         'shortuuid>=0.4.2',
         'setproctitle>=1.1.8',
         'python-dateutil>=2.6.0',
-        'alembic',
+        'alembic>=0.7.5',
         #'boto>=2.38.0',
         #'psycopg2>=2.6.1',
         #'pex==1.1.0',
