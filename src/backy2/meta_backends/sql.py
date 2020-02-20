@@ -192,7 +192,7 @@ class MetaBackend(_MetaBackend):
         uid = self._uid()
         version = Version(
             uid=uid,
-            date=datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),  # as func.now creates timezone stamps...
+            date=datetime.datetime.utcnow(),  # as func.now creates timezone stamps...
             name=version_name,
             snapshot_name=snapshot_name,
             size=size,
@@ -409,7 +409,7 @@ class MetaBackend(_MetaBackend):
             block = Block(
                 id=id,
                 version_uid=version_uid,
-                date=datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),  # as func.now creates timezone stamps...
+                date=datetime.datetime.utcnow(),  # as func.now creates timezone stamps...
                 uid=block_uid,
                 checksum=checksum,
                 size=size,
