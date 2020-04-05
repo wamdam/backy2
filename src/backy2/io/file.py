@@ -90,7 +90,7 @@ class IO(_IO):
 
         for i in range(self.simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
-            _writer_thread.daemon = True
+            #_writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
             self.writer_thread_status[i] = STATUS_NOTHING
@@ -115,6 +115,7 @@ class IO(_IO):
                 entry = self._write_queue.get()
                 if entry is None:
                     logger.debug("IO writer {} finishing.".format(id_))
+                    self._write_queue.task_done()
                     break
                 block, data = entry
 
@@ -125,7 +126,7 @@ class IO(_IO):
 
                 self.writer_thread_status[id_] = STATUS_WRITING
                 written = _write_file.write(data)
-                posix_fadvise(_write_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+                posix_fadvise(_write_file.fileno(), offset, offset + written, os.POSIX_FADV_DONTNEED)
 
                 self.writer_thread_status[id_] = STATUS_NOTHING
                 assert written == len(data)
@@ -143,6 +144,7 @@ class IO(_IO):
                 if block is None:
                     logger.debug("IO {} finishing.".format(id_))
                     self._outqueue.put(None)  # also let the outqueue end
+                    self._inqueue.task_done()
                     break
                 offset = block.id * self.block_size
                 t1 = time.time()
@@ -220,4 +222,5 @@ class IO(_IO):
                 _writer_thread.join()
             t2 = time.time()
             print("Was waiting for {}s for threads.".format(t2-t1))
+            self._write_queue.put(None)  # ends the restore
 
