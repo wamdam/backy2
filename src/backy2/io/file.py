@@ -31,7 +31,6 @@ else:  # pragma: no cover
 
 class IO(_IO):
     mode = None
-    _write_file = None
     WRITE_QUEUE_LENGTH = 20
     READ_QUEUE_LENGTH = 20
 
@@ -89,8 +88,6 @@ class IO(_IO):
                 f.seek(size - 1)
                 f.write(b'\0')
 
-        self._write_file = open(self.io_name, 'rb+')
-
         for i in range(self.simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
@@ -113,26 +110,27 @@ class IO(_IO):
     def _writer(self, id_):
         """ self._write_queue contains a list of (Block, data) to be written.
         """
-        while True:
-            entry = self._write_queue.get()
-            if entry is None:
-                logger.debug("IO writer {} finishing.".format(id_))
-                break
-            block, data = entry
+        with open(self.io_name, 'rb+') as _write_file:
+            while True:
+                entry = self._write_queue.get()
+                if entry is None:
+                    logger.debug("IO writer {} finishing.".format(id_))
+                    break
+                block, data = entry
 
-            offset = block.id * self.block_size
+                offset = block.id * self.block_size
 
-            self.writer_thread_status[id_] = STATUS_SEEKING
-            self._write_file.seek(offset)
+                self.writer_thread_status[id_] = STATUS_SEEKING
+                _write_file.seek(offset)
 
-            self.writer_thread_status[id_] = STATUS_WRITING
-            written = self._write_file.write(data)
-            posix_fadvise(self._write_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+                self.writer_thread_status[id_] = STATUS_WRITING
+                written = _write_file.write(data)
+                posix_fadvise(_write_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
 
-            self.writer_thread_status[id_] = STATUS_NOTHING
-            assert written == len(data)
+                self.writer_thread_status[id_] = STATUS_NOTHING
+                assert written == len(data)
 
-            self._write_queue.task_done()
+                self._write_queue.task_done()
 
 
     def _reader(self, id_):
@@ -189,10 +187,6 @@ class IO(_IO):
 
     def write(self, block, data):
         """ Adds a write job"""
-        # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
-        if not self._write_file:
-            raise RuntimeError('File not open.')
-
         self._write_queue.put((block, data))
 
 
@@ -226,5 +220,4 @@ class IO(_IO):
                 _writer_thread.join()
             t2 = time.time()
             print("Was waiting for {}s for threads.".format(t2-t1))
-            self._write_file.close()
 
