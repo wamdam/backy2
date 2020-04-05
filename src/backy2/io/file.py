@@ -222,5 +222,4 @@ class IO(_IO):
                 _writer_thread.join()
             t2 = time.time()
             print("Was waiting for {}s for threads.".format(t2-t1))
-            self._write_queue.put(None)  # ends the restore
 

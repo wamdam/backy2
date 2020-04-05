@@ -363,8 +363,6 @@ class Backy():
                 logger.info(io.thread_status() + " " + self.data_backend.thread_status())
         self.locking.unlock(version_uid)
         io.close()
-        result = io._write_queue.get()
-        print(result)
 
 
     def protect(self, version_uid):
