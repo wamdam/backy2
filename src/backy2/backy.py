@@ -594,6 +594,7 @@ class Backy():
         # now use the readers and write
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        t1 = time.time()
         for i in range(read_jobs):
             block, data, data_checksum = io.get()
 
@@ -623,7 +624,17 @@ class Backy():
             done_jobs += 1
             notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
-                logger.info('Backed up {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+                t2 = time.time()
+                logger.info('Backed up {}/{} blocks ({:.1f}%) [Sparse: {}  Dedup: {}  Written: {} ({:d}MB)  Write I/O: {:.1f}MB/s]'.format(
+                    i + 1,
+                    read_jobs,
+                    (i + 1) / read_jobs * 100,
+                    stats['blocks_sparse'],
+                    stats['blocks_found_dedup'],
+                    stats['blocks_written'],
+                    stats['bytes_written'] // 1024 // 1024,
+                    stats['bytes_written'] / 1024 / 1024 / (t2-t1),
+                ))
 
         io.close()  # wait for all readers
         # self.data_backend.close()  # wait for all writers
