@@ -18,10 +18,7 @@ Use by restoring to null://
 """
 
 STATUS_NOTHING = 0
-STATUS_READING = 1
 STATUS_WRITING = 2
-STATUS_SEEKING = 3
-STATUS_FADVISE = 4
 
 class IO(_IO):
     mode = None
@@ -160,15 +157,9 @@ class IO(_IO):
 
 
     def thread_status(self):
-        return "IO Reader Threads: N:{} R:{} S:{} F:{}  IO Writer Threads: N:{} W:{} S:{} F:{} Queue-Length:{}".format(
-                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
-                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
-                len([t for t in self.reader_thread_status.values() if t==STATUS_SEEKING]),
-                len([t for t in self.reader_thread_status.values() if t==STATUS_FADVISE]),
+        return "IO Writer Threads: N:{} W:{} Queue-Length:{}".format(
                 len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
-                len([t for t in self.writer_thread_status.values() if t==STATUS_SEEKING]),
-                len([t for t in self.writer_thread_status.values() if t==STATUS_FADVISE]),
                 self._write_queue.qsize(),
                 )
 

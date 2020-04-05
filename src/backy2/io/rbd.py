@@ -206,6 +206,16 @@ class IO(_IO):
         self._write_queue.put((block, data))
 
 
+    def thread_status(self):
+        return "IO Reader Threads: N:{} R:{}  IO Writer Threads: N:{} W:{} Queue-Length:{}".format(
+                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
+                self._write_queue.qsize(),
+                )
+
+
     def close(self):
         if self.mode == 'r':
             for _reader_thread in self._reader_threads:
