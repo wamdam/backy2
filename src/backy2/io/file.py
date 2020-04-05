@@ -47,6 +47,10 @@ class IO(_IO):
         self.reader_thread_status = {}
         self.writer_thread_status = {}
 
+        self._inqueue = queue.Queue()  # infinite size for all the blocks
+        self._outqueue = queue.Queue(self.simultaneous_reads + self.READ_QUEUE_LENGTH)  # data of read blocks
+        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
+
 
     def open_r(self, io_name):
         self.mode = 'r'
@@ -55,8 +59,6 @@ class IO(_IO):
             raise RuntimeError('Not a valid io name: {} . Need a file path, e.g. file:///somepath/file'.format(io_name))
         self.io_name = _s.groups()[0]
 
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads + self.READ_QUEUE_LENGTH)  # data of read blocks
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
@@ -89,7 +91,6 @@ class IO(_IO):
 
         self._write_file = open(self.io_name, 'rb+')
 
-        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
         for i in range(self.simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
@@ -196,11 +197,13 @@ class IO(_IO):
 
 
     def thread_status(self):
-        return "IOR: N{} R{} S{} F{}  IOW: N{} W{} S{} F{} QL{}".format(
+        return "IOR: N{} R{} S{} F{} IQ{} OQ{}  IOW: N{} W{} S{} F{} QL{}".format(
                 len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
                 len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
                 len([t for t in self.reader_thread_status.values() if t==STATUS_SEEKING]),
                 len([t for t in self.reader_thread_status.values() if t==STATUS_FADVISE]),
+                self._inqueue.qsize(),
+                self._outqueue.qsize(),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_SEEKING]),
