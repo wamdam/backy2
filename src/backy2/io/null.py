@@ -102,7 +102,7 @@ class IO(_IO):
 
             self.writer_thread_status[id_] = STATUS_WRITING
             # write nothing
-            time.sleep(.1)
+            #time.sleep(.1)
             self.writer_thread_status[id_] = STATUS_NOTHING
 
             self._write_queue.task_done()
