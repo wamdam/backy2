@@ -18,6 +18,7 @@ Use by restoring to null://
 """
 
 STATUS_NOTHING = 0
+STATUS_READING = 1
 STATUS_WRITING = 2
 
 class IO(_IO):
@@ -35,6 +36,9 @@ class IO(_IO):
         self._reader_threads = []
         self._writer_threads = []
 
+        self._inqueue = queue.Queue()  # infinite size for all the blocks
+        self._outqueue = queue.Queue(self.simultaneous_reads + self.READ_QUEUE_LENGTH)  # data of read blocks
+        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
         self.reader_thread_status = {}
         self.writer_thread_status = {}
 
@@ -61,8 +65,6 @@ class IO(_IO):
         self._size = size
 
         self._reader_threads = []
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads + self.READ_QUEUE_LENGTH)  # data of read blocks
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
@@ -76,7 +78,6 @@ class IO(_IO):
         self.mode = 'w'
         self._size = size
 
-        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
         for i in range(self.simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
@@ -121,7 +122,9 @@ class IO(_IO):
             start_offset = block.id * self.block_size
             end_offset = min(block.id * self.block_size + self.block_size, self._size)
             block_size = end_offset - start_offset
+            self.writer_thread_status[id_] = STATUS_READING
             data = generate_block(block.id, block_size)
+            self.writer_thread_status[id_] = STATUS_NOTHING
 
             if not data:
                 raise RuntimeError('EOF reached on source when there should be data.')
@@ -157,7 +160,11 @@ class IO(_IO):
 
 
     def thread_status(self):
-        return "IO Writer Threads: N:{} W:{} Queue-Length:{}".format(
+        return "IOR: N{} R{} IQ{} OQ{}  IOW: N{} W{} QL{}".format(
+                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
+                self._inqueue.qsize(),
+                self._outqueue.qsize(),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
                 self._write_queue.qsize(),

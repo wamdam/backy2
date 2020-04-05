@@ -207,7 +207,7 @@ class IO(_IO):
 
 
     def thread_status(self):
-        return "IO Reader Threads: N:{} R:{}  IO Writer Threads: N:{} W:{} Queue-Length:{}".format(
+        return "IOR: N{} R{}  IOW: N{} W{} QL{}".format(
                 len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
                 len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
                 len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),

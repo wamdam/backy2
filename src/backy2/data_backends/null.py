@@ -13,6 +13,10 @@ import socket
 import threading
 import time
 
+STATUS_NOTHING = 0
+STATUS_READING = 1
+STATUS_WRITING = 2
+STATUS_THROTTLING = 3
 
 class DataBackend(_DataBackend):
     """ A DataBackend for performance testing. It reads and writes to NULL.
@@ -48,16 +52,20 @@ class DataBackend(_DataBackend):
         self._read_data_queue = queue.Queue(self.read_queue_length)
         self._writer_threads = []
         self._reader_threads = []
+        self.reader_thread_status = {}
+        self.writer_thread_status = {}
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
+            self.writer_thread_status[i] = STATUS_NOTHING
         for i in range(simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
+            self.reader_thread_status[i] = STATUS_NOTHING
 
 
     def _writer(self, id_):
@@ -68,10 +76,16 @@ class DataBackend(_DataBackend):
                 logger.debug("Writer {} finishing.".format(id_))
                 break
             uid, data = entry
+            self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
+            self.writer_thread_status[id_] = STATUS_NOTHING
             t1 = time.time()
 
             # storing data to key uid
+            self.writer_thread_status[id_] = STATUS_WRITING
+            #time.sleep(.1)
+            self.writer_thread_status[id_] = STATUS_NOTHING
+
             t2 = time.time()
             # assert r == len(data)
             self._write_queue.task_done()
@@ -86,7 +100,11 @@ class DataBackend(_DataBackend):
                 logger.debug("Reader {} finishing.".format(id_))
                 break
             t1 = time.time()
+            self.reader_thread_status[id_] = STATUS_READING
             data = self.read_raw(block.id, block.size)
+            self.reader_thread_status[id_] = STATUS_THROTTLING
+            time.sleep(self.read_throttling.consume(len(data)))
+            self.reader_thread_status[id_] = STATUS_NOTHING
             self._read_data_queue.put((block, data))
             t2 = time.time()
             self._read_queue.task_done()
@@ -95,9 +113,6 @@ class DataBackend(_DataBackend):
 
     def read_raw(self, block_id, block_size):
         return generate_block(block_id, block_size)
-        #payload = block_uid.encode("ascii")
-        #data = (payload + b' ' * (self.default_block_size - len(payload)))[:block_size]
-        #return data
 
 
     def _uid(self):
@@ -153,6 +168,19 @@ class DataBackend(_DataBackend):
 
     def get_all_blob_uids(self, prefix=None):
         return []
+
+
+    def thread_status(self):
+        return "DaBaR: N{} R{} T{} QL{}  DaBaW: N{} W{} T{} QL{}".format(
+                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_THROTTLING]),
+                self._read_queue.qsize(),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_THROTTLING]),
+                self._write_queue.qsize(),
+                )
 
 
     def close(self):

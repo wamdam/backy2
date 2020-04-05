@@ -14,6 +14,11 @@ import socket
 import threading
 import time
 
+STATUS_NOTHING = 0
+STATUS_READING = 1
+STATUS_WRITING = 2
+STATUS_THROTTLING = 3
+STATUS_NEWKEY = 4
 
 class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
@@ -73,16 +78,20 @@ class DataBackend(_DataBackend):
         self._read_data_queue = queue.Queue(self.read_queue_length)
         self._writer_threads = []
         self._reader_threads = []
+        self.reader_thread_status = {}
+        self.writer_thread_status = {}
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
+            self.writer_thread_status[i] = STATUS_NOTHING
         for i in range(simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
+            self.reader_thread_status[i] = STATUS_NOTHING
 
 
     def _writer(self, id_):
@@ -93,11 +102,17 @@ class DataBackend(_DataBackend):
                 logger.debug("Writer {} finishing.".format(id_))
                 break
             uid, data = entry
+            self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
+            self.writer_thread_status[id_] = STATUS_NOTHING
             t1 = time.time()
+            self.writer_thread_status[id_] = STATUS_NEWKEY
             key = self.bucket.new_key(uid)
+            self.writer_thread_status[id_] = STATUS_NOTHING
             try:
+                self.writer_thread_status[id_] = STATUS_WRITING
                 r = key.set_contents_from_string(data)
+                self.writer_thread_status[id_] = STATUS_NOTHING
             except (
                     OSError,
                     boto.exception.BotoServerError,
@@ -130,7 +145,9 @@ class DataBackend(_DataBackend):
                 break
             t1 = time.time()
             try:
+                self.reader_thread_status[id_] = STATUS_READING
                 data = self.read_raw(block.uid)
+                self.reader_thread_status[id_] = STATUS_NOTHING
             except FileNotFoundError:
                 self._read_data_queue.put((block, None))  # catch this!
             else:
@@ -161,7 +178,7 @@ class DataBackend(_DataBackend):
                 pass
             else:
                 break
-        time.sleep(self.read_throttling.consume(len(data)))
+        time.sleep(self.read_throttling.consume(len(data)))  # TODO: Need throttling in thread statistics!
         return data
 
 
@@ -228,6 +245,18 @@ class DataBackend(_DataBackend):
 
     def get_all_blob_uids(self, prefix=None):
         return [k.name for k in self.bucket.list(prefix)]
+
+
+    def thread_status(self):
+        return "DaBaR: N{} R{} QL{}  DaBaW: N{} W{} T{} QL{}".format(
+                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
+                self._read_queue.qsize(),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_THROTTLING]),
+                self._write_queue.qsize(),
+                )
 
 
     def close(self):

@@ -12,6 +12,10 @@ import shortuuid
 import threading
 import time
 
+STATUS_NOTHING = 0
+STATUS_READING = 1
+STATUS_WRITING = 2
+STATUS_THROTTLING = 3
 
 def makedirs(path):
     try:
@@ -56,16 +60,21 @@ class DataBackend(_DataBackend):
         self._read_data_queue = queue.Queue(self.read_queue_length)
         self._writer_threads = []
         self._reader_threads = []
+        self.reader_thread_status = {}
+        self.writer_thread_status = {}
         for i in range(simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
+            self.writer_thread_status[i] = STATUS_NOTHING
         for i in range(simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
+            self.reader_thread_status[i] = STATUS_NOTHING
+
 
 
     def _writer(self, id_=0):
@@ -78,15 +87,21 @@ class DataBackend(_DataBackend):
             uid, data = entry
             path = os.path.join(self.path, self._path(uid))
             filename = self._filename(uid)
+            self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
+            self.writer_thread_status[id_] = STATUS_NOTHING
             t1 = time.time()
             try:
+                self.writer_thread_status[id_] = STATUS_WRITING
                 with open(filename, 'wb') as f:
                     r = f.write(data)
+                self.writer_thread_status[id_] = STATUS_NOTHING
             except FileNotFoundError:
+                self.writer_thread_status[id_] = STATUS_WRITING
                 makedirs(path)
                 with open(filename, 'wb') as f:
                     r = f.write(data)
+                self.writer_thread_status[id_] = STATUS_NOTHING
             t2 = time.time()
             assert r == len(data)
             self._write_queue.task_done()
@@ -103,7 +118,9 @@ class DataBackend(_DataBackend):
             block, offset, length = d
             t1 = time.time()
             try:
+                self.reader_thread_status[id_] = STATUS_READING
                 data = self.read_raw(block.uid, offset, length)
+                self.reader_thread_status[id_] = STATUS_NOTHING
             except FileNotFoundError:
                 self._read_data_queue.put((block, offset, length, None))  # catch this!
             else:
@@ -210,6 +227,7 @@ class DataBackend(_DataBackend):
                     data = f.read(length)
                 else:
                     data = f.read()
+            # TODO: throttling should be set into the thread's status too
             time.sleep(self.read_throttling.consume(len(data)))
             return data
 
@@ -223,6 +241,18 @@ class DataBackend(_DataBackend):
                 uid = filename.split('.')[0]
                 matches.append(uid)
         return matches
+
+
+    def thread_status(self):
+        return "DaBaR: N{} R{} QL{}  DaBaW: N{} W{} T{} QL{}".format(
+                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
+                self._read_queue.qsize(),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_THROTTLING]),
+                self._write_queue.qsize(),
+                )
 
 
     def close(self):
