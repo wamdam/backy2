@@ -275,6 +275,15 @@ class Backy():
             raise LockError('Version {} is locked.'.format(version_uid))
         self.locking.unlock(version_uid)  # no need to keep it locked
 
+        stats = {
+                'bytes_read': 0,
+                'blocks_read': 0,
+                'bytes_written': 0,
+                'blocks_written': 0,
+                'bytes_sparse': 0,
+                'blocks_sparse': 0,
+            }
+
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
         blocks = self.meta_backend.get_blocks_by_version2(version_uid)
@@ -290,11 +299,15 @@ class Backy():
                 read_jobs += 1
             elif not sparse:
                 io.write(block, b'\0'*block.size)
+                stats['blocks_written'] += 1
+                stats['bytes_written'] += block.size
                 logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
                     block.id,
                     block.size,
                     ))
             else:
+                stats['blocks_sparse'] += 1
+                stats['bytes_sparse'] += block.size
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
@@ -302,11 +315,18 @@ class Backy():
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        t1 = time.time()
         for i in range(read_jobs):
             block, offset, length, data = self.data_backend.read_get()
             assert len(data) == block.size
+            stats['blocks_read'] += 1
+            stats['bytes_read'] += block.size
+
             data_checksum = self.hash_function(data).hexdigest()
             io.write(block, data)
+            stats['blocks_written'] += 1
+            stats['bytes_written'] += block.size
+
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during restore for block '
                     '{} (is: {} should-be: {}, block-valid: {}). Block '
@@ -325,7 +345,21 @@ class Backy():
 
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
-                logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+
+                t2 = time.time()
+                dt = t2-t1
+                logger.info('Restored {}/{} blocks ({:.1f}%) [Read: {}  Written: {} ({:d}MB)  Read I/O: {:.1f}MB/s  Write I/O: {:.1f}MB/s]  ETA: {:d}s'.format(
+                    i + 1,
+                    read_jobs,
+                    (i + 1) / read_jobs * 100,
+                    stats['blocks_read'],
+                    stats['blocks_written'],
+                    stats['bytes_written'] // 1024 // 1024,
+                    stats['bytes_read'] / 1024 / 1024 / (dt),
+                    stats['bytes_written'] / 1024 / 1024 / (dt),
+                    round(read_jobs / (i+1) * dt - dt),
+                ))
+                #logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
                 logger.info(io.thread_status() + " " + self.data_backend.thread_status())
         self.locking.unlock(version_uid)
         io.close()
