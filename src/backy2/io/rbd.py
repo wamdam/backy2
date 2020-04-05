@@ -44,6 +44,9 @@ class IO(_IO):
 
         self.reader_thread_status = {}
         self.writer_thread_status = {}
+        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
+        self._inqueue = queue.Queue()  # infinite size for all the blocks
+        self._outqueue = queue.Queue(self.simultaneous_reads)
 
 
     def open_r(self, io_name):
@@ -67,8 +70,6 @@ class IO(_IO):
             logger.error('Image/Snapshot not found: {}@{}'.format(self.image_name, self.snapshot_name))
             exit('Error opening backup source.')
 
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads)
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
@@ -107,7 +108,6 @@ class IO(_IO):
                     logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
                     exit('Error opening restore target.')
 
-        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
         for i in range(self.simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
             _writer_thread.daemon = True
