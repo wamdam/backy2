@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from backy2.io.lib import rados  # XXX use default rados lib?
-from backy2.io.lib import rbd    # XXX use default rbd lib?
+try:
+    import rados
+    import rbd
+except ModuleNotFoundError:
+    from backy2.io.lib import rados
+    from backy2.io.lib import rbd
+    print("WARNING: You are using very old ceph libraries. As they might work, they are slower than newer ones.")
+    print("Please install python3-rbd and python3-rados.")
+
 from backy2.logging import logger
 from backy2.io import IO as _IO
 from functools import reduce
