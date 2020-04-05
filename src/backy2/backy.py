@@ -625,7 +625,8 @@ class Backy():
             notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
                 t2 = time.time()
-                logger.info('Backed up {}/{} blocks ({:.1f}%) [Sparse: {}  Dedup: {}  Written: {} ({:d}MB)  Write I/O: {:.1f}MB/s]'.format(
+                dt = t2-t1
+                logger.info('Backed up {}/{} blocks ({:.1f}%) [Sparse: {}  Dedup: {}  Written: {} ({:d}MB)  Write I/O: {:.1f}MB/s]  ETA: {:d}s'.format(
                     i + 1,
                     read_jobs,
                     (i + 1) / read_jobs * 100,
@@ -633,7 +634,8 @@ class Backy():
                     stats['blocks_found_dedup'],
                     stats['blocks_written'],
                     stats['bytes_written'] // 1024 // 1024,
-                    stats['bytes_written'] / 1024 / 1024 / (t2-t1),
+                    stats['bytes_written'] / 1024 / 1024 / (dt),
+                    round(read_jobs / (i+1) * dt - dt),
                 ))
 
         io.close()  # wait for all readers
