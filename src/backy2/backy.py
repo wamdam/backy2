@@ -39,7 +39,7 @@ class Backy():
 
     def __init__(self, meta_backend, data_backend, config, block_size=None,
             hash_function=None, lock_dir=None, process_name='backy2',
-            initdb=False):
+            initdb=False, dedup=True):
         if block_size is None:
             block_size = 1024*4096  # 4MB
         if hash_function is None:
@@ -54,6 +54,7 @@ class Backy():
         self.hash_function = hash_function
         self.locking = Locking(lock_dir)
         self.process_name = process_name
+        self.dedup = dedup
 
         notify(process_name)  # i.e. set process name without notification
 
@@ -602,7 +603,10 @@ class Backy():
             stats['bytes_read'] += len(data)
 
             # dedup
-            existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
+            if self.dedup:
+                existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
+            else:
+                existing_block = False
             if data == b'\0' * block.size:
                 # if the block is only \0, set it as a sparse block.
                 stats['blocks_sparse'] += 1

@@ -90,6 +90,7 @@ def backy_from_config(Config):
     hash_function = getattr(hashlib, config_DEFAULTS.get('hash_function', 'sha512'))
     lock_dir = config_DEFAULTS.get('lock_dir', None)
     process_name = config_DEFAULTS.get('process_name', 'backy2')
+    dedup = config_DEFAULTS.getboolean('deduplication', True)
 
     # configure meta backend
     config_MetaBackend = Config(section='MetaBackend')
@@ -118,6 +119,7 @@ def backy_from_config(Config):
             hash_function=hash_function,
             lock_dir=lock_dir,
             process_name=process_name,
+            dedup=dedup,
             )
     return backy
 
