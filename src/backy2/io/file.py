@@ -127,9 +127,9 @@ class IO(_IO):
 
             self.writer_thread_status[id_] = STATUS_WRITING
             written = self._write_file.write(data)
+            posix_fadvise(self._write_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
 
             self.writer_thread_status[id_] = STATUS_NOTHING
-            posix_fadvise(self._write_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
             assert written == len(data)
 
             self._write_queue.task_done()
@@ -219,9 +219,12 @@ class IO(_IO):
             for _reader_thread in self._reader_threads:
                 _reader_thread.join()
         elif self.mode == 'w':
+            t1 = time.time()
             for _writer_thread in self._writer_threads:
                 self._write_queue.put(None)  # ends the threads
             for _writer_thread in self._writer_threads:
                 _writer_thread.join()
+            t2 = time.time()
+            print("Was waiting for {}s for threads.".format(t2-t1))
             self._write_file.close()
 
