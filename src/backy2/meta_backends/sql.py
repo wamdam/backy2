@@ -453,6 +453,10 @@ class MetaBackend(_MetaBackend):
         return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all()
 
 
+    def get_blocks_by_version2(self, version_uid):
+        return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id)
+
+
     def rm_version(self, version_uid):
         affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
         num_blocks = affected_blocks.count()

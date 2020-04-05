@@ -12,28 +12,38 @@ import re
 import threading
 import time
 
+STATUS_NOTHING = 0
+STATUS_READING = 1
+STATUS_WRITING = 2
+
 class IO(_IO):
-    simultaneous_reads = 10
     pool_name = None
     image_name = None
     snapshot_name = None
     mode = None
-    _writer = None
+    _write_rbd = None
+    WRITE_QUEUE_LENGTH = 20
+    READ_QUEUE_LENGTH = 20
 
     def __init__(self, config, block_size, hash_function):
-        self.simultaneous_reads = config.getint('simultaneous_reads')
+        self.simultaneous_reads = config.getint('simultaneous_reads', 10)
+        self.simultaneous_writes = config.getint('simultaneous_reads', 1)
+
         ceph_conffile = config.get('ceph_conffile')
         self.block_size = block_size
         self.hash_function = hash_function
-        self._reader_threads = []
-        self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads)
         cluster_name = config.get('cluster_name', 'ceph')
         rados_name = config.get('rados_name', 'client.admin')
         self.cluster = rados.Rados(conffile=ceph_conffile, name=rados_name, clustername=cluster_name)
         self.cluster.connect()
         # create a bitwise or'd list of the configured features
         self.new_image_features = reduce(or_, [getattr(rbd, feature) for feature in config.getlist('new_image_features')])
+
+        self._reader_threads = []
+        self._writer_threads = []
+
+        self.reader_thread_status = {}
+        self.writer_thread_status = {}
 
 
     def open_r(self, io_name):
@@ -57,11 +67,14 @@ class IO(_IO):
             logger.error('Image/Snapshot not found: {}@{}'.format(self.image_name, self.snapshot_name))
             exit('Error opening backup source.')
 
+        self._inqueue = queue.Queue()  # infinite size for all the blocks
+        self._outqueue = queue.Queue(self.simultaneous_reads)
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
+            self.reader_thread_status[i] = STATUS_NOTHING
 
 
     def open_w(self, io_name, size=None, force=False):
@@ -94,12 +107,42 @@ class IO(_IO):
                     logger.error('Target size is too small. Has {}b, need {}b.'.format(self.size(), size))
                     exit('Error opening restore target.')
 
+        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
+        for i in range(self.simultaneous_writes):
+            _writer_thread = threading.Thread(target=self._writer, args=(i,))
+            _writer_thread.daemon = True
+            _writer_thread.start()
+            self._writer_threads.append(_writer_thread)
+            self.writer_thread_status[i] = STATUS_NOTHING
+
+        ioctx = self.cluster.open_ioctx(self.pool_name)
+        self._write_rbd = rbd.Image(ioctx, self.image_name)
+
 
     def size(self):
         ioctx = self.cluster.open_ioctx(self.pool_name)
         with rbd.Image(ioctx, self.image_name, self.snapshot_name, read_only=True) as image:
             size = image.size()
         return size
+
+
+    def _writer(self, id_):
+        """ self._write_queue contains a list of (Block, data) to be written.
+        """
+        while True:
+            entry = self._write_queue.get()
+            if entry is None:
+                logger.debug("IO writer {} finishing.".format(id_))
+                break
+            block, data = entry
+
+            offset = block.id * self.block_size
+            self.writer_thread_status[id_] = STATUS_WRITING
+            written = self._write_rbd.write(data, offset, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
+            assert written == len(data)
+            self.writer_thread_status[id_] = STATUS_NOTHING
+
+            self._write_queue.task_done()
 
 
     def _reader(self, id_):
@@ -116,9 +159,10 @@ class IO(_IO):
                     break
                 offset = block.id * self.block_size
                 t1 = time.time()
+                self.reader_thread_status[id_] = STATUS_READING
                 data = image.read(offset, self.block_size, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
+                self.reader_thread_status[id_] = STATUS_NOTHING
                 t2 = time.time()
-                # throw away cache
                 if not data:
                     raise RuntimeError('EOF reached on source when there should be data.')
 
@@ -157,14 +201,9 @@ class IO(_IO):
 
 
     def write(self, block, data):
-        # print("Writing block {} with {} bytes of data".format(block.id, len(data)))
-        if not self._writer:
-            ioctx = self.cluster.open_ioctx(self.pool_name)
-            self._writer = rbd.Image(ioctx, self.image_name)
-
-        offset = block.id * self.block_size
-        written = self._writer.write(data, offset, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
-        assert written == len(data)
+        if not self._write_rbd:
+            raise RuntimeError('RBD image not open / available.')
+        self._write_queue.put((block, data))
 
 
     def close(self):
@@ -174,5 +213,9 @@ class IO(_IO):
             for _reader_thread in self._reader_threads:
                 _reader_thread.join()
         elif self.mode == 'w':
-            self._writer.close()
+            for _writer_thread in self._writer_threads:
+                self._write_queue.put(None)  # ends the threads
+            for _writer_thread in self._writer_threads:
+                _writer_thread.join()
+            self._write_rbd.close()
 

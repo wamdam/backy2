@@ -17,15 +17,29 @@ This is a sink to /dev/null for writing restores.
 Use by restoring to null://
 """
 
+STATUS_NOTHING = 0
+STATUS_READING = 1
+STATUS_WRITING = 2
+STATUS_SEEKING = 3
+STATUS_FADVISE = 4
+
 class IO(_IO):
-    simultaneous_reads = 1
     mode = None
     _writer = None
+    WRITE_QUEUE_LENGTH = 20
+    READ_QUEUE_LENGTH = 20
 
     def __init__(self, config, block_size, hash_function):
-        self.simultaneous_reads = config.getint('simultaneous_reads')
+        self.simultaneous_reads = config.getint('simultaneous_reads', 1)
+        self.simultaneous_writes = config.getint('simultaneous_writes', 1)
         self.block_size = block_size
         self.hash_function = hash_function
+
+        self._reader_threads = []
+        self._writer_threads = []
+
+        self.reader_thread_status = {}
+        self.writer_thread_status = {}
 
 
     def open_r(self, size_str):
@@ -51,12 +65,13 @@ class IO(_IO):
 
         self._reader_threads = []
         self._inqueue = queue.Queue()  # infinite size for all the blocks
-        self._outqueue = queue.Queue(self.simultaneous_reads)
+        self._outqueue = queue.Queue(self.simultaneous_reads + self.READ_QUEUE_LENGTH)  # data of read blocks
         for i in range(self.simultaneous_reads):
             _reader_thread = threading.Thread(target=self._reader, args=(i,))
             _reader_thread.daemon = True
             _reader_thread.start()
             self._reader_threads.append(_reader_thread)
+            self.reader_thread_status[i] = STATUS_NOTHING
 
 
     def open_w(self, io_name, size=None, force=False):
@@ -64,9 +79,35 @@ class IO(_IO):
         self.mode = 'w'
         self._size = size
 
+        self._write_queue = queue.Queue(self.simultaneous_writes + self.WRITE_QUEUE_LENGTH)  # blocks to be written
+        for i in range(self.simultaneous_writes):
+            _writer_thread = threading.Thread(target=self._writer, args=(i,))
+            _writer_thread.daemon = True
+            _writer_thread.start()
+            self._writer_threads.append(_writer_thread)
+            self.writer_thread_status[i] = STATUS_NOTHING
+
 
     def size(self):
         return self._size
+
+
+    def _writer(self, id_):
+        """ self._write_queue contains a list of (Block, data) to be written.
+        """
+        while True:
+            entry = self._write_queue.get()
+            if entry is None:
+                logger.debug("IO writer {} finishing.".format(id_))
+                break
+            block, data = entry
+
+            self.writer_thread_status[id_] = STATUS_WRITING
+            # write nothing
+            time.sleep(.1)
+            self.writer_thread_status[id_] = STATUS_NOTHING
+
+            self._write_queue.task_done()
 
 
     def _reader(self, id_):
@@ -84,8 +125,6 @@ class IO(_IO):
             end_offset = min(block.id * self.block_size + self.block_size, self._size)
             block_size = end_offset - start_offset
             data = generate_block(block.id, block_size)
-            #payload = (start_offset).to_bytes(16, byteorder='big') + (end_offset).to_bytes(16, byteorder='big')
-            #data = (payload + b' ' * (self.block_size - len(payload)))[:block_size]
 
             if not data:
                 raise RuntimeError('EOF reached on source when there should be data.')
@@ -117,7 +156,21 @@ class IO(_IO):
 
 
     def write(self, block, data):
-        pass
+        self._write_queue.put((block, data))
+
+
+    def thread_status(self):
+        return "IO Reader Threads: N:{} R:{} S:{} F:{}  IO Writer Threads: N:{} W:{} S:{} F:{} Queue-Length:{}".format(
+                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_SEEKING]),
+                len([t for t in self.reader_thread_status.values() if t==STATUS_FADVISE]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_SEEKING]),
+                len([t for t in self.writer_thread_status.values() if t==STATUS_FADVISE]),
+                self._write_queue.qsize(),
+                )
 
 
     def close(self):
@@ -127,4 +180,7 @@ class IO(_IO):
             for _reader_thread in self._reader_threads:
                 _reader_thread.join()
         elif self.mode == 'w':
-            pass
+            for _writer_thread in self._writer_threads:
+                self._write_queue.put(None)  # ends the threads
+            for _writer_thread in self._writer_threads:
+                _writer_thread.join()

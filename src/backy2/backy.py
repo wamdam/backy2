@@ -303,7 +303,6 @@ class Backy():
             block, offset, length, data = self.data_backend.read_get()
             assert len(data) == block.size
             data_checksum = self.hash_function(data).hexdigest()
-            # TODO: Make the writer a queue / threaded
             io.write(block, data)
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during restore for block '
@@ -321,10 +320,41 @@ class Backy():
                     block.size,
                     ))
 
-            notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
             if i % _log_every_jobs == 0 or i + 1 == read_jobs:
+                notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
                 logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
+                logger.info(io.thread_status())
         self.locking.unlock(version_uid)
+        io.close()
+
+
+    def restore2(self, version_uid, target, sparse=False, force=False):
+        # See if the version is locked, i.e. currently in backup
+        if not self.locking.lock(version_uid):
+            raise LockError('Version {} is locked.'.format(version_uid))
+        self.locking.unlock(version_uid)  # no need to keep it locked
+
+        version = self.meta_backend.get_version(version_uid)  # raise if version not exists
+        notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
+        blocks = self.meta_backend.get_blocks_by_version2(version_uid)
+
+        io = self.get_io_by_source(target)
+        io.open_w(target, version.size_bytes, force)
+
+        read_jobs = 0
+        for block in blocks:
+            if block.uid:
+                self.data_backend.read(block.deref())  # adds a read job
+                read_jobs += 1
+            elif sparse:
+                logger.debug('Ignored sparse block {}.'.format(block.id))
+            elif not sparse:
+                io.write(block, b'\0'*block.size)
+                logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
+                    block.id,
+                    block.size,
+                    ))
+
 
 
     def protect(self, version_uid):
