@@ -302,6 +302,7 @@ class Backy():
             block, offset, length, data = self.data_backend.read_get()
             assert len(data) == block.size
             data_checksum = self.hash_function(data).hexdigest()
+            # TODO: Make the writer a queue / threaded
             io.write(block, data)
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during restore for block '

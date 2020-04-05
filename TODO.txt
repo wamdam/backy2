@@ -5,6 +5,9 @@ Backlog:
   bitrod in backup, ...
 * Check if we really should do image.close() ioctx.close() cluster.shutdown() as
   recommended in http://docs.ceph.com/docs/jewel/rbd/librbdpy/
+* Add timing for reads and writes to be able to find bottlenecks in storage
+* For restoring add a writer queue
+* Use less memory
 
 Next:
 
