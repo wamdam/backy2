@@ -172,6 +172,12 @@ class TokenBucket:
                 return -self.tokens / self.rate
 
 
+def generate_block(id_, size):
+    payload = (id_).to_bytes(16, byteorder='little')
+    data = (payload + b' ' * (size))[:size]
+    return data
+
+
 #if __name__ == '__main__':
 #    import sys
 #    from time import sleep

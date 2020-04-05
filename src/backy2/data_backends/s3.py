@@ -35,7 +35,7 @@ class DataBackend(_DataBackend):
         bucket_name = config.get('bucket_name', 'backy2')
         simultaneous_writes = config.getint('simultaneous_writes', 1)
         simultaneous_reads = config.getint('simultaneous_reads', 1)
-        calling_format=boto.s3.connection.OrdinaryCallingFormat()
+        calling_format=boto.s3.connection.OrdinaryCallingFormat()  # TODO: Old?
         bandwidth_read = config.getint('bandwidth_read', 0)
         bandwidth_write = config.getint('bandwidth_write', 0)
 
