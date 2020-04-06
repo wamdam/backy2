@@ -188,7 +188,7 @@ class Backy():
                 continue
 
             if source:
-                source_data = io.read(block, sync=True)  # TODO: This is still sync, but how could we do better (easily)?
+                source_data = io.read(block.id, sync=True)  # TODO: This is still sync, but how could we do better (easily)?
                 stats['source_blocks_read'] += 1
                 stats['source_bytes_read'] += len(source_data)
                 if source_data != data:

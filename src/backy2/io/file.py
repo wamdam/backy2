@@ -176,7 +176,7 @@ class IO(_IO):
         read False means the real data will not be read."""
         self._inqueue.put((block_id, read, metadata))
         if sync:
-            rblock_id, data, data_checksum = self.get()
+            rblock_id, data, data_checksum, metadata = self.get()
             if rblock_id != block_id:
                 raise RuntimeError('Do not mix threaded reading with sync reading!')
             return data
