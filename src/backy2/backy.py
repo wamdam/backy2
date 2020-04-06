@@ -178,7 +178,16 @@ class Backy():
         """
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
-        self.meta_backend.get_version(version_uid)  # raise if version not exists
+        self.locking.unlock(version_uid)  # No need to keep it locked.
+
+        stats = {
+                'source_bytes_read': 0,
+                'source_blocks_read': 0,
+                'bytes_read': 0,
+                'blocks_read': 0,
+            }
+
+        version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version(version_uid)
         if source:
             io = self.get_io_by_source(source)
@@ -207,13 +216,20 @@ class Backy():
                     ))
 
         # and read
+        _log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        _log_jobs_counter = 0
+        t1 = time.time()
+        t_last_run = 0
         for i in range(read_jobs):
+            _log_jobs_counter -= 1
             block, offset, length, data = self.data_backend.read_get()
             if data is None:
                 logger.error('Blob not found: {}'.format(str(block)))
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
                 state = False
                 continue
+            stats['blocks_read'] += 1
+            stats['bytes_read'] += len(data)
             if len(data) != block.size:
                 logger.error('Blob has wrong size: {} is: {} should be: {}'.format(
                     block.uid,
@@ -237,7 +253,9 @@ class Backy():
                 continue
 
             if source:
-                source_data = io.read(block, sync=True)
+                source_data = io.read(block, sync=True)  # TODO: This is still sync, but how could we do better (easily)?
+                stats['source_blocks_read'] += 1
+                stats['source_bytes_read'] += len(source_data)
                 if source_data != data:
                     logger.error('Source data has changed for block {} '
                         '(UID {}) (is: {} should-be: {}). NOT setting '
@@ -256,16 +274,37 @@ class Backy():
                 block.id,
                 block.uid,
                 ))
-            notify(self.process_name, 'Scrubbing Version {} ({:.1f}%)'.format(version_uid, (i + 1) / read_jobs * 100))
+
+            if time.time() - t_last_run >= 1:
+                # TODO: Log source io status
+                t_last_run = time.time()
+                t2 = time.time()
+                dt = t2-t1
+                logger.debug(self.data_backend.thread_status())
+
+                db_queue_status = self.data_backend.queue_status()
+                _status = status(
+                    'Scrubbing {} ({})'.format(version.name, version_uid),
+                    db_queue_status['rq_filled']*100,
+                    0,
+                    (i + 1) / read_jobs * 100,
+                    stats['bytes_read'] / dt,
+                    round(read_jobs / (i+1) * dt - dt),
+                    )
+                notify(self.process_name, _status)
+                if _log_jobs_counter <= 0:
+                    _log_jobs_counter = _log_every_jobs
+                    logger.info(_status)
+
         if state == True:
             self.meta_backend.set_version_valid(version_uid)
+            logger.info('Marked version valid: {}'.format(version_uid))
         else:
             # version is set invalid by set_blocks_invalid.
             logger.error('Marked version invalid because it has errors: {}'.format(version_uid))
         if source:
             io.close()  # wait for all io
 
-        self.locking.unlock(version_uid)
         notify(self.process_name)
         return state
 
@@ -675,7 +714,6 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
-            #notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
 
             if time.time() - t_last_run >= 1:
                 t_last_run = time.time()
