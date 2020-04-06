@@ -188,7 +188,7 @@ class Backy():
             }
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        blocks = self.meta_backend.get_blocks_by_version2(version_uid)
         if source:
             io = self.get_io_by_source(source)
             io.open_r(source)
@@ -198,7 +198,7 @@ class Backy():
         notify(self.process_name, 'Preparing Scrub of version {}'.format(version_uid))
         # prepare
         read_jobs = 0
-        for block in blocks:
+        for block in blocks.yield_per(1000):
             if block.uid:
                 if percentile < 100 and random.randint(1, 100) > percentile:
                     logger.debug('Scrub of block {} (UID {}) skipped (percentile is {}).'.format(
@@ -325,7 +325,7 @@ class Backy():
             }
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        notify(self.process_name, 'Restoring Version {}. Getting blocks.'.format(version_uid))
+        notify(self.process_name, 'Restoring Version {}'.format(version_uid))
         blocks = self.meta_backend.get_blocks_by_version2(version_uid)
         num_blocks = blocks.count()
 
@@ -333,7 +333,11 @@ class Backy():
         io.open_w(target, version.size_bytes, force)
 
         read_jobs = 0
-        for block in blocks:
+        _log_every_jobs = num_blocks // 200 + 1  # about every half percent
+        _log_jobs_counter = 0
+        t1 = time.time()
+        t_last_run = 0
+        for i, block in enumerate(blocks.yield_per(1000)):
             if block.uid:
                 self.data_backend.read(block.deref())  # adds a read job
                 read_jobs += 1
@@ -351,7 +355,27 @@ class Backy():
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
-            notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (block.id + 1) / num_blocks * 100))
+
+            if time.time() - t_last_run >= 1:
+                t_last_run = time.time()
+                t2 = time.time()
+                dt = t2-t1
+                logger.debug(io.thread_status() + " " + self.data_backend.thread_status())
+
+                io_queue_status = io.queue_status()
+                db_queue_status = self.data_backend.queue_status()
+                _status = status(
+                    'Restore phase 1/2 (sparse) to {}'.format(target),
+                    db_queue_status['rq_filled']*100,
+                    io_queue_status['wq_filled']*100,
+                    (i + 1) / num_blocks * 100,
+                    stats['bytes_written'] / dt,
+                    round(read_jobs / (i+1) * dt - dt),
+                    )
+                notify(self.process_name, _status)
+                if _log_jobs_counter <= 0:
+                    _log_jobs_counter = _log_every_jobs
+                    logger.info(_status)
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -395,7 +419,7 @@ class Backy():
                 io_queue_status = io.queue_status()
                 db_queue_status = self.data_backend.queue_status()
                 _status = status(
-                    'Restoring to {}'.format(target),
+                    'Restore phase 2/2 (data) to {}'.format(target),
                     db_queue_status['rq_filled']*100,
                     io_queue_status['wq_filled']*100,
                     (i + 1) / read_jobs * 100,
