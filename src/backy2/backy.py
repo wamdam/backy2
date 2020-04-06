@@ -648,9 +648,9 @@ class Backy():
                 # Sparse blocks have uid and checksum None.
                 io.read(block_id, read=False, metadata={'uid': None, 'checksum': None, 'block_size': block_size})
             else:
-                logger.debug('Block {}: Existing'.format(block_id))
+                logger.debug('Block {}: Fresh empty or existing'.format(block_id))
                 io.read(block_id, read=False, metadata={'uid': uid, 'checksum': checksum, 'block_size': block_size})
-                assert _have_old_block
+                #assert _have_old_block
 
 
         # now use the readers and write
