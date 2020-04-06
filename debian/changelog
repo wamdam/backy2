@@ -1,3 +1,15 @@
+backy2 (2.11.1) unstable; urgency=low
+
+  * Nicer output for restore
+  * Reducing memory on backup and restore at least by -40%, likely more
+  * Rewrote backup function
+  * Backup is now skipping "preparing version" and thus WAY faster
+  * Backy2 can now handle ~1.5GB throughput w/ backups on my notebook
+  * Restore is way faster
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 06 Apr 2020 18:55:11 +0200
+
+
 backy2 (2.11.0) unstable; urgency=low
 
   * Deduplication on/off can now be toggled in cfg (if performance is more
