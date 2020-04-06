@@ -247,6 +247,13 @@ class DataBackend(_DataBackend):
         return [k.name for k in self.bucket.list(prefix)]
 
 
+    def queue_status(self):
+        return {
+            'rq_filled': self._read_data_queue.qsize() / self._read_data_queue.maxsize,  # 0..1
+            'wq_filled': self._write_queue.qsize() / self._write_queue.maxsize,
+        }
+
+
     def thread_status(self):
         return "DaBaR: N{} R{} QL{}  DaBaW: N{} W{} T{} QL{}".format(
                 len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),

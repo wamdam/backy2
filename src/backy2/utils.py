@@ -180,6 +180,38 @@ def generate_block(id_, size):
     return data
 
 
+def _progressbar(pct):
+    return ("[%-10s]" % ('='*(round(pct/10))))
+
+
+def _eta(eta_s):
+    if eta_s < 2 * 60:
+        return "{:d}s".format(eta_s)
+    elif eta_s < 60 * 60:
+        #return "{:d}m{:d}s".format(eta_s//60, eta_s-eta_s//60*60)
+        return "{:d}m{:d}s".format(eta_s//60, eta_s%60)
+    else:
+        #return "{:d}h{:d}m".format(eta_s//60//60, eta_s//60-eta_s//60//60*60*60)
+        return "{:d}h{:d}m".format(eta_s//60//60, eta_s//60%(60))
+
+
+def status(msg, rq_len_pct, wq_len_pct, progress_pct, write_tp, eta_s):
+    """
+    Restoring to null:// Read Queue [====      ] Write Queue [==========] (23.5% 71MB/s ETA 1h32m)
+    Backing up rbd://vms/test Read Queue [=         ] Write Queue [==========] (11.3% 96MB/s ETA 120s)
+    """
+    return("{} Read Queue {} Write Queue {} ({:.1f}% {:.1f}MB/s ETA {})".format(
+        msg,
+        _progressbar(rq_len_pct),
+        _progressbar(wq_len_pct),
+        progress_pct,
+        write_tp / 1024 / 1024,
+        _eta(eta_s),
+        ))
+
+
+#print(status("Restoring to null://", 23, 87, 23.5, 71541112, 3700))
+
 #if __name__ == '__main__':
 #    import sys
 #    from time import sleep

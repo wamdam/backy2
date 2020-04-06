@@ -159,6 +159,13 @@ class IO(_IO):
         self._write_queue.put((block, data))
 
 
+    def queue_status(self):
+        return {
+            'rq_filled': self._outqueue.qsize() / self._outqueue.maxsize,  # 0..1
+            'wq_filled': self._write_queue.qsize() / self._write_queue.maxsize,
+        }
+
+
     def thread_status(self):
         return "IOR: N{} R{} IQ{} OQ{}  IOW: N{} W{} QL{}".format(
                 len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),

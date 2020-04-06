@@ -39,6 +39,17 @@ class IO():
         raise NotImplementedError()
 
 
+    def queue_status(self):
+        return {
+            'rq_filled': 0.0,
+            'wq_filled': 0.0,
+        }
+
+
+    def thread_status(self):
+        raise NotImplementedError()
+
+
     def close(self):
         """ Close the io
         """

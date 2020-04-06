@@ -105,6 +105,7 @@ class DataBackend(_DataBackend):
             self.reader_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.read_throttling.consume(len(data)))
             self.reader_thread_status[id_] = STATUS_NOTHING
+            #time.sleep(.5)
             self._read_data_queue.put((block, data))
             t2 = time.time()
             self._read_queue.task_done()
@@ -168,6 +169,13 @@ class DataBackend(_DataBackend):
 
     def get_all_blob_uids(self, prefix=None):
         return []
+
+
+    def queue_status(self):
+        return {
+            'rq_filled': self._read_data_queue.qsize() / self._read_data_queue.maxsize,  # 0..1
+            'wq_filled': self._write_queue.qsize() / self._write_queue.maxsize,
+        }
 
 
     def thread_status(self):

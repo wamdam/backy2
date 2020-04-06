@@ -192,6 +192,13 @@ class IO(_IO):
         self._write_queue.put((block, data))
 
 
+    def queue_status(self):
+        return {
+            'rq_filled': self._outqueue.qsize() / self._outqueue.maxsize,  # 0..1
+            'wq_filled': self._write_queue.qsize() / self._write_queue.maxsize,
+        }
+
+
     def thread_status(self):
         return "IOR: N{} R{} S{} F{} IQ{} OQ{}  IOW: N{} W{} S{} F{} QL{}".format(
                 len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
@@ -221,5 +228,4 @@ class IO(_IO):
             for _writer_thread in self._writer_threads:
                 _writer_thread.join()
             t2 = time.time()
-            print("Was waiting for {}s for threads.".format(t2-t1))
 
