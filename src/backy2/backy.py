@@ -314,6 +314,14 @@ class Backy():
                     _log_jobs_counter = _log_every_jobs
                     logger.info(_status)
 
+        stats = {
+                'bytes_read': 0,
+                'blocks_read': 0,
+                'bytes_written': 0,
+                'blocks_written': 0,
+                'bytes_sparse': 0,
+                'blocks_sparse': 0,
+            }
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
         _log_jobs_counter = 0
