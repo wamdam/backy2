@@ -272,7 +272,9 @@ class Backy():
         _log_jobs_counter = 0
         t1 = time.time()
         t_last_run = 0
+        num_blocks = blocks.count()
         for i, block in enumerate(blocks.yield_per(1000)):
+            _log_jobs_counter -= 1
             if block.uid:
                 self.data_backend.read(block.deref())  # adds a read job
                 read_jobs += 1
@@ -305,7 +307,7 @@ class Backy():
                     io_queue_status['wq_filled']*100,
                     (i + 1) / num_blocks * 100,
                     stats['bytes_written'] / dt,
-                    round(read_jobs / (i+1) * dt - dt),
+                    round(num_blocks / (i+1) * dt - dt),
                     )
                 notify(self.process_name, _status)
                 if _log_jobs_counter <= 0:
