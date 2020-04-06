@@ -609,13 +609,13 @@ class Backy():
             try:
                 old_block = next(old_blocks)
             except StopIteration:  # No old block found, we create a fresh one
-                uid = None
+                block_uid = None
                 checksum = None
                 block_size = self.block_size
                 valid = 1
             else:  # Old block found, maybe base on that one
                 assert old_block.id == block_id
-                uid = old_block.uid
+                block_uid = old_block.uid
                 checksum = old_block.checksum
                 block_size = old_block.size
                 valid = old_block.valid
@@ -626,7 +626,7 @@ class Backy():
             if new_block_size != block_size:
                 # last block changed, so set back all info
                 block_size = new_block_size
-                uid = None
+                block_uid = None
                 checksum = None
                 valid = 1
                 _have_old_block = False
@@ -646,11 +646,11 @@ class Backy():
             elif block_id in sparse_blocks:
                 logger.debug('Block {}: Sparse'.format(block_id))
                 # Sparse blocks have uid and checksum None.
-                io.read(block_id, read=False, metadata={'uid': None, 'checksum': None, 'block_size': block_size})
+                io.read(block_id, read=False, metadata={'block_uid': None, 'checksum': None, 'block_size': block_size})
             else:
                 logger.debug('Block {}: Fresh empty or existing'.format(block_id))
-                io.read(block_id, read=False, metadata={'uid': uid, 'checksum': checksum, 'block_size': block_size})
-                #assert _have_old_block
+                io.read(block_id, read=False, metadata={'block_uid': block_uid, 'checksum': checksum, 'block_size': block_size})
+                assert _have_old_block
 
 
         # now use the readers and write
@@ -699,10 +699,10 @@ class Backy():
                     stats['blocks_checked'] += 1
                     stats['bytes_checked'] += block_size
             else:
-                block_uid = metadata['uid']
+                block_uid = metadata['block_uid']
                 data_checksum = metadata['checksum']
                 block_size = metadata['block_size']
-                if metadata['uid'] is None:
+                if metadata['block_uid'] is None:
                     stats['blocks_sparse'] += 1
                     stats['bytes_sparse'] += block_size
                 else:
@@ -713,7 +713,7 @@ class Backy():
             block = self.meta_backend.set_block(
                 block_id,
                 version_uid,
-                uid,
+                block_uid,
                 data_checksum,
                 block_size,
                 valid=1,
