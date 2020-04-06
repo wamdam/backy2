@@ -5,6 +5,7 @@ import shutil
 import random
 import json
 import hashlib
+import math
 from backy2.scripts.backy import hints_from_rbd_diff
 from backy2.logging import init_logging
 from backy2.utils import backy_from_config
@@ -61,6 +62,11 @@ with TestPath() as testpath:
             size = old_size
         else:
             size = 32*4*kB + random.randint(-4*kB, 4*kB)
+            if size > old_size:
+                hints.append({'offset': old_size, 'length': size-old_size, 'exists': 'true'})
+            if size < old_size:
+                last_block_offset = math.floor(size/(4*kB))*4*kB
+                hints.append({'offset': last_block_offset, 'length': size-last_block_offset, 'exists': 'true'})
             old_size = size
             for j in range(random.randint(0, 10)):  # up to 10 changes
                 if random.randint(0, 1):
@@ -120,7 +126,7 @@ with TestPath() as testpath:
             'data-backup',
             'snapshot-name',
             'file://'+os.path.join(testpath, 'data'),
-            hints_from_rbd_diff(open(os.path.join(testpath, 'hints')).read()),
+            from_version and hints_from_rbd_diff(open(os.path.join(testpath, 'hints')).read()) or None,
             from_version
             )
         backy.close()

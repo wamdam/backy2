@@ -424,6 +424,7 @@ class MetaBackend(_MetaBackend):
             logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
         if _commit:
             self.session.commit()
+        return block
 
 
     def set_blocks_invalid(self, uid, checksum):

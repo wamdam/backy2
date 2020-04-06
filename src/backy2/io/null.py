@@ -109,42 +109,42 @@ class IO(_IO):
 
 
     def _reader(self, id_):
-        """ self._inqueue contains Blocks.
-        self._outqueue contains (block, data, data_checksum)
+        """ self._inqueue contains block_ids to be read.
+        self._outqueue contains (block_id, data, data_checksum)
         """
         while True:
-            block = self._inqueue.get()
-            if block is None:
+            entry = self._inqueue.get()
+            if entry is None:
                 logger.debug("IO {} finishing.".format(id_))
                 self._outqueue.put(None)  # also let the outqueue end
+                self._inqueue.task_done()
                 break
-
-            start_offset = block.id * self.block_size
-            end_offset = min(block.id * self.block_size + self.block_size, self._size)
-            block_size = end_offset - start_offset
-            self.writer_thread_status[id_] = STATUS_READING
-            data = generate_block(block.id, block_size)
-            self.writer_thread_status[id_] = STATUS_NOTHING
-
-            if not data:
-                raise RuntimeError('EOF reached on source when there should be data.')
-
-            data_checksum = self.hash_function(data).hexdigest()
-            if not block.valid:
-                logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
+            block_id, read, metadata = entry
+            if not read:
+                self._outqueue.put((block_id, None, None, metadata))
             else:
-                logger.debug('IO {} read block {} (len {}, checksum {}...) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], self._inqueue.qsize(), self._outqueue.qsize()))
+                start_offset = block_id * self.block_size
+                end_offset = min(block_id * self.block_size + self.block_size, self._size)
+                block_size = end_offset - start_offset
+                self.writer_thread_status[id_] = STATUS_READING
+                data = generate_block(block_id, block_size)
+                self.writer_thread_status[id_] = STATUS_NOTHING
 
-            self._outqueue.put((block, data, data_checksum))
+                if not data:
+                    raise RuntimeError('EOF reached on source when there should be data.')
+
+                data_checksum = self.hash_function(data).hexdigest()
+
+                self._outqueue.put((block_id, data, data_checksum, metadata))
             self._inqueue.task_done()
 
 
-    def read(self, block, sync=False):
+    def read(self, block_id, sync=False, read=True, metadata=None):
         """ Adds a read job """
-        self._inqueue.put(block)
+        self._inqueue.put((block_id, read, metadata))
         if sync:
-            rblock, data, data_checksum = self.get()
-            if rblock.id != block.id:
+            rblock_id, data, data_checksum = self.get()
+            if rblock_id != block_id:
                 raise RuntimeError('Do not mix threaded reading with sync reading!')
             return data
 

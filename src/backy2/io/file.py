@@ -135,48 +135,49 @@ class IO(_IO):
 
 
     def _reader(self, id_):
-        """ self._inqueue contains Blocks to be read.
-        self._outqueue contains (block, data, data_checksum)
+        """ self._inqueue contains block_ids to be read.
+        self._outqueue contains (block_id, data, data_checksum)
         """
         with open(self.io_name, 'rb') as source_file:
             while True:
-                block = self._inqueue.get()
-                if block is None:
+                entry = self._inqueue.get()
+                if entry is None:
                     logger.debug("IO {} finishing.".format(id_))
                     self._outqueue.put(None)  # also let the outqueue end
                     self._inqueue.task_done()
                     break
-                offset = block.id * self.block_size
-                t1 = time.time()
-                self.reader_thread_status[id_] = STATUS_SEEKING
-                source_file.seek(offset)
-                t2 = time.time()
-                self.reader_thread_status[id_] = STATUS_READING
-                data = source_file.read(self.block_size)
-                t3 = time.time()
-                # throw away cache
-                self.reader_thread_status[id_] = STATUS_FADVISE
-                posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
-                self.reader_thread_status[id_] = STATUS_NOTHING
-                if not data:
-                    raise RuntimeError('EOF reached on source when there should be data.')
-
-                data_checksum = self.hash_function(data).hexdigest()
-                if not block.valid:
-                    logger.debug('IO {} re-read block (because it was invalid) {} (checksum {})'.format(id_, block.id, data_checksum))
+                block_id, read, metadata = entry
+                if not read:
+                    self._outqueue.put((block_id, None, None, metadata))
                 else:
-                    logger.debug('IO {} read block {} (len {}, checksum {}...) in {:.2f}s (seek in {:.2f}s) (Inqueue size: {}, Outqueue size: {})'.format(id_, block.id, len(data), data_checksum[:16], t3-t1, t2-t1, self._inqueue.qsize(), self._outqueue.qsize()))
+                    offset = block_id * self.block_size
+                    t1 = time.time()
+                    self.reader_thread_status[id_] = STATUS_SEEKING
+                    source_file.seek(offset)
+                    t2 = time.time()
+                    self.reader_thread_status[id_] = STATUS_READING
+                    data = source_file.read(self.block_size)
+                    t3 = time.time()
+                    # throw away cache
+                    self.reader_thread_status[id_] = STATUS_FADVISE
+                    posix_fadvise(source_file.fileno(), offset, offset + self.block_size, os.POSIX_FADV_DONTNEED)
+                    self.reader_thread_status[id_] = STATUS_NOTHING
+                    if not data:
+                        raise RuntimeError('EOF reached on source when there should be data.')
 
-                self._outqueue.put((block, data, data_checksum))
+                    data_checksum = self.hash_function(data).hexdigest()
+
+                    self._outqueue.put((block_id, data, data_checksum, metadata))
                 self._inqueue.task_done()
 
 
-    def read(self, block, sync=False):
-        """ Adds a read job """
-        self._inqueue.put(block)
+    def read(self, block_id, sync=False, read=True, metadata=None):
+        """ Adds a read job, passes through metadata.
+        read False means the real data will not be read."""
+        self._inqueue.put((block_id, read, metadata))
         if sync:
-            rblock, data, data_checksum = self.get()
-            if rblock.id != block.id:
+            rblock_id, data, data_checksum = self.get()
+            if rblock_id != block_id:
                 raise RuntimeError('Do not mix threaded reading with sync reading!')
             return data
 
