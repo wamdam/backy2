@@ -97,7 +97,7 @@ class BackyStore():
 
 
     def get_cow_version(self, from_version):
-        cow_version_uid = self.backy.meta_backend.copy_version(from_version.uid, 'copy on write', '')
+        cow_version_uid = self.backy.meta_backend.copy_version(from_version.uid, from_version.name, 'copy on write')
         self.cow[cow_version_uid] = {}  # contains version_uid: dict() of block id -> uid
         return cow_version_uid
 
