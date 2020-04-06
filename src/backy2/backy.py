@@ -650,7 +650,6 @@ class Backy():
             else:
                 logger.debug('Block {}: Fresh empty or existing'.format(block_id))
                 io.read(block_id, read=False, metadata={'block_uid': block_uid, 'checksum': checksum, 'block_size': block_size})
-                assert _have_old_block
 
 
         # now use the readers and write
