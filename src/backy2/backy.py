@@ -316,8 +316,11 @@ class Backy():
 
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        _log_jobs_counter = 0
         t1 = time.time()
+        t_last_run = 0
         for i in range(read_jobs):
+            _log_jobs_counter -= 1
             block, offset, length, data = self.data_backend.read_get()
             assert len(data) == block.size
             stats['blocks_read'] += 1
@@ -344,36 +347,27 @@ class Backy():
                     block.size,
                     ))
 
-            if i % _log_every_jobs == 0 or i + 1 == read_jobs:
-                notify(self.process_name, 'Restoring Version {} to {} ({:.1f}%)'.format(version_uid, target, (i + 1) / read_jobs * 100))
-
+            if time.time() - t_last_run >= 1:
+                t_last_run = time.time()
                 t2 = time.time()
                 dt = t2-t1
-                #logger.info('Restored {}/{} blocks ({:.1f}%) [Read: {}  Written: {} ({:d}MB)  Read I/O: {:.1f}MB/s  Write I/O: {:.1f}MB/s]  ETA: {:d}s'.format(
-                #    i + 1,
-                #    read_jobs,
-                #    (i + 1) / read_jobs * 100,
-                #    stats['blocks_read'],
-                #    stats['blocks_written'],
-                #    stats['bytes_written'] // 1024 // 1024,
-                #    stats['bytes_read'] / 1024 / 1024 / (dt),
-                #    stats['bytes_written'] / 1024 / 1024 / (dt),
-                #    round(read_jobs / (i+1) * dt - dt),
-                #))
-                ##logger.info('Restored {}/{} blocks ({:.1f}%)'.format(i + 1, read_jobs, (i + 1) / read_jobs * 100))
-                #logger.info(io.thread_status() + " " + self.data_backend.thread_status())
-
+                logger.debug(io.thread_status() + " " + self.data_backend.thread_status())
 
                 io_queue_status = io.queue_status()
                 db_queue_status = self.data_backend.queue_status()
-                logger.info(status(
+                _status = status(
                     'Restoring to {}'.format(target),
                     db_queue_status['rq_filled']*100,
                     io_queue_status['wq_filled']*100,
                     (i + 1) / read_jobs * 100,
                     stats['bytes_written'] / dt,
                     round(read_jobs / (i+1) * dt - dt),
-                    ))
+                    )
+                notify(self.process_name, _status)
+                if _log_jobs_counter <= 0:
+                    _log_jobs_counter = _log_every_jobs
+                    logger.info(_status)
+
 
         self.locking.unlock(version_uid)
         io.close()
@@ -647,8 +641,11 @@ class Backy():
         # now use the readers and write
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
+        _log_jobs_counter = 0
         t1 = time.time()
+        t_last_run = 0
         for i in range(read_jobs):
+            _log_jobs_counter -= 1
             block, data, data_checksum = io.get()
 
             stats['blocks_read'] += 1
@@ -678,27 +675,33 @@ class Backy():
                 stats['bytes_written'] += len(data)
                 logger.debug('Wrote block {} (checksum {}...)'.format(block.id, data_checksum[:16]))
             done_jobs += 1
-            notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
-            if i % _log_every_jobs == 0 or i + 1 == read_jobs:
+            #notify(self.process_name, 'Backup Version {} from {} ({:.1f}%)'.format(version_uid, source, (i + 1) / read_jobs * 100))
+
+            if time.time() - t_last_run >= 1:
+                t_last_run = time.time()
                 t2 = time.time()
                 dt = t2-t1
-                logger.info('Backed up {}/{} blocks ({:.1f}%) [Sparse: {}  Dedup: {}  Written: {} ({:d}MB)  Write I/O: {:.1f}MB/s]  ETA: {:d}s'.format(
-                    i + 1,
-                    read_jobs,
+                logger.debug(io.thread_status() + " " + self.data_backend.thread_status())
+
+                io_queue_status = io.queue_status()
+                db_queue_status = self.data_backend.queue_status()
+                _status = status(
+                    'Backing up {}'.format(source),
+                    io_queue_status['rq_filled']*100,
+                    db_queue_status['wq_filled']*100,
                     (i + 1) / read_jobs * 100,
-                    stats['blocks_sparse'],
-                    stats['blocks_found_dedup'],
-                    stats['blocks_written'],
-                    stats['bytes_written'] // 1024 // 1024,
-                    stats['bytes_written'] / 1024 / 1024 / (dt),
+                    stats['bytes_written'] / dt,
                     round(read_jobs / (i+1) * dt - dt),
-                ))
-                logger.info(io.thread_status() + " " + self.data_backend.thread_status())
+                    )
+                notify(self.process_name, _status)
+                if _log_jobs_counter <= 0:
+                    _log_jobs_counter = _log_every_jobs
+                    logger.info(_status)
 
         io.close()  # wait for all readers
         # self.data_backend.close()  # wait for all writers
         if read_jobs != done_jobs:
-            logger.error('backy broke somewhere. Backup is invalid.')
+            logger.error('backy2 broke somewhere. Backup is invalid.')
             sys.exit(3)
 
         self.meta_backend.set_version_valid(version_uid)
