@@ -223,6 +223,7 @@ class MetaBackend(_MetaBackend):
                     _upsert=False,
                     )
         self._commit()
+        logger.info('Done copying version...')
         return new_version_uid
 
 
