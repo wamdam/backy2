@@ -205,6 +205,27 @@ class MetaBackend(_MetaBackend):
         return uid
 
 
+    def copy_version(self, from_version_uid, version_name, snapshot_name=''):
+        """ Copy version to a new uid and name, snapshot_name"""
+        old_version = self.get_version(from_version_uid)
+        new_version_uid = self.set_version(version_name, snapshot_name, old_version.size, old_version.size_bytes, old_version.valid)
+        old_blocks = self.get_blocks_by_version2(from_version_uid)
+        logger.info('Copying version...')
+        for i, block in enumerate(old_blocks.yield_per(1000)):
+            self.set_block(
+                    i,
+                    new_version_uid,
+                    block.uid,
+                    block.checksum,
+                    block.size,
+                    block.valid,
+                    _commit=False,
+                    _upsert=False,
+                    )
+        self._commit()
+        return new_version_uid
+
+
     def du(self, version_uid):
         virtual_space = 0
         real_space = 0
