@@ -153,7 +153,7 @@ class DataBackend(_DataBackend):
             t2 = time.time()
 
             self._write_queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+            logger.debug('Writer {} with bucket {} wrote data {} in {:.2f}s (Queue size is {})'.format(id_, id(bucket), uid, t2-t1, self._write_queue.qsize()))
 
 
     def _reader(self, id_):
