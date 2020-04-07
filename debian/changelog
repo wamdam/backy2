@@ -1,3 +1,10 @@
+backy2 (2.11.2) unstable; urgency=low
+
+  * Bugfixes (stats and scrubs)
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 14:34:21 +0200
+
+
 backy2 (2.11.1) unstable; urgency=low
 
   * Nicer output for restore
