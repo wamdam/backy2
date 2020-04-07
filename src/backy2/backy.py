@@ -779,7 +779,7 @@ class Backy():
                     logger.info(_status)
 
         io.close()  # wait for all readers
-        # self.data_backend.close()  # wait for all writers
+        self.data_backend.close()  # wait for all writers
 
         if tag is not None:
             if isinstance(tag, list):
