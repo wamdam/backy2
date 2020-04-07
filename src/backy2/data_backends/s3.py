@@ -133,19 +133,25 @@ class DataBackend(_DataBackend):
                 logger.debug("Writer {} finishing.".format(id_))
                 break
             if bucket is None:
-                bicket = self._get_bucket()
+                bucket = self._get_bucket()
             uid, data = entry
+
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
+
             t1 = time.time()
+
             self.writer_thread_status[id_] = STATUS_NEWKEY
             obj = bucket.Object(uid)
             self.writer_thread_status[id_] = STATUS_NOTHING
+
             self.writer_thread_status[id_] = STATUS_WRITING
             obj.put(Body=data)
             self.writer_thread_status[id_] = STATUS_NOTHING
+
             t2 = time.time()
+
             self._write_queue.task_done()
             logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
 
@@ -159,7 +165,7 @@ class DataBackend(_DataBackend):
                 logger.debug("Reader {} finishing.".format(id_))
                 break
             if bucket is None:
-                bicket = self._get_bucket()
+                bucket = self._get_bucket()
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
