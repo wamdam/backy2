@@ -1,3 +1,10 @@
+backy2 (2.11.5) unstable; urgency=low
+
+  * Upgrade to boto3
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 19:11:21 +0200
+
+
 backy2 (2.11.4) unstable; urgency=low
 
   * Better stats
