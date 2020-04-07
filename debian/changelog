@@ -1,3 +1,10 @@
+backy2 (2.11.4) unstable; urgency=low
+
+  * Better stats
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 14:57:21 +0200
+
+
 backy2 (2.11.3) unstable; urgency=low
 
   * Bugfixes
