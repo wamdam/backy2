@@ -611,7 +611,13 @@ class Backy():
             old_blocks = iter([])
 
         # Create read jobs
+        # TODO: log output - how far are we?
+        _log_every_jobs = size // 200 + 1  # about every half percent
+        _log_jobs_counter = 0
+        t1 = time.time()
+        t_last_run = 0
         for block_id in range(size):
+            _log_jobs_counter -= 1
             # Create a block, either based on an old one (from_version) or a fresh one
             _have_old_block = False
             try:
@@ -658,6 +664,28 @@ class Backy():
             else:
                 logger.debug('Block {}: Fresh empty or existing'.format(block_id))
                 io.read(block_id, read=False, metadata={'block_uid': block_uid, 'checksum': checksum, 'block_size': block_size})
+
+            # log and process output
+            if time.time() - t_last_run >= 1:
+                t_last_run = time.time()
+                t2 = time.time()
+                dt = t2-t1
+                logger.debug(io.thread_status() + " " + self.data_backend.thread_status())
+
+                io_queue_status = io.queue_status()
+                db_queue_status = self.data_backend.queue_status()
+                _status = status(
+                    'Backing up (Phase 1/2: Building blocklist) {}'.format(source),
+                    0,
+                    0,
+                    (block_id + 1) / size * 100,
+                    0.0,
+                    round(size / (block_id+1) * dt - dt),
+                    )
+                notify(self.process_name, _status)
+                if _log_jobs_counter <= 0:
+                    _log_jobs_counter = _log_every_jobs
+                    logger.info(_status)
 
 
         # now use the readers and write
@@ -738,7 +766,7 @@ class Backy():
                 io_queue_status = io.queue_status()
                 db_queue_status = self.data_backend.queue_status()
                 _status = status(
-                    'Backing up {}'.format(source),
+                    'Backing up (Phase 2/2: data) {}'.format(source),
                     io_queue_status['rq_filled']*100,
                     db_queue_status['wq_filled']*100,
                     (i + 1) / size * 100,
