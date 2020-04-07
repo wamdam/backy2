@@ -185,7 +185,7 @@ class DataBackend(_DataBackend):
             _bucket = self.bucket
 
         while True:
-            obj = _bucket.Object(key)
+            obj = _bucket.Object(block_uid)
             try:
                 data_dict = obj.get()
                 data = data_dict['Body'].read()
