@@ -129,11 +129,11 @@ class DataBackend(_DataBackend):
         bucket = None
         while True:
             entry = self._write_queue.get()
-            if bucket is None:
-                bicket = self._get_bucket()
             if entry is None or self.fatal_error:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
+            if bucket is None:
+                bicket = self._get_bucket()
             uid, data = entry
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
@@ -155,14 +155,11 @@ class DataBackend(_DataBackend):
         bucket = None
         while True:
             block = self._read_queue.get()  # contains block
-            if bucket is None:
-                bicket = self._get_bucket()
-            if entry is None or self.fatal_error:
-                logger.debug("Writer {} finishing.".format(id_))
-                break
             if block is None or self.fatal_error:
                 logger.debug("Reader {} finishing.".format(id_))
                 break
+            if bucket is None:
+                bicket = self._get_bucket()
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
