@@ -676,6 +676,7 @@ class Backy():
                 stats['blocks_read'] += 1
                 stats['bytes_read'] += block_size
 
+                existing_block = None
                 if self.dedup:
                     existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
 
