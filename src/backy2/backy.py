@@ -540,8 +540,6 @@ class Backy():
         stats = {
                 'version_size_bytes': 0,
                 'version_size_blocks': 0,
-                'bytes_kept': 0,
-                'blocks_kept': 0,
                 'bytes_checked': 0,
                 'blocks_checked': 0,
                 'bytes_read': 0,
@@ -715,8 +713,8 @@ class Backy():
                     stats['blocks_sparse'] += 1
                     stats['bytes_sparse'] += block_size
                 else:
-                    stats['blocks_kept'] += 1
-                    stats['bytes_kept'] += block_size
+                    stats['blocks_found_dedup'] += 1
+                    stats['bytes_found_dedup'] += block_size
 
             # Insert the block into the database
             block = self.meta_backend.set_block(
