@@ -94,6 +94,9 @@ class DataBackend(_DataBackend):
         self._write_queue = queue.Queue(self.write_queue_length)
         self._read_queue = queue.Queue()
         self._read_data_queue = queue.Queue(self.read_queue_length)
+
+        self.bucket = self._get_bucket()  # for read_raw
+
         self._writer_threads = []
         self._reader_threads = []
         self.reader_thread_status = {}
@@ -111,8 +114,6 @@ class DataBackend(_DataBackend):
             self._reader_threads.append(_reader_thread)
             self.reader_thread_status[i] = STATUS_NOTHING
 
-        self.bucket = self._get_bucket()  # for read_raw
-
 
     def _get_bucket(self):
         session = boto3.session.Session()
@@ -125,9 +126,11 @@ class DataBackend(_DataBackend):
 
     def _writer(self, id_):
         """ A threaded background writer """
-        bucket = self._get_bucket()
+        bucket = None
         while True:
             entry = self._write_queue.get()
+            if bucket is None:
+                bicket = self._get_bucket()
             if entry is None or self.fatal_error:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
@@ -149,9 +152,14 @@ class DataBackend(_DataBackend):
 
     def _reader(self, id_):
         """ A threaded background reader """
-        bucket = self._get_bucket()
+        bucket = None
         while True:
             block = self._read_queue.get()  # contains block
+            if bucket is None:
+                bicket = self._get_bucket()
+            if entry is None or self.fatal_error:
+                logger.debug("Writer {} finishing.".format(id_))
+                break
             if block is None or self.fatal_error:
                 logger.debug("Reader {} finishing.".format(id_))
                 break
