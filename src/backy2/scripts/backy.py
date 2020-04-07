@@ -293,10 +293,12 @@ class Commands():
         backy.close()
 
 
-    def cleanup(self, full, prefix=None):
+    def cleanup(self, full, dangerous_force, prefix=None):
         backy = self.backy()
         if full:
             backy.cleanup_full(prefix)
+        elif dangerous_force:
+            backy.cleanup_fast(dt=0)
         else:
             backy.cleanup_fast()
         backy.close()
@@ -582,6 +584,9 @@ def main():
         help='If you perform a full cleanup, you may add --prefix to only cleanup block uids starting '
              'with this prefix. This is for iterative cleanups. Example: '
              'cleanup --full --prefix=a')
+    p.add_argument(
+        '--dangerous-force', action='store_true', default=False,
+        help='Seriously, do not use this outside of testing and development.')
     p.set_defaults(func='cleanup')
 
     # LS

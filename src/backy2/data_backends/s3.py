@@ -4,8 +4,10 @@
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.logging import logger
 from backy2.utils import TokenBucket
-import boto.exception
-import boto.s3.connection
+import boto3
+from botocore.client import Config as BotoCoreClientConfig
+from botocore.exceptions import ClientError
+from botocore.handlers import set_list_objects_encoding_type_url
 import hashlib
 import os
 import queue
@@ -33,14 +35,27 @@ class DataBackend(_DataBackend):
 
     def __init__(self, config):
         aws_access_key_id = config.get('aws_access_key_id')
+        if aws_access_key_id is None:
+            aws_access_key_id_file = config.get('aws_access_key_id_file')
+            with open(aws_access_key_id_file, 'r', encoding="ascii") as f:
+                aws_access_key_id = f.read().rstrip()
+
         aws_secret_access_key = config.get('aws_secret_access_key')
-        host = config.get('host')
-        port = config.getint('port')
-        is_secure = config.getboolean('is_secure')
-        bucket_name = config.get('bucket_name', 'backy2')
+        if aws_secret_access_key is None:
+            aws_secret_access_key_file = config.get('aws_secret_access_key_file')
+            with open(aws_secret_access_key_file, 'r', encoding="ascii") as f:
+                aws_secret_access_key = f.read().rstrip()
+
+        region_name = config.get('region_name', '')
+        endpoint_url = config.get('endpoint_url', '')
+        use_ssl = config.get('use_ssl', '')
+        self._bucket_name = config.get('bucket_name', '')
+        addressing_style = config.get('addressing_style', '')
+        signature_version = config.get('signature_version', '')
+        self._disable_encoding_type = config.get('disable_encoding_type', '')
+
         simultaneous_writes = config.getint('simultaneous_writes', 1)
         simultaneous_reads = config.getint('simultaneous_reads', 1)
-        calling_format=boto.s3.connection.OrdinaryCallingFormat()  # TODO: Old?
         bandwidth_read = config.getint('bandwidth_read', 0)
         bandwidth_write = config.getint('bandwidth_write', 0)
 
@@ -49,27 +64,30 @@ class DataBackend(_DataBackend):
         self.write_throttling = TokenBucket()
         self.write_throttling.set_rate(bandwidth_write)  # 0 disables throttling
 
-        self.conn = boto.connect_s3(
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                host=host,
-                port=port,
-                is_secure=is_secure,
-                calling_format=calling_format
-            )
-        # create our bucket
-        try:
-            self.bucket = self.conn.create_bucket(bucket_name)
-        except boto.exception.S3CreateError:
-            # exists...
-            self.bucket = self.conn.get_bucket(bucket_name)
-            pass
-        except OSError as e:
-            # no route to host
-            self.fatal_error = e
-            logger.error('Fatal error, dying: {}'.format(e))
-            print('Fatal error: {}'.format(e))
-            exit(10)
+
+        self._resource_config = {
+            'aws_access_key_id': aws_access_key_id,
+            'aws_secret_access_key': aws_secret_access_key,
+        }
+
+        if region_name:
+            self._resource_config['region_name'] = region_name
+
+        if endpoint_url:
+            self._resource_config['endpoint_url'] = endpoint_url
+
+        if use_ssl:
+            self._resource_config['use_ssl'] = use_ssl
+
+        resource_config = {}
+        if addressing_style:
+            resource_config['s3'] = {'addressing_style': addressing_style}
+
+        if signature_version:
+            resource_config['signature_version'] = signature_version
+
+        self._resource_config['config'] = BotoCoreClientConfig(**resource_config)
+
 
         self.write_queue_length = simultaneous_writes + self.WRITE_QUEUE_LENGTH
         self.read_queue_length = simultaneous_reads + self.READ_QUEUE_LENGTH
@@ -93,9 +111,21 @@ class DataBackend(_DataBackend):
             self._reader_threads.append(_reader_thread)
             self.reader_thread_status[i] = STATUS_NOTHING
 
+        self.bucket = self._get_bucket()  # for read_raw
+
+
+    def _get_bucket(self):
+        session = boto3.session.Session()
+        if self._disable_encoding_type:
+            session.events.unregister('before-parameter-build.s3.ListObjects', set_list_objects_encoding_type_url)
+        resource = session.resource('s3', **self._resource_config)
+        bucket = resource.Bucket(self._bucket_name)
+        return bucket
+
 
     def _writer(self, id_):
         """ A threaded background writer """
+        bucket = self._get_bucket()
         while True:
             entry = self._write_queue.get()
             if entry is None or self.fatal_error:
@@ -107,37 +137,19 @@ class DataBackend(_DataBackend):
             self.writer_thread_status[id_] = STATUS_NOTHING
             t1 = time.time()
             self.writer_thread_status[id_] = STATUS_NEWKEY
-            key = self.bucket.new_key(uid)
+            obj = bucket.Object(uid)
             self.writer_thread_status[id_] = STATUS_NOTHING
-            try:
-                self.writer_thread_status[id_] = STATUS_WRITING
-                r = key.set_contents_from_string(data)
-                self.writer_thread_status[id_] = STATUS_NOTHING
-            except (
-                    OSError,
-                    boto.exception.BotoServerError,
-                    boto.exception.S3ResponseError,
-                    ) as e:
-                # OSError happens when the S3 host is gone (i.e. network died,
-                # host down, ...). boto tries hard to recover, however after
-                # several attempts it will give up and raise.
-                # BotoServerError happens, when there is no server.
-                # S3ResponseError sometimes happens, when the cluster is about
-                # to shutdown. Hard to reproduce because the writer must write
-                # in exactly this moment.
-                # We let the backup job die here fataly.
-                self.fatal_error = e
-                logger.error('Fatal error, dying: {}'.format(e))
-                #exit('Fatal error: {}'.format(e))  # this only raises SystemExit
-                os._exit(11)
+            self.writer_thread_status[id_] = STATUS_WRITING
+            obj.put(Body=data)
+            self.writer_thread_status[id_] = STATUS_NOTHING
             t2 = time.time()
-            assert r == len(data)
             self._write_queue.task_done()
             logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
 
 
     def _reader(self, id_):
         """ A threaded background reader """
+        bucket = self._get_bucket()
         while True:
             block = self._read_queue.get()  # contains block
             if block is None or self.fatal_error:
@@ -146,10 +158,10 @@ class DataBackend(_DataBackend):
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
-                data = self.read_raw(block.uid)
+                data = self.read_raw(block.uid, bucket)
                 self.reader_thread_status[id_] = STATUS_NOTHING
             except FileNotFoundError:
-                self._read_data_queue.put((block, None))  # catch this!
+                self._read_data_queue.put((block, None))  # TODO: catch this!
             else:
                 self._read_data_queue.put((block, data))
                 t2 = time.time()
@@ -157,13 +169,20 @@ class DataBackend(_DataBackend):
                 logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
-    def read_raw(self, block_uid):
-        key = self.bucket.get_key(block_uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(block_uid))
+    def read_raw(self, block_uid, _bucket=None):
+        if not _bucket:
+            _bucket = self.bucket
+
         while True:
+            obj = _bucket.Object(key)
             try:
-                data = key.get_contents_as_string()
+                data_dict = obj.get()
+                data = data_dict['Body'].read()
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
+                    raise FileNotFoundError('Key {} not found.'.format(key)) from None
+                else:
+                    raise
             except socket.timeout:
                 logger.error('Timeout while fetching from s3, trying again.')
                 pass
@@ -203,21 +222,25 @@ class DataBackend(_DataBackend):
 
 
     def rm(self, uid):
-        key = self.bucket.get_key(uid)
-        if not key:
-            raise FileNotFoundError('UID {} not found.'.format(uid))
-        self.bucket.delete_key(uid)
+        obj = self.bucket.Object(uid)
+        try:
+            obj.load()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
+                raise FileNotFoundError('Key {} not found.'.format(uid)) from None
+            else:
+                raise
+        else:
+            obj.delete()
 
 
     def rm_many(self, uids):
         """ Deletes many uids from the data backend and returns a list
         of uids that couldn't be deleted.
         """
-        errors = self.bucket.delete_keys(uids, quiet=True)
-        if errors.errors:
-            # unable to test this. ceph object gateway doesn't return errors.
-            # raise FileNotFoundError('UIDS {} not found.'.format(errors.errors))
-            return errors.errors  # TODO: which should be a list of uids.
+        for uid in uids:
+            self.rm(uid)
+        # TODO: maybe use delete_objects
 
 
     def read(self, block, sync=False):
@@ -244,7 +267,12 @@ class DataBackend(_DataBackend):
 
 
     def get_all_blob_uids(self, prefix=None):
-        return [k.name for k in self.bucket.list(prefix)]
+        if prefix is None:
+            objects_iterable = self.bucket.objects.all()
+        else:
+            objects_iterable = self.bucket.objects.filter(Prefix=prefix)
+
+        return [o.key for o in objects_iterable]
 
 
     def queue_status(self):
@@ -275,6 +303,5 @@ class DataBackend(_DataBackend):
             self._read_queue.put(None)  # ends the thread
         for _reader_thread in self._reader_threads:
             _reader_thread.join()
-        self.conn.close()
 
 
