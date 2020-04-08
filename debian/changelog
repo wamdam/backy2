@@ -1,3 +1,11 @@
+backy2 (2.11.7) unstable; urgency=low
+
+  * Improved performance on s3. However, boto3 seems to be the bottleneck
+    here. We only get ~120MB/s to s3. Hints welcome.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 08 Apr 2020 17:15:21 +0200
+
+
 backy2 (2.11.6) unstable; urgency=low
 
   * Bugfixes

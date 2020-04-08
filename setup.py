@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 from setuptools import setup, find_packages
 
-version = '2.11.6'
+version = '2.11.7'
 
 setup(name='backy2',
     version=version,
