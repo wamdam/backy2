@@ -9,7 +9,7 @@ from botocore.client import Config as BotoCoreClientConfig
 from botocore.exceptions import ClientError
 from botocore.handlers import set_list_objects_encoding_type_url
 import hashlib
-import io
+#import io
 import os
 import queue
 import shortuuid
@@ -154,21 +154,14 @@ class DataBackend(_DataBackend):
             uid, data = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
-            ###time.sleep(self.write_throttling.consume(len(data)))
+            time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
 
             t1 = time.time()
 
-            #self.writer_thread_status[id_] = STATUS_NEWKEY
-            #obj = bucket.Object(uid)
-            #self.writer_thread_status[id_] = STATUS_NOTHING
-
-            #self.writer_thread_status[id_] = STATUS_WRITING
-            #obj.put(Body=data)
-            #self.writer_thread_status[id_] = STATUS_NOTHING
             self.writer_thread_status[id_] = STATUS_WRITING
-            #client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
-            client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
+            client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
+            #client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
             self.writer_thread_status[id_] = STATUS_NOTHING
 
             t2 = time.time()
