@@ -9,6 +9,7 @@ from botocore.client import Config as BotoCoreClientConfig
 from botocore.exceptions import ClientError
 from botocore.handlers import set_list_objects_encoding_type_url
 import hashlib
+import io
 import os
 import queue
 import shortuuid
@@ -86,6 +87,11 @@ class DataBackend(_DataBackend):
         if signature_version:
             resource_config['signature_version'] = signature_version
 
+        # TODO
+        #resource_config['max_pool_connections'] = 100
+        #resource_config['parameter_validation'] = False
+        #resource_config['use_accelerate_endpoint'] = True
+
         self._resource_config['config'] = BotoCoreClientConfig(**resource_config)
 
 
@@ -124,36 +130,51 @@ class DataBackend(_DataBackend):
         return bucket
 
 
+    def _get_client(self):
+        session = boto3.session.Session()
+        if self._disable_encoding_type:
+            session.events.unregister('before-parameter-build.s3.ListObjects', set_list_objects_encoding_type_url)
+        client = session.client('s3', **self._resource_config)
+        return client
+
+
     def _writer(self, id_):
         """ A threaded background writer """
-        bucket = None
+        #bucket = None
+        client = None
         while True:
             entry = self._write_queue.get()
             if entry is None or self.fatal_error:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            if bucket is None:
-                bucket = self._get_bucket()
+            #if bucket is None:
+            #    bucket = self._get_bucket()
+            if client is None:
+                client = self._get_client()
             uid, data = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
-            time.sleep(self.write_throttling.consume(len(data)))
+            ###time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
 
             t1 = time.time()
 
-            self.writer_thread_status[id_] = STATUS_NEWKEY
-            obj = bucket.Object(uid)
-            self.writer_thread_status[id_] = STATUS_NOTHING
+            #self.writer_thread_status[id_] = STATUS_NEWKEY
+            #obj = bucket.Object(uid)
+            #self.writer_thread_status[id_] = STATUS_NOTHING
 
+            #self.writer_thread_status[id_] = STATUS_WRITING
+            #obj.put(Body=data)
+            #self.writer_thread_status[id_] = STATUS_NOTHING
             self.writer_thread_status[id_] = STATUS_WRITING
-            obj.put(Body=data)
+            #client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
+            client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
             self.writer_thread_status[id_] = STATUS_NOTHING
 
             t2 = time.time()
 
             self._write_queue.task_done()
-            logger.debug('Writer {} with bucket {} wrote data {} in {:.2f}s (Queue size is {})'.format(id_, id(bucket), uid, t2-t1, self._write_queue.qsize()))
+            logger.debug('Writer {} with client {} wrote data {} in {:.2f}s (Queue size is {})'.format(id_, id(client), uid, t2-t1, self._write_queue.qsize()))
 
 
     def _reader(self, id_):
