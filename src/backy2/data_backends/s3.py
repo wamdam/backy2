@@ -14,6 +14,7 @@ import os
 import queue
 import shortuuid
 import socket
+import sys
 import threading
 import time
 
@@ -21,7 +22,9 @@ STATUS_NOTHING = 0
 STATUS_READING = 1
 STATUS_WRITING = 2
 STATUS_THROTTLING = 3
-STATUS_NEWKEY = 4
+STATUS_QUEUE = 4
+
+_lock = threading.Lock()
 
 class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
@@ -121,6 +124,25 @@ class DataBackend(_DataBackend):
             self.reader_thread_status[i] = STATUS_NOTHING
 
 
+    def _writer_thread_status(self):
+        _lock.acquire()
+        sys.stdout.write("\r")
+        for status in self.writer_thread_status.values():
+            if status == STATUS_NOTHING:
+                sys.stdout.write(' ')
+            elif status == STATUS_READING:
+                sys.stdout.write('R')
+            elif status == STATUS_WRITING:
+                sys.stdout.write('W')
+            elif status == STATUS_THROTTLING:
+                sys.stdout.write('T')
+            elif status == STATUS_QUEUE:
+                sys.stdout.write('=')
+        sys.stdout.flush()
+        #sys.stdout.write("\n")
+        _lock.release()
+
+
     def _get_bucket(self):
         session = boto3.session.Session()
         if self._disable_encoding_type:
@@ -143,7 +165,10 @@ class DataBackend(_DataBackend):
         #bucket = None
         client = None
         while True:
+            self.writer_thread_status[id_] = STATUS_QUEUE
+            #self._writer_thread_status()
             entry = self._write_queue.get()
+            self.writer_thread_status[id_] = STATUS_NOTHING
             if entry is None or self.fatal_error:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
@@ -154,20 +179,24 @@ class DataBackend(_DataBackend):
             uid, data = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
+            #self._writer_thread_status()
             time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
+            #self._writer_thread_status()
 
             t1 = time.time()
 
             self.writer_thread_status[id_] = STATUS_WRITING
+            #self._writer_thread_status()
             client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
             #client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
             self.writer_thread_status[id_] = STATUS_NOTHING
+            #self._writer_thread_status()
 
             t2 = time.time()
 
             self._write_queue.task_done()
-            logger.debug('Writer {} with client {} wrote data {} in {:.2f}s (Queue size is {})'.format(id_, id(client), uid, t2-t1, self._write_queue.qsize()))
+            #logger.debug('Writer {} with client {} wrote data {} in {:.2f}s (Queue size is {})'.format(id_, id(client), uid, t2-t1, self._write_queue.qsize()))
 
 
     def _reader(self, id_):

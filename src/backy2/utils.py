@@ -200,7 +200,7 @@ def status(msg, rq_len_pct, wq_len_pct, progress_pct, write_tp, eta_s):
     Restoring to null:// Read Queue [====      ] Write Queue [==========] (23.5% 71MB/s ETA 1h32m)
     Backing up rbd://vms/test Read Queue [=         ] Write Queue [==========] (11.3% 96MB/s ETA 120s)
     """
-    return("{} Read Queue {} Write Queue {} ({:.1f}% {:.1f}MB/s ETA {})".format(
+    return("{} Read Queue {} Write Queue {} ({:.1f}% {:.1f}MB/sØ ETA {})".format(
         msg,
         _progressbar(rq_len_pct),
         _progressbar(wq_len_pct),

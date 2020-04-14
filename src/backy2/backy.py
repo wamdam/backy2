@@ -255,6 +255,8 @@ class Backy():
                 'blocks_read': 0,
                 'bytes_written': 0,
                 'blocks_written': 0,
+                'bytes_throughput': 0,
+                'blocks_throughput': 0,
                 'bytes_sparse': 0,
                 'blocks_sparse': 0,
             }
@@ -282,6 +284,8 @@ class Backy():
                 io.write(block, b'\0'*block.size)
                 stats['blocks_written'] += 1
                 stats['bytes_written'] += block.size
+                stats['blocks_throughput'] += 1
+                stats['bytes_throughput'] += block.size
                 logger.debug('Restored sparse block {} successfully ({} bytes).'.format(
                     block.id,
                     block.size,
@@ -306,7 +310,7 @@ class Backy():
                     db_queue_status['rq_filled']*100,
                     io_queue_status['wq_filled']*100,
                     (i + 1) / num_blocks * 100,
-                    stats['bytes_written'] / dt,
+                    stats['bytes_throughput'] / dt,
                     round(num_blocks / (i+1) * dt - dt),
                     )
                 notify(self.process_name, _status)
@@ -321,6 +325,8 @@ class Backy():
                 'blocks_written': 0,
                 'bytes_sparse': 0,
                 'blocks_sparse': 0,
+                'bytes_throughput': 0,
+                'blocks_throughput': 0,
             }
         done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
@@ -338,6 +344,9 @@ class Backy():
             io.write(block, data)
             stats['blocks_written'] += 1
             stats['bytes_written'] += block.size
+
+            stats['blocks_throughput'] += 1
+            stats['bytes_throughput'] += block.size
 
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during restore for block '
@@ -368,7 +377,7 @@ class Backy():
                     db_queue_status['rq_filled']*100,
                     io_queue_status['wq_filled']*100,
                     (i + 1) / read_jobs * 100,
-                    stats['bytes_written'] / dt,
+                    stats['bytes_throughput'] / dt,
                     round(read_jobs / (i+1) * dt - dt),
                     )
                 notify(self.process_name, _status)
@@ -550,6 +559,8 @@ class Backy():
                 'blocks_found_dedup': 0,
                 'bytes_sparse': 0,
                 'blocks_sparse': 0,
+                'bytes_throughput': 0,
+                'blocks_throughput': 0,
                 'start_time': time.time(),
             }
         io = self.get_io_by_source(source)
@@ -675,7 +686,7 @@ class Backy():
                 io_queue_status = io.queue_status()
                 db_queue_status = self.data_backend.queue_status()
                 _status = status(
-                    'Backing up (Phase 1/2: Building blocklist) {}'.format(source),
+                    'Backing up (1/2: Prep) {}'.format(source),
                     0,
                     0,
                     (block_id + 1) / size * 100,
@@ -703,6 +714,8 @@ class Backy():
                 block_size = len(data)
                 stats['blocks_read'] += 1
                 stats['bytes_read'] += block_size
+                stats['blocks_throughput'] += 1
+                stats['bytes_throughput'] += block_size
 
                 existing_block = None
                 if self.dedup:
@@ -766,11 +779,11 @@ class Backy():
                 io_queue_status = io.queue_status()
                 db_queue_status = self.data_backend.queue_status()
                 _status = status(
-                    'Backing up (Phase 2/2: data) {}'.format(source),
+                    'Backing up (2/2: Data) {}'.format(source),
                     io_queue_status['rq_filled']*100,
                     db_queue_status['wq_filled']*100,
                     (i + 1) / size * 100,
-                    stats['bytes_written'] / dt,
+                    stats['bytes_throughput'] / dt,
                     round(size / (i+1) * dt - dt),
                     )
                 notify(self.process_name, _status)
