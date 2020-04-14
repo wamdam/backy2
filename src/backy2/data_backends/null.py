@@ -8,6 +8,7 @@ from backy2.utils import generate_block
 import hashlib
 import os
 import queue
+import random
 import shortuuid
 import socket
 import threading
@@ -29,7 +30,7 @@ class DataBackend(_DataBackend):
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
-    fatal_error = None
+    last_exception = None
 
     def __init__(self, config):
         self.default_block_size = int([value for key, value in config.items('DEFAULTS') if key=='block_size'][0])
@@ -72,44 +73,54 @@ class DataBackend(_DataBackend):
         """ A threaded background writer """
         while True:
             entry = self._write_queue.get()
-            if entry is None or self.fatal_error:
+            if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            uid, data = entry
+            uid, data, callback = entry
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
             t1 = time.time()
-
-            # storing data to key uid
-            self.writer_thread_status[id_] = STATUS_WRITING
-            #time.sleep(.1)
-            self.writer_thread_status[id_] = STATUS_NOTHING
-
-            t2 = time.time()
-            # assert r == len(data)
-            self._write_queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+            try:
+                # storing data to key uid
+                self.writer_thread_status[id_] = STATUS_WRITING
+                #time.sleep(.1)
+                self.writer_thread_status[id_] = STATUS_NOTHING
+            except Exception as e:
+                self.last_exception = e
+            else:
+                t2 = time.time()
+                # assert r == len(data)
+                if callback:
+                    callback(uid)
+                self._write_queue.task_done()
+                #logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+                #if random.random() > 0.9:
+                #    raise ValueError("This is a test")
 
 
     def _reader(self, id_):
         """ A threaded background reader """
         while True:
             block = self._read_queue.get()  # contains block
-            if block is None or self.fatal_error:
+            if block is None or self.last_exception:
                 logger.debug("Reader {} finishing.".format(id_))
                 break
             t1 = time.time()
-            self.reader_thread_status[id_] = STATUS_READING
-            data = self.read_raw(block.id, block.size)
-            self.reader_thread_status[id_] = STATUS_THROTTLING
-            time.sleep(self.read_throttling.consume(len(data)))
-            self.reader_thread_status[id_] = STATUS_NOTHING
-            #time.sleep(.5)
-            self._read_data_queue.put((block, data))
-            t2 = time.time()
-            self._read_queue.task_done()
-            logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
+            try:
+                self.reader_thread_status[id_] = STATUS_READING
+                data = self.read_raw(block.id, block.size)
+                self.reader_thread_status[id_] = STATUS_THROTTLING
+            except Exception as e:
+                self.last_exception = e
+            else:
+                time.sleep(self.read_throttling.consume(len(data)))
+                self.reader_thread_status[id_] = STATUS_NOTHING
+                #time.sleep(.5)
+                self._read_data_queue.put((block, data))
+                t2 = time.time()
+                self._read_queue.task_done()
+                logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
     def read_raw(self, block_id, block_size):
@@ -126,11 +137,13 @@ class DataBackend(_DataBackend):
         return hash[:10] + suuid
 
 
-    def save(self, data, _sync=False):
-        if self.fatal_error:
-            raise self.fatal_error
+    def save(self, data, _sync=False, callback=None):
+        if self.last_exception:
+            raise self.last_exception
         uid = self._uid()
-        # Don't save anything.
+        self._write_queue.put((uid, data, callback))
+        if _sync:
+            self._write_queue.join()
         return uid
 
 
@@ -155,8 +168,10 @@ class DataBackend(_DataBackend):
             return ' ' * self.default_block_size
 
 
-    def read_get(self):
-        block, data = self._read_data_queue.get()
+    def read_get(self, timeout=30):
+        if self.last_exception:
+            raise self.last_exception
+        block, data = self._read_data_queue.get(timeout=timeout)
         offset = 0
         length = len(data)
         self._read_data_queue.task_done()

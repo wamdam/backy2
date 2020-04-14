@@ -38,6 +38,7 @@ class DataBackend(_DataBackend):
 
     _SUPPORTS_PARTIAL_READS = True
     _SUPPORTS_PARTIAL_WRITES = True
+    last_exception = None
 
 
     def __init__(self, config):
@@ -81,10 +82,10 @@ class DataBackend(_DataBackend):
         """ A threaded background writer """
         while True:
             entry = self._write_queue.get()
-            if entry is None:
+            if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            uid, data = entry
+            uid, data, callback = entry
             path = os.path.join(self.path, self._path(uid))
             filename = self._filename(uid)
             self.writer_thread_status[id_] = STATUS_THROTTLING
@@ -92,20 +93,26 @@ class DataBackend(_DataBackend):
             self.writer_thread_status[id_] = STATUS_NOTHING
             t1 = time.time()
             try:
-                self.writer_thread_status[id_] = STATUS_WRITING
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-                self.writer_thread_status[id_] = STATUS_NOTHING
-            except FileNotFoundError:
-                self.writer_thread_status[id_] = STATUS_WRITING
-                makedirs(path)
-                with open(filename, 'wb') as f:
-                    r = f.write(data)
-                self.writer_thread_status[id_] = STATUS_NOTHING
-            t2 = time.time()
-            assert r == len(data)
-            self._write_queue.task_done()
-            logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
+                try:
+                    self.writer_thread_status[id_] = STATUS_WRITING
+                    with open(filename, 'wb') as f:
+                        r = f.write(data)
+                    self.writer_thread_status[id_] = STATUS_NOTHING
+                except FileNotFoundError:
+                    self.writer_thread_status[id_] = STATUS_WRITING
+                    makedirs(path)
+                    with open(filename, 'wb') as f:
+                        r = f.write(data)
+                    self.writer_thread_status[id_] = STATUS_NOTHING
+                assert r == len(data)
+            except Exception as e:
+                self.last_exception = e
+            else:
+                t2 = time.time()
+                if callback:
+                    callback(uid)
+                self._write_queue.task_done()
+                #logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
 
 
     def _reader(self, id_):
@@ -121,8 +128,9 @@ class DataBackend(_DataBackend):
                 self.reader_thread_status[id_] = STATUS_READING
                 data = self.read_raw(block.uid, offset, length)
                 self.reader_thread_status[id_] = STATUS_NOTHING
-            except FileNotFoundError:
-                self._read_data_queue.put((block, offset, length, None))  # catch this!
+                #except FileNotFoundError:
+            except Exception as e:
+                self.last_exception = e
             else:
                 self._read_data_queue.put((block, offset, length, data))
                 t2 = time.time()
@@ -156,9 +164,11 @@ class DataBackend(_DataBackend):
         return os.path.join(path, uid + self.SUFFIX)
 
 
-    def save(self, data, _sync=False):
+    def save(self, data, _sync=False, callback=None):
+        if self.last_exception:
+            raise self.last_exception
         uid = self._uid()
-        self._write_queue.put((uid, data))
+        self._write_queue.put((uid, data, callback))
         if _sync:
             self._write_queue.join()
         return uid
@@ -203,8 +213,10 @@ class DataBackend(_DataBackend):
             return data
 
 
-    def read_get(self):
-        block, offset, length, data = self._read_data_queue.get()
+    def read_get(self, timeout=30):
+        if self.last_exception:
+            raise self.last_exception
+        block, offset, length, data = self._read_data_queue.get(timeout=timeout)
         self._read_data_queue.task_done()
         return block, offset, length, data
 

@@ -11,6 +11,7 @@ from urllib import parse
 import datetime
 import importlib
 import math
+import queue
 import random
 import time
 import sys
@@ -157,7 +158,19 @@ class Backy():
         t_last_run = 0
         for i in range(read_jobs):
             _log_jobs_counter -= 1
-            block, offset, length, data = self.data_backend.read_get()
+            try:
+                while True:
+                    try:
+                        block, offset, length, data = self.data_backend.read_get(timeout=1)
+                    except queue.Empty:  # timeout occured
+                        continue
+                    else:
+                        break
+            except Exception as e:
+                # log e
+                logger.error("Exception during reading from the data backend: {}".format(str(e)))
+                # exit with error
+                sys.exit(6)
             if data is None:
                 logger.error('Blob not found: {}'.format(str(block)))
                 self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
@@ -335,7 +348,21 @@ class Backy():
         t_last_run = 0
         for i in range(read_jobs):
             _log_jobs_counter -= 1
-            block, offset, length, data = self.data_backend.read_get()
+            try:
+                while True:
+                    try:
+                        block, offset, length, data = self.data_backend.read_get(timeout=.1)
+                    except queue.Empty:  # timeout occured
+                        continue
+                    else:
+                        break
+            except Exception as e:
+                # TODO (restore):
+                # write information for continue
+                # log e
+                logger.error("Exception during reading from the data backend: {}".format(str(e)))
+                # exit with error
+                sys.exit(6)
             assert len(data) == block.size
             stats['blocks_read'] += 1
             stats['bytes_read'] += block.size
@@ -622,7 +649,6 @@ class Backy():
             old_blocks = iter([])
 
         # Create read jobs
-        # TODO: log output - how far are we?
         _log_every_jobs = size // 200 + 1  # about every half percent
         _log_jobs_counter = 0
         t1 = time.time()
@@ -639,6 +665,8 @@ class Backy():
                 block_size = self.block_size
                 valid = 1
             else:  # Old block found, maybe base on that one
+                if old_block.id != block_id:
+                    import pdb; pdb.set_trace()
                 assert old_block.id == block_id
                 block_uid = old_block.uid
                 checksum = old_block.checksum
@@ -705,6 +733,8 @@ class Backy():
         t1 = time.time()
         t_last_run = 0
 
+        _written_blocks_queue = queue.Queue()  # contains ONLY blocks that have been written to the data backend.
+
         # consume the read jobs
         for i in range(size):
             _log_jobs_counter -= 1
@@ -724,10 +754,22 @@ class Backy():
                 if data == b'\0' * block_size:
                     block_uid = None
                     data_checksum = None
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
                 elif existing_block and existing_block.size == block_size:
                     block_uid = existing_block.uid
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
                 else:
-                    block_uid = self.data_backend.save(data)
+                    try:
+                        # This is the whole reason for _written_blocks_queue. We must first write the block to
+                        # the backup data store before we write it to the database. Otherwise we can't continue
+                        # reliably.
+                        def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
+                            def f(_block_uid):
+                                _written_blocks_queue.put((local_block_id, local_version_uid, _block_uid, local_data_checksum, local_block_size))
+                            return f
+                        block_uid = self.data_backend.save(data, callback=callback(block_id, version_uid, data_checksum, block_size))  # this will re-raise an exception from a worker thread
+                    except Exception as e:
+                        break  # close anything as always.
                     stats['blocks_written'] += 1
                     stats['bytes_written'] += block_size
 
@@ -744,13 +786,14 @@ class Backy():
                         # remove version
                         self.meta_backend.rm_version(version_uid)
                         sys.exit(5)
-
                     stats['blocks_checked'] += 1
                     stats['bytes_checked'] += block_size
             else:
+                # No data means that this block is from the previous version or is empty as of the hints, so just store metadata.
                 block_uid = metadata['block_uid']
                 data_checksum = metadata['checksum']
                 block_size = metadata['block_size']
+                _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
                 if metadata['block_uid'] is None:
                     stats['blocks_sparse'] += 1
                     stats['bytes_sparse'] += block_size
@@ -758,16 +801,14 @@ class Backy():
                     stats['blocks_found_dedup'] += 1
                     stats['bytes_found_dedup'] += block_size
 
-            # Insert the block into the database
-            block = self.meta_backend.set_block(
-                block_id,
-                version_uid,
-                block_uid,
-                data_checksum,
-                block_size,
-                valid=1,
-                _commit=False,
-                _upsert=False)
+            # Set the blocks from the _written_blocks_queue
+            while True:
+                try:
+                    q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size = _written_blocks_queue.get(block=False)
+                except queue.Empty:
+                    break
+                else:
+                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=False, _upsert=False)
 
             # log and process output
             if time.time() - t_last_run >= 1:
@@ -791,8 +832,23 @@ class Backy():
                     _log_jobs_counter = _log_every_jobs
                     logger.info(_status)
 
-        io.close()  # wait for all readers
-        self.data_backend.close()  # wait for all writers
+        # check if there are any exceptions left
+        if self.data_backend.last_exception:
+            logger.error("Exception during saving to the data backend: {}".format(str(self.data_backend.last_exception)))
+            # TODO: log continue information
+            # TODO: exit with error
+        else:
+            io.close()  # wait for all readers
+            self.data_backend.close()  # wait for all writers
+
+        # Set the rest of the blocks from the _written_blocks_queue
+        while True:
+            try:
+                q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size = _written_blocks_queue.get(block=False)
+            except queue.Empty:
+                break
+            else:
+                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=False, _upsert=False)
 
         if tag is not None:
             if isinstance(tag, list):
@@ -825,9 +881,13 @@ class Backy():
             )
         logger.info('New version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
 
-        self.meta_backend.set_version_valid(version_uid)
+        if not self.data_backend.last_exception:
+            self.meta_backend.set_version_valid(version_uid)
         self.meta_backend._commit()
         self.locking.unlock(version_uid)
+
+        if self.data_backend.last_exception:
+            sys.exit(6)  # i.e. kill all the remaining workers
 
         return version_uid
 

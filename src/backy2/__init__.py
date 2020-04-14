@@ -19,3 +19,4 @@ def notify(process_name, msg=''):
         setproctitle.setproctitle(new_msg)
         _OLD = new_msg
 
+

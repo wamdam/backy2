@@ -90,7 +90,7 @@ class IO(_IO):
 
         for i in range(self.simultaneous_writes):
             _writer_thread = threading.Thread(target=self._writer, args=(i,))
-            #_writer_thread.daemon = True
+            _writer_thread.daemon = True
             _writer_thread.start()
             self._writer_threads.append(_writer_thread)
             self.writer_thread_status[i] = STATUS_NOTHING

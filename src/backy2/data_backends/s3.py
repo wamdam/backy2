@@ -12,6 +12,7 @@ import hashlib
 #import io
 import os
 import queue
+import random
 import shortuuid
 import socket
 import sys
@@ -35,7 +36,7 @@ class DataBackend(_DataBackend):
 
     _SUPPORTS_PARTIAL_READS = False
     _SUPPORTS_PARTIAL_WRITES = False
-    fatal_error = None
+    last_exception = None
 
     def __init__(self, config):
         aws_access_key_id = config.get('aws_access_key_id')
@@ -169,34 +170,28 @@ class DataBackend(_DataBackend):
             #self._writer_thread_status()
             entry = self._write_queue.get()
             self.writer_thread_status[id_] = STATUS_NOTHING
-            if entry is None or self.fatal_error:
+            if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            #if bucket is None:
-            #    bucket = self._get_bucket()
             if client is None:
                 client = self._get_client()
-            uid, data = entry
+            uid, data, callback = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
-            #self._writer_thread_status()
             time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
-            #self._writer_thread_status()
 
-            t1 = time.time()
-
-            self.writer_thread_status[id_] = STATUS_WRITING
-            #self._writer_thread_status()
-            client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
-            #client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
-            self.writer_thread_status[id_] = STATUS_NOTHING
-            #self._writer_thread_status()
-
-            t2 = time.time()
-
-            self._write_queue.task_done()
-            #logger.debug('Writer {} with client {} wrote data {} in {:.2f}s (Queue size is {})'.format(id_, id(client), uid, t2-t1, self._write_queue.qsize()))
+            try:
+                self.writer_thread_status[id_] = STATUS_WRITING
+                client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
+                #client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
+                self.writer_thread_status[id_] = STATUS_NOTHING
+            except Exception as e:
+                self.last_exception = e
+            else:
+                if callback:
+                    callback(uid)
+                self._write_queue.task_done()
 
 
     def _reader(self, id_):
@@ -204,7 +199,7 @@ class DataBackend(_DataBackend):
         bucket = None
         while True:
             block = self._read_queue.get()  # contains block
-            if block is None or self.fatal_error:
+            if block is None or self.last_exception:
                 logger.debug("Reader {} finishing.".format(id_))
                 break
             if bucket is None:
@@ -214,8 +209,9 @@ class DataBackend(_DataBackend):
                 self.reader_thread_status[id_] = STATUS_READING
                 data = self.read_raw(block.uid, bucket)
                 self.reader_thread_status[id_] = STATUS_NOTHING
-            except FileNotFoundError:
-                self._read_data_queue.put((block, None))  # TODO: catch this!
+                #except FileNotFoundError:
+            except Exception as e:
+                self.last_exception = e
             else:
                 self._read_data_queue.put((block, data))
                 t2 = time.time()
@@ -265,11 +261,11 @@ class DataBackend(_DataBackend):
         return hash[:10] + suuid
 
 
-    def save(self, data, _sync=False):
-        if self.fatal_error:
-            raise self.fatal_error
+    def save(self, data, _sync=False, callback=None):
+        if self.last_exception:
+            raise self.last_exception
         uid = self._uid()
-        self._write_queue.put((uid, data))
+        self._write_queue.put((uid, data, callback))
         if _sync:
             self._write_queue.join()
         return uid
@@ -308,8 +304,10 @@ class DataBackend(_DataBackend):
             return data
 
 
-    def read_get(self):
-        block, data = self._read_data_queue.get()
+    def read_get(self, timeout=30):
+        if self.last_exception:
+            raise self.last_exception
+        block, data = self._read_data_queue.get(timeout=timeout)
         offset = 0
         length = len(data)
         self._read_data_queue.task_done()
