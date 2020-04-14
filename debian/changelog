@@ -1,3 +1,10 @@
+backy2 (2.11.8) unstable; urgency=low
+
+  * Show throughput in stats, not write performance.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 14 Apr 2020 09:11:21 +0200
+
+
 backy2 (2.11.7) unstable; urgency=low
 
   * Improved performance on s3. However, boto3 seems to be the bottleneck
