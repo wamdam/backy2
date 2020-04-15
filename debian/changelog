@@ -1,8 +1,15 @@
+backy2 (2.11.9) unstable; urgency=low
+
+  * Added "continue" feature both for backup and restore
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Wed, 15 Apr 2020 12:04:21 +0200
+
+
 backy2 (2.11.8) unstable; urgency=low
 
   * Show throughput in stats, not write performance.
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 14 Apr 2020 09:11:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 14 Apr 2020 09:11:21 +0200
 
 
 backy2 (2.11.7) unstable; urgency=low
@@ -10,42 +17,42 @@ backy2 (2.11.7) unstable; urgency=low
   * Improved performance on s3. However, boto3 seems to be the bottleneck
     here. We only get ~120MB/s to s3. Hints welcome.
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 08 Apr 2020 17:15:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Wed, 08 Apr 2020 17:15:21 +0200
 
 
 backy2 (2.11.6) unstable; urgency=low
 
   * Bugfixes
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 19:19:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 07 Apr 2020 19:19:21 +0200
 
 
 backy2 (2.11.5) unstable; urgency=low
 
   * Upgrade to boto3
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 19:11:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 07 Apr 2020 19:11:21 +0200
 
 
 backy2 (2.11.4) unstable; urgency=low
 
   * Better stats
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 14:57:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 07 Apr 2020 14:57:21 +0200
 
 
 backy2 (2.11.3) unstable; urgency=low
 
   * Bugfixes
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 14:48:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 07 Apr 2020 14:48:21 +0200
 
 
 backy2 (2.11.2) unstable; urgency=low
 
   * Bugfixes (stats and scrubs)
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 07 Apr 2020 14:34:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 07 Apr 2020 14:34:21 +0200
 
 
 backy2 (2.11.1) unstable; urgency=low
