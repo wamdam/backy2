@@ -30,7 +30,8 @@ Base = declarative_base()
 class Stats(Base):
     __tablename__ = 'stats'
     date = Column("date", DateTime , default=func.now(), nullable=False)
-    version_uid = Column(String(36), primary_key=True)
+    id = Column(Integer, primary_key=True)
+    version_uid = Column(String(36), index=True)
     version_name = Column(String, nullable=False)
     version_size_bytes = Column(BigInteger, nullable=False)
     version_size_blocks = Column(BigInteger, nullable=False)
@@ -131,7 +132,7 @@ class DeletedBlock(Base):
 class MetaBackend(_MetaBackend):
     """ Stores meta data in an sql database """
 
-    FLUSH_EVERY_N_BLOCKS = 1000
+    FLUSH_EVERY_N_BLOCKS = 100
 
     def __init__(self, config):
         _MetaBackend.__init__(self)
@@ -143,8 +144,9 @@ class MetaBackend(_MetaBackend):
         try:
             self.migrate_db(self.engine)
         #except sqlalchemy.exc.OperationalError:
-        except:
+        except Exception as e:
             logger.error('Invalid database ({}). Please run initdb first.'.format(self.engine.url))
+            logger.error(e)
             sys.exit(1)  # TODO: Return something (or raise)
             #raise RuntimeError('Invalid database')
 
@@ -478,6 +480,11 @@ class MetaBackend(_MetaBackend):
 
     def get_blocks_by_version2(self, version_uid):
         return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id)
+
+
+    def get_block_ids_by_version(self, version_uid):
+        _b = self.session.query(Block.id).filter_by(version_uid=version_uid).order_by(Block.id)
+        return [v[0] for v in _b.values('id')]
 
 
     def rm_version(self, version_uid):

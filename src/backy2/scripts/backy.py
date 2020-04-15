@@ -74,7 +74,7 @@ class Commands():
             print('|'.join(map(str, values)))
 
 
-    def backup(self, name, snapshot_name, source, rbd, from_version, tag=None, expire=None):
+    def backup(self, name, snapshot_name, source, rbd, from_version, tag=None, expire=None, continue_version=None):
         expire_date = None
         if expire:
             try:
@@ -92,7 +92,7 @@ class Commands():
             tags = [t.strip() for t in list(csv.reader(StringIO(tag)))[0]]
         else:
             tags = None
-        version_uid = backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date)
+        version_uid = backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date, continue_version)
         if self.machine_output:
             print(version_uid)
         backy.close()
@@ -503,6 +503,7 @@ def main():
     p.add_argument('-s', '--snapshot-name', default='', help='Snapshot name (e.g. the name of the rbd snapshot)')
     p.add_argument('-r', '--rbd', default=None, help='Hints as rbd json format')
     p.add_argument('-f', '--from-version', default=None, help='Use this version-uid as base')
+    p.add_argument('-c', '--continue-version', default=None, help='Continue backup on this version-uid')
     p.add_argument(
         '-t', '--tag', default=None,
         help='Use a specific tag (or multiple comma-separated tags) for the target backup version-uid')

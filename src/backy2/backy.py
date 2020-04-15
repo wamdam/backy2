@@ -572,13 +572,15 @@ class Backy():
         return tags
 
 
-    def backup(self, name, snapshot_name, source, hints, from_version, tag=None, expire=None):
+    def backup(self, name, snapshot_name, source, hints, from_version, tag=None, expire=None, continue_version=None):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
         data within hints will be backed up.
         Otherwise, the backup reads source and looks if checksums match with
         the target.
+        If continue_version is given, this version will be continued, i.e.
+        existing blocks will not be read again.
         """
         stats = {
                 'version_size_bytes': 0,
@@ -627,10 +629,21 @@ class Backy():
             if not old_version.valid:
                 raise RuntimeError('You cannot base on an invalid version.')
 
-        # Create new version
-        version_uid = self.meta_backend.set_version(name, snapshot_name, size, source_size, 0)  # initially marked invalid
-        if not self.locking.lock(version_uid):
-            raise LockError('Version {} is locked.'.format(version_uid))
+        existing_block_ids = set()
+        if continue_version:
+            version_uid = continue_version
+            _v = self.meta_backend.get_version(version_uid)  # raise if version does not exist
+            if _v.size_bytes != source_size:
+                raise ValueError('Version to continue backup from has a different size than the source. Cannot continue.')
+            # reduce read_blocks and sparse_blocks by existing blocks
+            existing_block_ids = set(self.meta_backend.get_block_ids_by_version(version_uid))
+            read_blocks = read_blocks - existing_block_ids
+            sparse_blocks = sparse_blocks - existing_block_ids
+        else:
+            # Create new version
+            version_uid = self.meta_backend.set_version(name, snapshot_name, size, source_size, 0)  # initially marked invalid
+            if not self.locking.lock(version_uid):
+                raise LockError('Version {} is locked.'.format(version_uid))
 
         # Sanity check:
         # Check some blocks outside of hints if they are the same in the
@@ -672,8 +685,6 @@ class Backy():
                 block_size = self.block_size
                 valid = 1
             else:  # Old block found, maybe base on that one
-                if old_block.id != block_id:
-                    import pdb; pdb.set_trace()
                 assert old_block.id == block_id
                 block_uid = old_block.uid
                 checksum = old_block.checksum
@@ -707,6 +718,9 @@ class Backy():
                 logger.debug('Block {}: Sparse'.format(block_id))
                 # Sparse blocks have uid and checksum None.
                 io.read(block_id, read=False, metadata={'block_uid': None, 'checksum': None, 'block_size': block_size})
+            elif block_id in existing_block_ids:
+                logger.debug('Block {}: Exists in continued version'.format(block_id))
+                io.read(block_id, read=False, metadata={'skip': True})
             else:
                 logger.debug('Block {}: Fresh empty or existing'.format(block_id))
                 io.read(block_id, read=False, metadata={'block_uid': block_uid, 'checksum': checksum, 'block_size': block_size})
@@ -797,16 +811,18 @@ class Backy():
                     stats['bytes_checked'] += block_size
             else:
                 # No data means that this block is from the previous version or is empty as of the hints, so just store metadata.
-                block_uid = metadata['block_uid']
-                data_checksum = metadata['checksum']
-                block_size = metadata['block_size']
-                _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
-                if metadata['block_uid'] is None:
-                    stats['blocks_sparse'] += 1
-                    stats['bytes_sparse'] += block_size
-                else:
-                    stats['blocks_found_dedup'] += 1
-                    stats['bytes_found_dedup'] += block_size
+                # Except it's a skipped block from a continued version.
+                if not 'skip' in metadata:
+                    block_uid = metadata['block_uid']
+                    data_checksum = metadata['checksum']
+                    block_size = metadata['block_size']
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
+                    if metadata['block_uid'] is None:
+                        stats['blocks_sparse'] += 1
+                        stats['bytes_sparse'] += block_size
+                    else:
+                        stats['blocks_found_dedup'] += 1
+                        stats['bytes_found_dedup'] += block_size
 
             # Set the blocks from the _written_blocks_queue
             while True:

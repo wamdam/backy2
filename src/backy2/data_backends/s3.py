@@ -186,6 +186,8 @@ class DataBackend(_DataBackend):
                 client.put_object(Body=data, Key=uid, Bucket=self._bucket_name)
                 #client.upload_fileobj(io.BytesIO(data), Key=uid, Bucket=self._bucket_name)
                 self.writer_thread_status[id_] = STATUS_NOTHING
+                if random.random() > 0.9:
+                    raise ValueError("This is a test")
             except Exception as e:
                 self.last_exception = e
             else:
