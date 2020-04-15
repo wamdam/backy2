@@ -98,12 +98,14 @@ class IO(_IO):
             if entry is None:
                 logger.debug("IO writer {} finishing.".format(id_))
                 break
-            block, data = entry
+            block, data, callback = entry
 
             self.writer_thread_status[id_] = STATUS_WRITING
             # write nothing
             #time.sleep(.1)
             self.writer_thread_status[id_] = STATUS_NOTHING
+            if callback:
+                callback()
 
             self._write_queue.task_done()
 
@@ -155,8 +157,8 @@ class IO(_IO):
         return d
 
 
-    def write(self, block, data):
-        self._write_queue.put((block, data))
+    def write(self, block, data, callback=None):
+        self._write_queue.put((block, data, callback))
 
 
     def queue_status(self):

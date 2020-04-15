@@ -132,7 +132,7 @@ class DeletedBlock(Base):
 class MetaBackend(_MetaBackend):
     """ Stores meta data in an sql database """
 
-    FLUSH_EVERY_N_BLOCKS = 100
+    FLUSH_EVERY_N_BLOCKS = 1000
 
     def __init__(self, config):
         _MetaBackend.__init__(self)

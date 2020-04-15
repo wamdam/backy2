@@ -117,19 +117,19 @@ class IO(_IO):
                     logger.debug("IO writer {} finishing.".format(id_))
                     self._write_queue.task_done()
                     break
-                block, data = entry
+                block, data, callback = entry
 
                 offset = block.id * self.block_size
 
                 self.writer_thread_status[id_] = STATUS_SEEKING
                 _write_file.seek(offset)
-
                 self.writer_thread_status[id_] = STATUS_WRITING
                 written = _write_file.write(data)
                 posix_fadvise(_write_file.fileno(), offset, offset + written, os.POSIX_FADV_DONTNEED)
-
                 self.writer_thread_status[id_] = STATUS_NOTHING
                 assert written == len(data)
+                if callback:
+                    callback()
 
                 self._write_queue.task_done()
 
@@ -188,9 +188,9 @@ class IO(_IO):
         return d
 
 
-    def write(self, block, data):
+    def write(self, block, data, callback=None):
         """ Adds a write job"""
-        self._write_queue.put((block, data))
+        self._write_queue.put((block, data, callback))
 
 
     def queue_status(self):

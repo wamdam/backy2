@@ -23,6 +23,7 @@ def init_logging(logfile, console_level):  # pragma: no cover
     logging.getLogger('alembic').setLevel(logging.WARN)
     logging.getLogger('boto3').setLevel(logging.WARN)
     logging.getLogger('botocore').setLevel(logging.WARN)
+    logging.getLogger('urllib3').setLevel(logging.WARN)
 
     logger.info('$ ' + ' '.join(sys.argv))
 

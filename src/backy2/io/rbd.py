@@ -141,13 +141,15 @@ class IO(_IO):
             if entry is None:
                 logger.debug("IO writer {} finishing.".format(id_))
                 break
-            block, data = entry
+            block, data, callback = entry
 
             offset = block.id * self.block_size
             self.writer_thread_status[id_] = STATUS_WRITING
             written = self._write_rbd.write(data, offset, rados.LIBRADOS_OP_FLAG_FADVISE_DONTNEED)
             assert written == len(data)
             self.writer_thread_status[id_] = STATUS_NOTHING
+            if callback:
+                callback()
 
             self._write_queue.task_done()
 
@@ -200,10 +202,10 @@ class IO(_IO):
         return d
 
 
-    def write(self, block, data):
+    def write(self, block, data, callback=None):
         if not self._write_rbd:
             raise RuntimeError('RBD image not open / available.')
-        self._write_queue.put((block, data))
+        self._write_queue.put((block, data, callback))
 
 
     def queue_status(self):

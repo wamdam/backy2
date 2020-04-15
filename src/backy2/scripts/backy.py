@@ -98,9 +98,9 @@ class Commands():
         backy.close()
 
 
-    def restore(self, version_uid, target, sparse, force):
+    def restore(self, version_uid, target, sparse, force, continue_from):
         backy = self.backy()
-        backy.restore(version_uid, target, sparse, force)
+        backy.restore(version_uid, target, sparse, force, int(continue_from))
         backy.close()
 
 
@@ -517,6 +517,7 @@ def main():
     p.add_argument('-s', '--sparse', action='store_true', help='Faster. Restore '
         'only existing blocks (works only with file- and rbd-restore, not with lvm)')
     p.add_argument('-f', '--force', action='store_true', help='Force overwrite of existing files/devices/images')
+    p.add_argument('-c', '--continue-from', default=0, help='Continue from this block (only use this for partially failed restores!)')
     p.add_argument('version_uid')
     p.add_argument('target',
         help='Source (url-like, e.g. file:///dev/sda or rbd://pool/imagename)')

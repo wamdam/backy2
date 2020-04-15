@@ -8,6 +8,7 @@ import itertools
 import hashlib
 import importlib
 import json
+import random
 from datetime import timedelta, datetime
 
 
@@ -195,19 +196,77 @@ def _eta(eta_s):
         return "{:d}h{:d}m".format(eta_s//60//60, eta_s//60%(60))
 
 
-def status(msg, rq_len_pct, wq_len_pct, progress_pct, write_tp, eta_s):
+def status(msg, rq_len_pct, wq_len_pct, progress_pct, write_tp, eta_s, other=""):
     """
     Restoring to null:// Read Queue [====      ] Write Queue [==========] (23.5% 71MB/s ETA 1h32m)
     Backing up rbd://vms/test Read Queue [=         ] Write Queue [==========] (11.3% 96MB/s ETA 120s)
     """
-    return("{} Read Queue {} Write Queue {} ({:.1f}% {:.1f}MB/sØ ETA {})".format(
+    return("{} Read Queue {} Write Queue {} ({:.1f}% {:.1f}MB/sØ ETA {}) {}".format(
         msg,
         _progressbar(rq_len_pct),
         _progressbar(wq_len_pct),
         progress_pct,
         write_tp / 1024 / 1024,
         _eta(eta_s),
+        other,
         ))
+
+
+class MinSequential():
+    OPTIMIZE_PROBABILITY = 0.1  # 1 means every put
+
+    def __init__(self, absolute_minimum=0):
+        self._entries = []
+        self.lock = Lock()
+        self.absolute_minimum = absolute_minimum
+
+
+    def put(self, entry):
+        with self.lock:
+            self._entries.append(entry)
+            if random.random() < self.OPTIMIZE_PROBABILITY:
+                self._optimize()
+
+
+    def _optimize(self):
+        """
+        optimize self._entries
+        [0, 1, 2, 3, 5, 7] =>  [3, 5, 7]
+        """
+        if len(self._entries) < 2:
+            return
+
+        self._entries.sort()
+        new_entries = []
+        if self._entries[0] != self.absolute_minimum:
+            # we must start at this value.
+            return
+
+        for entry in self._entries[1:]:
+            if entry == self.absolute_minimum + 1:
+                self.absolute_minimum = entry
+            else:
+                new_entries.append(entry)
+        new_entries.insert(0, self.absolute_minimum)
+        self._entries = new_entries
+
+
+    def get(self):
+        """
+        Returns the smallest integer in entries up to which numbers
+        are in sequence, i.e. where there's no gap.
+
+        Example: In a list of [4, 5, 6, 8, 9] it would return 6.
+        In a list of [10, 13, 15] it would return 10.
+
+        Note: The list is ordered first.
+        """
+        if len(self._entries) == 0:
+            return None
+
+        with self.lock:
+            self._optimize()
+            return self._entries[0] if self._entries[0] == self.absolute_minimum else None
 
 
 #print(status("Restoring to null://", 23, 87, 23.5, 71541112, 3700))

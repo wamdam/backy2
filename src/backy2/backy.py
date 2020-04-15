@@ -6,6 +6,7 @@ from backy2.locking import Locking
 from backy2.locking import find_other_procs
 from backy2.utils import grouper
 from backy2.utils import status
+from backy2.utils import MinSequential
 from dateutil.relativedelta import relativedelta
 from urllib import parse
 import datetime
@@ -264,7 +265,7 @@ class Backy():
         return state
 
 
-    def restore(self, version_uid, target, sparse=False, force=False):
+    def restore(self, version_uid, target, sparse=False, force=False, continue_from=0):
         # See if the version is locked, i.e. currently in backup
         if not self.locking.lock(version_uid):
             raise LockError('Version {} is locked.'.format(version_uid))
@@ -281,8 +282,11 @@ class Backy():
                 'blocks_sparse': 0,
             }
 
-        version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        notify(self.process_name, 'Restoring Version {}'.format(version_uid))
+        version = self.meta_backend.get_version(version_uid)  # raise if version does not exist
+        if continue_from:
+            notify(self.process_name, 'Restoring Version {} from block id'.format(version_uid, continue_from))
+        else:
+            notify(self.process_name, 'Restoring Version {}'.format(version_uid))
         blocks = self.meta_backend.get_blocks_by_version2(version_uid)
         num_blocks = blocks.count()
 
@@ -296,6 +300,8 @@ class Backy():
         t_last_run = 0
         num_blocks = blocks.count()
         for i, block in enumerate(blocks.yield_per(1000)):
+            if block.id < continue_from:
+                continue
             _log_jobs_counter -= 1
             if block.uid:
                 self.data_backend.read(block.deref())  # adds a read job
@@ -348,11 +354,11 @@ class Backy():
                 'bytes_throughput': 0,
                 'blocks_throughput': 0,
             }
-        done_jobs = 0
         _log_every_jobs = read_jobs // 200 + 1  # about every half percent
         _log_jobs_counter = 0
         t1 = time.time()
         t_last_run = 0
+        min_sequential_block_id = MinSequential(continue_from)  # for finding the minimum block-ID until which we have restored ALL blocks
         for i in range(read_jobs):
             _log_jobs_counter -= 1
             try:
@@ -364,23 +370,23 @@ class Backy():
                     else:
                         break
             except Exception as e:
-                # TODO (restore):
-                # write information for continue
-                # log e
+                # TODO (restore): write information for continue
                 logger.error("Exception during reading from the data backend: {}".format(str(e)))
-                # exit with error
                 sys.exit(6)
             assert len(data) == block.size
             stats['blocks_read'] += 1
             stats['bytes_read'] += block.size
 
             data_checksum = self.hash_function(data).hexdigest()
-            io.write(block, data)
-            stats['blocks_written'] += 1
-            stats['bytes_written'] += block.size
-
-            stats['blocks_throughput'] += 1
-            stats['bytes_throughput'] += block.size
+            def callback(local_block_id):
+                def f():
+                    min_sequential_block_id.put(local_block_id)
+                    stats['blocks_written'] += 1
+                    stats['bytes_written'] += block.size
+                    stats['blocks_throughput'] += 1
+                    stats['bytes_throughput'] += block.size
+                return f
+            io.write(block, data, callback(block.id))
 
             if data_checksum != block.checksum:
                 logger.error('Checksum mismatch during restore for block '
@@ -413,6 +419,7 @@ class Backy():
                     (i + 1) / read_jobs * 100,
                     stats['bytes_throughput'] / dt,
                     round(read_jobs / (i+1) * dt - dt),
+                    'Last ID: {}'.format(min_sequential_block_id.get()),
                     )
                 notify(self.process_name, _status)
                 if _log_jobs_counter <= 0:
@@ -831,7 +838,7 @@ class Backy():
                 except queue.Empty:
                     break
                 else:
-                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=False, _upsert=False)
+                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=True, _upsert=False)
 
             # log and process output
             if time.time() - t_last_run >= 1:
@@ -858,8 +865,6 @@ class Backy():
         # check if there are any exceptions left
         if self.data_backend.last_exception:
             logger.error("Exception during saving to the data backend: {}".format(str(self.data_backend.last_exception)))
-            # TODO: log continue information
-            # TODO: exit with error
         else:
             io.close()  # wait for all readers
             self.data_backend.close()  # wait for all writers
@@ -871,16 +876,17 @@ class Backy():
             except queue.Empty:
                 break
             else:
-                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=False, _upsert=False)
+                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=True, _upsert=False)
 
+        tags = []
         if tag is not None:
             if isinstance(tag, list):
                 tags = tag
             else:
-                tags = []
                 tags.append(tag)
         else:
-            tags = self._generate_auto_tags(name)
+            if not continue_version:
+                tags = self._generate_auto_tags(name)
         for tag in tags:
             self.meta_backend.add_tag(version_uid, tag)
 
@@ -902,10 +908,13 @@ class Backy():
             blocks_sparse=stats['blocks_sparse'],
             duration_seconds=int(time.time() - stats['start_time']),
             )
-        logger.info('New version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
 
-        if not self.data_backend.last_exception:
+        if self.data_backend.last_exception:
+            logger.info('New invalid version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
+        else:
             self.meta_backend.set_version_valid(version_uid)
+            logger.info('New version: {} (Tags: [{}])'.format(version_uid, ','.join(tags)))
+
         self.meta_backend._commit()
         self.locking.unlock(version_uid)
 
