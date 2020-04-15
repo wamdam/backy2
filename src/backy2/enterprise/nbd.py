@@ -31,7 +31,7 @@ class BackyStore():
     def _block_list(self, version_uid, offset, length):
         # get cached blocks data
         if not self.blocks.get(version_uid):
-            self.blocks[version_uid] = self.backy.meta_backend.get_blocks_by_version(version_uid)
+            self.blocks[version_uid] = self.backy.meta_backend.get_blocks_by_version(version_uid).all()
         blocks = self.blocks[version_uid]
 
         block_number = offset // self.backy.block_size

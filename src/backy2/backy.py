@@ -73,7 +73,7 @@ class Backy():
 
     def ls_version(self, version_uid):
         # don't lock here, this is not really error-prone.
-        blocks = self.meta_backend.get_blocks_by_version(version_uid)
+        blocks = self.meta_backend.get_blocks_by_version(version_uid).all()
         return blocks
 
 
@@ -125,7 +125,7 @@ class Backy():
             }
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
-        blocks = self.meta_backend.get_blocks_by_version2(version_uid)
+        blocks = self.meta_backend.get_blocks_by_version(version_uid)
 
         # check if the backup is at least complete
         if blocks.count() != version.size:
@@ -287,7 +287,7 @@ class Backy():
             notify(self.process_name, 'Restoring Version {} from block id'.format(version_uid, continue_from))
         else:
             notify(self.process_name, 'Restoring Version {}'.format(version_uid))
-        blocks = self.meta_backend.get_blocks_by_version2(version_uid)
+        blocks = self.meta_backend.get_blocks_by_version(version_uid)
         num_blocks = blocks.count()
 
         io = self.get_io_by_source(target)
@@ -671,7 +671,7 @@ class Backy():
         # Find blocks to base on
         if from_version:
             # Make sure we're based on a valid version.
-            old_blocks = iter(self.meta_backend.get_blocks_by_version2(from_version).yield_per(1000))
+            old_blocks = iter(self.meta_backend.get_blocks_by_version(from_version).yield_per(1000))
         else:
             old_blocks = iter([])
 
