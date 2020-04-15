@@ -125,6 +125,13 @@ class Backy():
 
         version = self.meta_backend.get_version(version_uid)  # raise if version not exists
         blocks = self.meta_backend.get_blocks_by_version2(version_uid)
+
+        # check if the backup is at least complete
+        if blocks.count() != version.size:
+            logger.error("Version is incomplete.")
+            self.meta_backend.set_version_invalid(version_uid)
+            return
+
         if source:
             io = self.get_io_by_source(source)
             io.open_r(source)
