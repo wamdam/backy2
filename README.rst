@@ -64,8 +64,8 @@ Main features
 **Parallel: backups while scrubbing while restoring**
     As backy2 is a long-running process, you will of course not want to wait
     until something has finished. So there are very few places in backy where
-    a global lock will be applied (especially on cleanup which you can kill
-    at any time to release the lock).
+    a global lock will be applied (especially on a very rarely used full
+    cleanup which you can kill at any time to release the lock).
 
     So you can scrub, backup and restore (multiple times each) on the same
     machine.
@@ -141,7 +141,7 @@ Main features
     Also, you'll need ``--force`` to overwrite existing files or volumes.
 
 **Easy installation**
-    Currently under ubuntu 16.04, you simply install the .deb. Please refer to
+    Currently under ubuntu 18.04, you simply install the .deb. Please refer to
     :ref:`installation` for a detailed install process.
 
 **Free and Open Source Software**

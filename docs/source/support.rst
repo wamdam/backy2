@@ -15,14 +15,6 @@ Documentation
 http://backy2.com/docs/
 
 
-IRC
----
-
-Channel #backy2 on freenode.net.
-
-http://webchat.freenode.net/?channels=#backy2
-
-
 Security
 --------
 

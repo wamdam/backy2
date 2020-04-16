@@ -118,7 +118,7 @@ You can also monitor progress of the backups either by looking at the mentioned
 logfile or by checking your process-tree::
 
     $ ps axfu|grep "[b]acky2"
-    …  \_ backy2 [Scrubbing Version 52da2130-2929-11e7-bde0-003048d74f6c (0.1%)]
+    …  \_ backy2 [Scrubbing test (9054672e-7e3e-11ea-a694-003048d74f6c) Read Queue [          ] Write Queue [          ] (2.0% 2.4MB/s ETA 83s)]
 
 To know which backup took how long and to see how many blocks/bytes have been
 read and written, you can use the excellent ``backy2 stats`` command:
@@ -137,6 +137,62 @@ Example::
     | 2017-05-02 10:27:48 | d91be794-2f21-11e7-b961-a44e314f9270 | test  |  104857600 |       25600 |  104857600 |       25600 |        323584 |             79 |   104534016 |        25521 |            0 |             0 |           60 |
     +---------------------+--------------------------------------+-------+------------+-------------+------------+-------------+---------------+----------------+-------------+--------------+--------------+---------------+--------------+
         INFO: Backy complete.
+
+To find out which backup takes up how much space, you can use the ``backy2 du`` command:
+
+.. command-output:: backy2 du --help
+
+Here's an example and I'm trying to describe the meaning of the output::
+
+    backy2 du 30d53cea-7ff8-11ea-9466-8931a4889813
+       INFO: $ backy2 du 30d53cea-7ff8-11ea-9466-8931a4889813
+   +-------------+-----------+-----------+--------------+------------+------------+------------------+
+   |        Real |      Null | Dedup Own | Dedup Others | Individual | Est. Space | Est. Space freed |
+   +-------------+-----------+-----------+--------------+------------+------------+------------------+
+   | 21323841536 | 150994944 |         0 |  20774387712 |  549453824 | 3600314339 |        549453824 |
+   +-------------+-----------+-----------+--------------+------------+------------+------------------+
+       INFO: Backy complete.
+
+Real
+   The size of the version in bytes when restored.
+
+Null
+   The number of bytes (4MB-block-wise) that are \\0 in this version.
+   These are not stored in the backup target, instead they're only
+   referenced in the metadata so they take up virtually no space.
+
+Dedup Own
+   Bytes (again 4MB-block-wise) which are deduplicated within this
+   version and nowhere else.
+
+Dedup Others
+   Bytes (again 4MB-block-wise) which are duplicates also found in
+   other versions.
+
+Individual
+   Bytes that are specific to this version (no duplicates in other versions)
+
+Est. Space
+   From the former values a calculated byte-size how much space this
+   version takes up. The calculation divides duplicate (=shared) blocks
+   by the number they occur in other versions +1 (for this version).
+   Unshared blocks are just added, Null blocks are not added.
+
+Est. Space freed
+   Estimated space freed on the target storage when this version is
+   deleted.
+
+
+If you don't like byte-values, just use the ``-r`` switch for backy2::
+
+    backy2 du 30d53cea-7ff8-11ea-9466-8931a4889813
+       INFO: $ backy2 du 30d53cea-7ff8-11ea-9466-8931a4889813
+   +--------+---------+-----------+--------------+------------+------------+------------------+
+   |   Real |    Null | Dedup Own | Dedup Others | Individual | Est. Space | Est. Space freed |
+   +--------+---------+-----------+--------------+------------+------------+------------------+
+   | 20 GiB | 144 MiB |         0 |       19 GiB |    524 MiB |      3 GiB |          524 MiB |
+   +--------+---------+-----------+--------------+------------+------------+------------------+
+       INFO: Backy complete.
 
 
 Machine output

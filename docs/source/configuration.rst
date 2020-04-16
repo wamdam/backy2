@@ -40,7 +40,7 @@ to have at least these parameters set differently in each configuration:
 * ``lock_dir`` in section ``DEFAULTS``
 * ``logfile`` in section ``DEFAULTS``
 * ``engine`` in section ``MetaBackend``
-* ``path in`` section ``DataBackend``
+* ``path`` or ``bucket_name``… in section ``DataBackend``
 * ``cachedir`` in section ``NBD``
 
 If one of these are the same, no concurrency guarantees are given from backy2 and

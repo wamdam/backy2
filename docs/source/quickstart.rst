@@ -35,16 +35,21 @@ Version
 Installation
 ------------
 
-Ubuntu 16.04
+Ubuntu 18.04
 ~~~~~~~~~~~~
 
 Installation::
 
-    wget https://github.com/wamdam/backy2/releases/download/2.9.9/backy2_2.9.11_all.deb
-    sudo dpkg -i backy2_2.9.11_all.deb  # Install the debian archive
+    Get the latest release from https://github.com/wamdam/backy2/releases
+    sudo dpkg -i backy2_*.deb          # Install the debian archive
     sudo apt-get -f install            # Install the dependencies
 
-.. TODO: Show how to install drivers for postgreSQL, MySQL, others
+    # if you're using rbd/rados from ceph, we recommend the newer libraries
+    sudo apt install python3-rbd python3-rados
+
+    # if you're going to use postgresql
+    sudo apt install python3-psycopg2
+
 
 Edit backy.cfg::
 

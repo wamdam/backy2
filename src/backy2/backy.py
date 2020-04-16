@@ -642,6 +642,8 @@ class Backy():
             _v = self.meta_backend.get_version(version_uid)  # raise if version does not exist
             if _v.size_bytes != source_size:
                 raise ValueError('Version to continue backup from has a different size than the source. Cannot continue.')
+            if _v.valid:
+                raise ValueError('You cannot continue a valid version.')
             # reduce read_blocks and sparse_blocks by existing blocks
             existing_block_ids = set(self.meta_backend.get_block_ids_by_version(version_uid))
             read_blocks = read_blocks - existing_block_ids

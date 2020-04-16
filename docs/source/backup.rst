@@ -29,6 +29,29 @@ realistic examples::
     $ backy2 backup file:///var/lib/vms/database.img database
     $ backy2 backup rbd://poolname/database@snapshot1 database
 
+If you need testdata for backup tests, there's also a ``null``-source which
+creates demo data for you on demand::
+
+    $ backy2 backup null://200GB testbackup
+
+Supported sizes are::
+
+  k or kB for kibibytes
+  M or MB for mebibytes
+  G or GB for gibibytes
+  T or TB for tebibytes
+  P or PB for pebibytes
+
+.. NOTE:: The null:// source is only there to test performance of backy2 and
+   the backup target and for testing RAM usage when sizes get larger. If you
+   have other usecases, please let me know.
+
+.. NOTE:: There's also a ``null`` backup target configuration available in
+   backy.cfg if you want to also throw away backup data. This is also only
+   there to test performance and RAM usage. With this and the null:// source
+   you can backup petabytes of data from null to null just to test performance
+   and RAM usage.
+
 
 Stored version data
 -------------------
@@ -73,8 +96,8 @@ You can output this data with::
 Differential backup
 -------------------
 
-backy2 is (only) able to backup changed blocks. It can do this in two different
-ways:
+backy2 is able to only backup changed, non-sparse blocks. It can do this in two
+different ways:
 
 1. **It can read the whole image**, checksum each block and look the checksum up
    in the metadata backend. If it is found, only a reference to the existing
@@ -275,8 +298,9 @@ Tag backups
 -----------
 
 backy2 provides predefined backup tags: b_daily, b_weekly, b_monthly
-These tags are created automatically by compating the dates of version with the
-same name.
+These tags are created automatically by comparing the dates of version with the
+same name and only if you don't provide tags yourself (via the ``-t`` option
+on backup).
 
 If a specific tag should be used for a target backup revision, the backup
 command provides the command line switch '-t' or '--tag':
@@ -301,11 +325,11 @@ Expire backups
 Backup expiration is used to mark backups as obsolete automatically at a given
 date. The expiration can be set at backup time via '-e' or '--expire'::
 
-    $ backy2 backup file:///tmp/test test -e 2020-01-24
+    $ backy2 backup file:///tmp/test test -e 2020-01-24T04:00:00
 
 You may also set or change the expiration date with the 'expire' command::
 
-    $ backy2 expire 93e01e08-2af9-11ea-8e38-dc53608da00e 2020-02-01
+    $ backy2 expire 93e01e08-2af9-11ea-8e38-dc53608da00e 2020-02-01T04:00:00
 
 Or you may remove the expiration date entirely by providing an empty string
 as input for the 'expire' command::
@@ -321,6 +345,90 @@ only show expired backups with its '-e' switch::
     When scripting the backup, that's how you might add the expiration date::
 
         $ backy2 backup file:///tmp/test test -e `date +"%Y-%m-%d" -d "today + 7 days"`
+
+Schedulers
+----------
+
+due
+~~~
+
+As you might have seen in the backy.cfg config file, backy has support for
+individually defined schedulers. Here are some examples::
+
+   [daily]
+   interval: 1d
+   keep: 8
+   sla: 6h
+
+   [weekly]
+   interval: 7d
+   keep: 5
+   sla: 12h
+
+   [monthly]
+   interval: 30d
+   keep: 3
+   sla: 3d
+
+Backy itself does not do anything itself just by these schedulers. You must
+explicitly use them when calculating keep-times and so on.
+
+That's where the ``backy2 due`` command kicks in:
+
+.. command-output:: backy2 due --help
+
+It checks for the given backup name (or for all if the name is skipped) together
+with the information which schedulers to test for, if a new backup is due and
+which expiration date should be set for it. If you don't pass schedulers,
+backy2 will by default only use the ``daily`` scheduler::
+
+   $ backy2 due test
+       INFO: $ /root/backy2/env/bin/backy2 due test
+   +---------------+------------+---------------------+
+   | name          | schedulers |     expire_date     |
+   +---------------+------------+---------------------+
+   | test          | daily      | 2020-04-23 15:10:35 |
+   +---------------+------------+---------------------+
+       INFO: Backy complete.
+
+Of course you can pass schedulers too::
+
+   $ backy2 due -s hourly,daily test
+       INFO: $ /root/backy2/env/bin/backy2 due -s hourly,daily test
+   +------+--------------+---------------------+
+   | name | schedulers   |     expire_date     |
+   +------+--------------+---------------------+
+   | test | hourly,daily | 2020-04-23 15:16:31 |
+   +------+--------------+---------------------+
+       INFO: Backy complete.
+
+If you use the machine-output (``-m``) and short (``-s``) output options, you can
+see that this information can easily be scripted::
+
+   $ backy2 -ms due test
+   test|daily|2020-04-23 15:13:56
+
+sla
+~~~
+
+If you want to check if for given schedulers there are not enough, too many, too old backups
+or backups with too much time in between them, you can check this with the ``sla`` command:
+
+.. command-output:: backy2 sla --help
+
+Example::
+
+   $ backy2 sla -s hourly,daily test
+       INFO: $ /root/backy2/env/bin/backy2 sla -s hourly,daily test
+   +------+-------------------------------------------------+
+   | name | breach                                          |
+   +------+-------------------------------------------------+
+   | test | hourly: Too few backups. Found 0, should be 25. |
+   | test | daily: Too few backups. Found 0, should be 6.   |
+   +------+-------------------------------------------------+
+       INFO: Backy complete.
+
+.. NOTE:: If there's no sla breach, the table will be empty.
 
 
 Export metadata
@@ -405,7 +513,8 @@ For this, backy2 updates its progress in the process tree. So in order to watch
 backy2's progress, just look at ::
 
     $ ps axfu|grep "[b]acky2"
-    …  \_ backy2 [Scrubbing Version 52da2130-2929-11e7-bde0-003048d74f6c (0.1%)]
+    …  \_ backy2 [Scrubbing test (9054672e-7e3e-11ea-a694-003048d74f6c) Read Queue [          ] Write Queue [          ] (2.0% 2.4MB/s ETA 83s)]
+    …  \_ backy2 [Backing up (2/2: Data) rbd://vms/test@backy2_20200415111550 Read Queue [==========] Write Queue [==========] (11.5% 93.0MB/sØ ETA 59h1m) ]
 
 .. _hints_file:
 
@@ -414,16 +523,72 @@ The *hints file*
 
 Example of a hints-file::
 
-    [{"offset":0,"length":4194304,"exists":"true"},
-    {"offset":4194304,"length":4194304,"exists":"true"},
-    {"offset":8388608,"length":4194304,"exists":"true"},
-    {"offset":12582912,"length":4194304,"exists":"true"},
-    {"offset":16777216,"length":4194304,"exists":"true"},
-    {"offset":20971520,"length":4194304,"exists":"true"},
-    {"offset":25165824,"length":4194304,"exists":"true"},
-    {"offset":952107008,"length":4194304,"exists":"true"}
+    [{"offset":0,"length":4194304,"exists":"true"},{"offset":4194304,"length":4194304,"exists":"true"},{"offset":952107008,"length":4194304,"exists":"true"}]
 
 .. NOTE:: The length may vary, however it's nicely aligned to 4MB when using
     ``rbd diff --whole-object``. As backy2 per default also uses 4MB blocks,
     backy will not have to recalculate which 4MB blocks are affected by more
     and smaller offset+length tuples (not that that'd take very long).
+
+Backup continuation
+-------------------
+
+If you backup target is unreliable and your backups take a long time it may
+happen that backy2 stops working because the backup target is down, unreachable
+or throws errors (actually you may also just kill the backy2 process by pressing
+ctrl+c or killing the process).
+
+In this case backy2 will *not* mark the version as valid.
+
+You can of course just start the backup again - even from the same snapshot. That
+will create a new version and backup from the start.
+
+However if your backup takes longer than your backup target can usually be
+reliable (for whatever reason, might also be networking related), you may use
+the ``--continue-version`` (or ``-c``) option for ``backy2 backup``.
+
+You must ensure yourself that all other parameters are identical when continuing a
+backup. Otherwise you'll just backup garbage.
+
+Here's an example for backing up from a snapshot::
+
+   $ rbd snap create pool/vm1@backup1
+   $ rbd diff --whole-object pool/vm1@backup1 --format=json > /tmp/vm1.diff
+   $ backy2 backup -s backup1 -r /tmp/vm1.diff rbd://pool/vm1@backup1 vm1
+
+Now if the backup stops somehow you will get an error message and the backup will
+not be valid. Example::
+
+   $ backy2 ls
+       INFO: $ backy2 ls
+   +---------------------+-------------+---------------+--------+---------------+--------------------------------------+-------+-----------+…
+   |         date        | name        | snapshot_name |   size |    size_bytes |                 uid                  | valid | protected |…
+   +---------------------+-------------+---------------+--------+---------------+--------------------------------------+-------+-----------+…
+   | 2020-04-16 06:13:23 | test        | backup1       |     33 |        133809 | af6478e3-2af2-11ea-8e38-dc53608da00e |   0   |     0     |…
+   +---------------------+-------------+---------------+--------+---------------+--------------------------------------+-------+-----------+…
+       INFO: Backy complete.
+
+Now you can continue this backup if the snapshot and the diff file still exist
+if you pass backy2 the version uid for the backup to continue from::
+
+   $ backy2 backup -s backup1 -r /tmp/vm1.diff -c af6478e3-2af2-11ea-8e38-dc53608da00e rbd://pool/vm1@backup1 vm1
+
+Backy will only check if the backup source has the same size as saved in the
+version (as a little bit of a sanity check) and if the version is marked as
+invalid::
+
+   $ backy2 backup null://1GB test1gb -c 30d53cea-7ff8-11ea-9466-8931a4889813
+       INFO: $ backy2 backup null://1GB test1gb -c 30d53cea-7ff8-11ea-9466-8931a4889813
+      ERROR: Unexpected exception
+      ERROR: You cannot continue a valid version.
+   Traceback (most recent call last):
+     File "/home/dk/develop/backy2/src/backy2/scripts/backy.py", line 749, in main
+       func(**func_args)
+     File "/home/dk/develop/backy2/src/backy2/scripts/backy.py", line 95, in backup
+       version_uid = backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date, continue_version)
+     File "/home/dk/develop/backy2/src/backy2/backy.py", line 646, in backup
+       raise ValueError('You cannot continue a valid version.')
+   ValueError: You cannot continue a valid version.
+       INFO: Backy failed.
+
+

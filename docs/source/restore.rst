@@ -153,19 +153,68 @@ You can then safely press ``ctrl+c`` in backy2 in order to end the nbd server.
 Writing to backy2 NBD will create a copy-on-write backup (example)::
 
     $ backy2 ls
-    +---------------------+---------------+--------------------------------------+------+------------+--------------------------------------+-------+-----------+---------+
-    |         date        | name          | snapshot_name                        | size | size_bytes |                 uid                  | valid | protected | tags    |
-    +---------------------+---------------+--------------------------------------+------+------------+--------------------------------------+-------+-----------+---------+
-    | 2017-05-02 09:53:58 | copy on write | 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 | 2560 |   10485760 | 430d4f4e-2f1d-11e7-b961-a44e314f9270 |   1   |     0     |         |
-    +---------------------+---------------+--------------------------------------+------+------------+--------------------------------------+-------+-----------+---------+
+    +---------------------+---------------+---------------+…
+    |         date        | name          | snapshot_name |…
+    +---------------------+---------------+---------------+…
+    | 2017-05-02 09:53:58 | testbackup    | copy on write |…
+    +---------------------+---------------+---------------+…
         INFO: Backy complete.
 
-The name will be ``copy on write`` and the snapshot_name will be the version UID
-of the originating backup version.
+The name will be the same as the original backup, the snapshot name will be
+``copy on write``.
 
 .. NOTE:: You may safely delete the original version and the copy-on-write
     independently of each other.
 
+
+Restore continuation
+--------------------
+
+If your backup target (=restore source) or your restore target are unstable,
+it can happen that you're unable to restore a full backup due to service
+interruptions on these storages.
+
+In that case you can resume a stopped restore process, even if backy2 stops
+working in strange ways (actually you may also just kill the backy2 process by
+pressing ctrl+c or killing the process).
+
+For hinting from where to start writing to the restore-target again, backy2
+outputs ``Last ID`` as the hint which was the last block until which **all**
+blocks have been written successfully to the restore-target.
+
+.. NOTE:: This especially works even with asynchronuous writes as we have
+   them when using the simultanuous_writes config variable.
+
+You can then pass the last block-ID that you have seen during the restore
+process to ``backy2 restore``. It's important however that you use the exactly
+same parameters as before when restoring::
+
+   $ backy2 restore 30d53cea-7ff8-11ea-9466-8931a4889813 file://test.img
+       INFO: $ backy2 restore 30d53cea-7ff8-11ea-9466-8931a4889813 file://test.img
+       INFO: Restore phase 1/2 (sparse) to null:// Read Queue [          ] Write Queue [          ] (0.4% 0.0MB/sØ ETA 1s) 
+       INFO: Restore phase 2/2 (data) to null:// Read Queue [=         ] Write Queue [          ] (0.4% 0.0MB/sØ ETA 13s) Last ID: None
+       INFO: Restore phase 2/2 (data) to null:// Read Queue [==========] Write Queue [          ] (20.7% 197.3MB/sØ ETA 4s) Last ID: 42
+   ^CTraceback (most recent call last):
+     File "/home/dk/develop/backy2/env/bin/backy2", line 11, in <module>
+       load_entry_point('backy2', 'console_scripts', 'backy2')()
+     File "/home/dk/develop/backy2/src/backy2/scripts/backy.py", line 749, in main
+       func(**func_args)
+     File "/home/dk/develop/backy2/src/backy2/scripts/backy.py", line 103, in restore
+       backy.restore(version_uid, target, sparse, force, int(continue_from))
+     File "/home/dk/develop/backy2/src/backy2/backy.py", line 380, in restore
+       data_checksum = self.hash_function(data).hexdigest()
+   KeyboardInterrupt
+
+   $ backy2 restore 30d53cea-7ff8-11ea-9466-8931a4889813 file://test.img -c 42
+       INFO: $ backy2 restore 30d53cea-7ff8-11ea-9466-8931a4889813 file://test.img -c 42
+       INFO: Restore phase 1/2 (sparse) to null:// Read Queue [          ] Write Queue [          ] (16.8% 0.0MB/sØ ETA 0s) 
+       INFO: Restore phase 2/2 (data) to null:// Read Queue [====      ] Write Queue [          ] (0.5% 0.0MB/sØ ETA 23s) Last ID: None
+       INFO: Restore phase 2/2 (data) to null:// Read Queue [==========] Write Queue [          ] (38.3% 292.1MB/sØ ETA 2s) Last ID: 122
+       INFO: Backy complete.
+
+.. HINT:: If you don't see why ``-c 42`` has been used in the above command,
+   you will need to scroll to the right as output is cut in this documentation.
+   Then you'll see ``Last ID: 42``.
 
 Edge-Cases
 ----------
@@ -188,4 +237,14 @@ Even when encountering such an error, backy2 will continue to restore.
     are errors in the data. Most times invalid data is on irrelevant places or can
     be fixed later. It's always worse to crash/break the restore process when an
     error occurs.
+
+The ``null://`` target
+----------------------
+
+As there's the null://<size> source, there's also a null:// target. You may use
+this for performance-testing or bottleneck-tests, but of course all "written"
+data will just be lost.
+Example::
+
+    $ backy2 restore 30d53cea-7ff8-11ea-9466-8931a4889813 null://
 
