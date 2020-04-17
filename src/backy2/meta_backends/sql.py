@@ -393,11 +393,14 @@ class MetaBackend(_MetaBackend):
     def add_tag(self, version_uid, name):
         """ Add a tag to a version_uid, do nothing if the tag already exists.
         """
-        tag = Tag(
-            version_uid=version_uid,
-            name=name,
-            )
-        self.session.add(tag)
+        version = self.get_version(version_uid)
+        existing_tags = [t.name for t in version.tags]
+        if name not in existing_tags:
+            tag = Tag(
+                version_uid=version_uid,
+                name=name,
+                )
+            self.session.add(tag)
 
 
     def remove_tag(self, version_uid, name):
