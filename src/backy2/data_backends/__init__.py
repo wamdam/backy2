@@ -27,9 +27,18 @@ class DataBackend():
         raise NotImplementedError()
 
 
-    def read(self, uid, offset=0, length=None):
-        """ Returns b'<data>' or raises FileNotFoundError.
+    def read(self, block, sync=False, offset=0, length=None):
+        """ Adds the read request to the read queue.
+        If sync is True, returns b'<data>' or raises FileNotFoundError.
+        Do not mix sync and non-sync reads in one program!
         With length==None, all known data is read for this uid.
+        """
+        raise NotImplementedError()
+
+
+    def read_get(self, timeout=30):
+        """ 
+        Returns (block, offset, length, data) from the reader threads.
         """
         raise NotImplementedError()
 
