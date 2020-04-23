@@ -69,19 +69,16 @@ class BackyStore():
 
 
     def _read(self, block_uid, offset=0, length=None):
-        if self.backy.data_backend._SUPPORTS_PARTIAL_READS:
-            return self.backy.data_backend.read_raw(block_uid, offset=offset, length=length)
-        else:
-            if block_uid not in self.block_cache:
-                data = self.backy.data_backend.read_raw(block_uid)
-                open(os.path.join(self.cachedir, block_uid), 'wb').write(data)
-                self.block_cache.add(block_uid)
-            with open(os.path.join(self.cachedir, block_uid), 'rb') as f:
-                f.seek(offset)
-                if length is None:
-                    return f.read()
-                else:
-                    return f.read(length)
+        if block_uid not in self.block_cache:
+            data = self.backy.data_backend.read_raw(block_uid)
+            open(os.path.join(self.cachedir, block_uid), 'wb').write(data)
+            self.block_cache.add(block_uid)
+        with open(os.path.join(self.cachedir, block_uid), 'rb') as f:
+            f.seek(offset)
+            if length is None:
+                return f.read()
+            else:
+                return f.read(length)
 
 
     def read(self, version_uid, offset, length):

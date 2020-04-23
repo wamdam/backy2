@@ -177,6 +177,7 @@ class Backy():
             except Exception as e:
                 # log e
                 logger.error("Exception during reading from the data backend: {}".format(str(e)))
+                # raise  # use if you want to debug.
                 # exit with error
                 sys.exit(6)
             if data is None:

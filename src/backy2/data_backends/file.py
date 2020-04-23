@@ -2,20 +2,14 @@
 # -*- encoding: utf-8 -*-
 
 from backy2.data_backends import DataBackend as _DataBackend
+from backy2.data_backends import (STATUS_NOTHING, STATUS_READING, STATUS_WRITING, STATUS_THROTTLING, STATUS_QUEUE)
 from backy2.logging import logger
 from backy2.utils import TokenBucket
 import fnmatch
-import hashlib
 import os
 import queue
-import shortuuid
 import threading
 import time
-
-STATUS_NOTHING = 0
-STATUS_READING = 1
-STATUS_WRITING = 2
-STATUS_THROTTLING = 3
 
 def makedirs(path):
     try:
@@ -36,8 +30,6 @@ class DataBackend(_DataBackend):
     WRITE_QUEUE_LENGTH = 10
     READ_QUEUE_LENGTH = 20
 
-    _SUPPORTS_PARTIAL_READS = True
-    _SUPPORTS_PARTIAL_WRITES = True
     last_exception = None
 
 
@@ -86,6 +78,9 @@ class DataBackend(_DataBackend):
                 logger.debug("Writer {} finishing.".format(id_))
                 break
             uid, data, callback = entry
+
+            # TODO: encrypt, compress data before throttling.
+
             path = os.path.join(self.path, self._path(uid))
             filename = self._filename(uid)
             self.writer_thread_status[id_] = STATUS_THROTTLING
@@ -118,34 +113,23 @@ class DataBackend(_DataBackend):
     def _reader(self, id_):
         """ A threaded background reader """
         while True:
-            d = self._read_queue.get()  # contains block, offset, length
-            if d is None:
+            block = self._read_queue.get()
+            if block is None:
                 logger.debug("Reader {} finishing.".format(id_))
                 break
-            block, offset, length = d
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
-                data = self.read_raw(block.uid, offset, length)
+                data = self.read_raw(block.uid)
                 self.reader_thread_status[id_] = STATUS_NOTHING
                 #except FileNotFoundError:
             except Exception as e:
                 self.last_exception = e
             else:
-                self._read_data_queue.put((block, offset, length, data))
+                self._read_data_queue.put((block, data))
                 t2 = time.time()
                 self._read_queue.task_done()
                 logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
-
-
-    def _uid(self):
-        # 32 chars are allowed and we need to spread the first few chars so
-        # that blobs are distributed nicely. And want to avoid hash collisions.
-        # So we create a real base57-encoded uuid (22 chars) and prefix it with
-        # its own md5 hash[:10].
-        suuid = shortuuid.uuid()
-        hash = hashlib.md5(suuid.encode('ascii')).hexdigest()
-        return hash[:10] + suuid
 
 
     def _path(self, uid):
@@ -162,16 +146,6 @@ class DataBackend(_DataBackend):
     def _filename(self, uid):
         path = os.path.join(self.path, self._path(uid))
         return os.path.join(path, uid + self.SUFFIX)
-
-
-    def save(self, data, _sync=False, callback=None):
-        if self.last_exception:
-            raise self.last_exception
-        uid = self._uid()
-        self._write_queue.put((uid, data, callback))
-        if _sync:
-            self._write_queue.join()
-        return uid
 
 
     def update(self, uid, data, offset=0):
@@ -200,48 +174,14 @@ class DataBackend(_DataBackend):
         return _no_del
 
 
-    def read(self, block, sync=False, offset=0, length=None):
-        self._read_queue.put((block, offset, length))
-        if sync:
-            rblock, offset, length, data = self.read_get()
-            assert offset == offset
-            assert length == length
-            if rblock.id != block.id:
-                raise RuntimeError('Do not mix threaded reading with sync reading!')
-            if data is None:
-                raise FileNotFoundError('UID {} not found.'.format(block.uid))
-            return data
-
-
-    def read_get(self, timeout=30):
-        if self.last_exception:
-            raise self.last_exception
-        block, offset, length, data = self._read_data_queue.get(timeout=timeout)
-        self._read_data_queue.task_done()
-        return block, offset, length, data
-
-
-    def read_queue_size(self):
-        return self._read_queue.qsize()
-
-
-    def read_raw(self, uid, offset=0, length=None):
+    def read_raw(self, uid):
         filename = self._filename(uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
-        if offset==0 and length is None:
-            return open(filename, 'rb').read()
-        else:
-            with open(filename, 'rb') as f:
-                if offset:
-                    f.seek(offset)
-                if length:
-                    data = f.read(length)
-                else:
-                    data = f.read()
-            # TODO: throttling should be set into the thread's status too
-            time.sleep(self.read_throttling.consume(len(data)))
-            return data
+        # TODO: Decrypt, uncompress data
+        data = open(filename, 'rb').read()
+        time.sleep(self.read_throttling.consume(len(data)))
+        return data
 
 
     def get_all_blob_uids(self, prefix=None):
@@ -253,36 +193,3 @@ class DataBackend(_DataBackend):
                 uid = filename.split('.')[0]
                 matches.append(uid)
         return matches
-
-
-    def queue_status(self):
-        return {
-            'rq_filled': self._read_data_queue.qsize() / self._read_data_queue.maxsize,  # 0..1
-            'wq_filled': self._write_queue.qsize() / self._write_queue.maxsize,
-        }
-
-
-    def thread_status(self):
-        return "DaBaR: N{} R{} QL{}  DaBaW: N{} W{} T{} QL{}".format(
-                len([t for t in self.reader_thread_status.values() if t==STATUS_NOTHING]),
-                len([t for t in self.reader_thread_status.values() if t==STATUS_READING]),
-                self._read_queue.qsize(),
-                len([t for t in self.writer_thread_status.values() if t==STATUS_NOTHING]),
-                len([t for t in self.writer_thread_status.values() if t==STATUS_WRITING]),
-                len([t for t in self.writer_thread_status.values() if t==STATUS_THROTTLING]),
-                self._write_queue.qsize(),
-                )
-
-
-    def close(self):
-        for _writer_thread in self._writer_threads:
-            self._write_queue.put(None)  # ends the thread
-        for _writer_thread in self._writer_threads:
-            _writer_thread.join()
-        for _reader_thread in self._reader_threads:
-            self._read_queue.put(None)  # ends the thread
-        for _reader_thread in self._reader_threads:
-            _reader_thread.join()
-
-
-
