@@ -43,6 +43,13 @@ class DataBackend():
         raise NotImplementedError()
 
 
+    def read_raw(self, uid, offset=0, length=None):
+        """ Read a block in sync. Returns block's data.
+        Used only by nbd server.
+        """
+        raise NotImplementedError()
+
+
     def rm(self, uid):
         """ Deletes a block """
         raise NotImplementedError()
