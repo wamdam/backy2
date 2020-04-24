@@ -3,6 +3,7 @@
 
 import shortuuid
 import hashlib
+import binascii
 from backy2.crypt import get_crypt
 
 STATUS_NOTHING = 0
@@ -18,6 +19,13 @@ class DataBackend():
     def __init__(self, config, encryption_key):
         self.encryption_key = encryption_key
         self.cc_latest = get_crypt()(key=encryption_key)
+        self.cc = {}
+
+
+    def _cc_by_version(self, version):
+        if version not in self.cc:
+            self.cc[version] = get_crypt(version=version)(key=self.encryption_key)
+        return self.cc[version]
 
 
     def _uid(self):
@@ -76,7 +84,13 @@ class DataBackend():
         """
         if self.last_exception:
             raise self.last_exception
-        block, data = self._read_data_queue.get(timeout=timeout)
+        block, blob = self._read_data_queue.get(timeout=timeout)
+
+        # TODO: This is currently in the main thread. Maybe we want this to be
+        # in the worker threads (i.e. _reader method).
+        cc = self._cc_by_version(block.enc_version)
+        data = cc.decrypt(blob, envelope_key=binascii.unhexlify(block.enc_envkey))
+
         offset = 0
         length = len(data)
         self._read_data_queue.task_done()

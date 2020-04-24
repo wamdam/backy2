@@ -80,7 +80,7 @@ class Tag(Base):
                             self.version_uid, self.name)
 
 
-DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid'])
+DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid', 'enc_envkey', 'enc_version'])
 class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
@@ -107,6 +107,8 @@ class Block(Base):
             checksum=self.checksum,
             size=self.size,
             valid=self.valid,
+            enc_envkey=self.enc_envkey,
+            enc_version=self.enc_version,
         )
 
 
