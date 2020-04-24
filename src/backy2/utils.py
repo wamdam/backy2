@@ -4,6 +4,7 @@
 from functools import partial
 from time import time
 from threading import Lock
+import binascii
 import itertools
 import hashlib
 import importlib
@@ -93,6 +94,9 @@ def backy_from_config(Config):
     process_name = config_DEFAULTS.get('process_name', 'backy2')
     dedup = config_DEFAULTS.getboolean('deduplication', True)
     encryption_key = config_DEFAULTS.get('encryption_key', None)  # if None then version=0 will be used (no encryption)
+
+    if encryption_key:
+        encryption_key = binascii.unhexlify(encryption_key)
 
     # configure meta backend
     config_MetaBackend = Config(section='MetaBackend')

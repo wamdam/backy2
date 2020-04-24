@@ -70,6 +70,8 @@ class CryptV1(CryptBase):
     VERSION = 1
 
     def __init__(self, key, compression_level=1):
+        if len(key) != 32:
+            raise ValueError('You must provide a 32-byte long encryption-key in your configuration.')
         self.key = key
         self.compression_level = compression_level
         self.cctx = zstandard.ZstdCompressor(level=compression_level)  # zstandard.MAX_COMPRESSION_LEVEL

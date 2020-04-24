@@ -785,10 +785,10 @@ class Backy():
                 if data == b'\0' * block_size:
                     block_uid = None
                     data_checksum = None
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0))
                 elif existing_block and existing_block.size == block_size:
                     block_uid = existing_block.uid
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0))
                 else:
                     try:
                         # This is the whole reason for _written_blocks_queue. We must first write the block to
@@ -826,7 +826,7 @@ class Backy():
                     block_uid = metadata['block_uid']
                     data_checksum = metadata['checksum']
                     block_size = metadata['block_size']
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size))
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0))
                     if metadata['block_uid'] is None:
                         stats['blocks_sparse'] += 1
                         stats['bytes_sparse'] += block_size
@@ -841,7 +841,7 @@ class Backy():
                 except queue.Empty:
                     break
                 else:
-                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=enc_envkey, enc_version=enc_version, _commit=True, _upsert=False)
+                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, _commit=True, _upsert=False)
 
             # log and process output
             if time.time() - t_last_run >= 1:
@@ -875,11 +875,11 @@ class Backy():
         # Set the rest of the blocks from the _written_blocks_queue
         while True:
             try:
-                q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size = _written_blocks_queue.get(block=False)
+                q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version = _written_blocks_queue.get(block=False)
             except queue.Empty:
                 break
             else:
-                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=True, _upsert=False)
+                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, _commit=True, _upsert=False)
 
         tags = []
         if tag is not None:

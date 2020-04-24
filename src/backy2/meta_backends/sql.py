@@ -9,6 +9,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, query
 from sqlalchemy.sql import text
 from sqlalchemy.types import DateTime, Date
+import binascii
 import csv
 import datetime
 import os
@@ -447,7 +448,7 @@ class MetaBackend(_MetaBackend):
                 checksum=checksum,
                 size=size,
                 valid=valid,
-                enc_envkey=enc_envkey,
+                enc_envkey=binascii.hexlify(enc_envkey),
                 enc_version=enc_version,
                 )
             self.session.add(block)
