@@ -33,7 +33,8 @@ class DataBackend(_DataBackend):
 
     last_exception = None
 
-    def __init__(self, config):
+    def __init__(self, config, encryption_password):
+        self.encryption_password = encryption_password
         self.aws_access_key_id = config.get('aws_access_key_id')
         if self.aws_access_key_id is None:
             aws_access_key_id_file = config.get('aws_access_key_id_file')

@@ -14,7 +14,7 @@ class DataBackend():
     """ Holds BLOBs, never overwrites
     """
 
-    def __init__(self, config):
+    def __init__(self, config, encryption_password):
         pass
 
 
