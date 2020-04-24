@@ -97,6 +97,7 @@ with TestPath() as testpath:
         hash_function: sha512
         lock_dir: /tmp
         process_name: backy2
+        encryption_key: decafbaddecafbaddecafbaddecafbaddecafbaddecafbaddecafbaddecafbad
 
         [MetaBackend]
         type: backy2.meta_backends.sql

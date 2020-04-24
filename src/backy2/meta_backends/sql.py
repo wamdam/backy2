@@ -89,6 +89,9 @@ class Block(Base):
     checksum = Column(String(128), index=True, nullable=True)
     size = Column(BigInteger, nullable=True)
     valid = Column(Integer, nullable=False)
+    enc_version = Column(Integer, nullable=False, default=0)
+    enc_envkey = Column(String(64), nullable=True)
+    # hashsum of master key?
 
 
     def deref(self):
@@ -417,9 +420,10 @@ class MetaBackend(_MetaBackend):
             ))
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size, valid, _commit=True, _upsert=True):
+    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, _commit=True, _upsert=True):
         """ Upsert a block (or insert only when _upsert is False - this is only
         a performance improvement)
+        Upsert is only used in nbdserver
         """
         valid = 1 if valid else 0
         block = None
@@ -432,6 +436,8 @@ class MetaBackend(_MetaBackend):
             block.size = size
             block.valid = valid
             block.date = datetime.datetime.now()
+            block.enc_envkey = enc_envkey
+            block.enc_version = enc_version
         else:
             block = Block(
                 id=id,
@@ -440,7 +446,9 @@ class MetaBackend(_MetaBackend):
                 uid=block_uid,
                 checksum=checksum,
                 size=size,
-                valid=valid
+                valid=valid,
+                enc_envkey=enc_envkey,
+                enc_version=enc_version,
                 )
             self.session.add(block)
         self._flush_block_counter += 1

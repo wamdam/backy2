@@ -33,8 +33,8 @@ class DataBackend(_DataBackend):
     last_exception = None
 
 
-    def __init__(self, config, encryption_password):
-        self.encryption_password = encryption_password
+    def __init__(self, config, encryption_key):
+        super().__init__(config, encryption_key)
         self.path = config.get('path')
         simultaneous_writes = config.getint('simultaneous_writes')
         simultaneous_reads = config.getint('simultaneous_reads', 1)
@@ -78,9 +78,7 @@ class DataBackend(_DataBackend):
             if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            uid, data, callback = entry
-
-            # TODO: encrypt, compress data before throttling.
+            uid, enc_envkey, enc_version, data, callback = entry
 
             path = os.path.join(self.path, self._path(uid))
             filename = self._filename(uid)
@@ -106,7 +104,7 @@ class DataBackend(_DataBackend):
             else:
                 t2 = time.time()
                 if callback:
-                    callback(uid)
+                    callback(uid, enc_envkey, enc_version)
                 self._write_queue.task_done()
                 #logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
 

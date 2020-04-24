@@ -24,8 +24,8 @@ class DataBackend(_DataBackend):
 
     last_exception = None
 
-    def __init__(self, config, encryption_password):
-        self.encryption_password = encryption_password
+    def __init__(self, config, encryption_key):
+        super().__init__(config, encryption_key)
         self.default_block_size = int([value for key, value in config.items('DEFAULTS') if key=='block_size'][0])
 
         simultaneous_writes = config.getint('simultaneous_writes', 1)
@@ -69,7 +69,8 @@ class DataBackend(_DataBackend):
             if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            uid, data, callback = entry
+            uid, enc_envkey, enc_version, data, callback = entry
+
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
             self.writer_thread_status[id_] = STATUS_NOTHING
@@ -85,7 +86,7 @@ class DataBackend(_DataBackend):
                 t2 = time.time()
                 # assert r == len(data)
                 if callback:
-                    callback(uid)
+                    callback(uid, enc_envkey, enc_version)
                 self._write_queue.task_done()
                 #logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
                 #if random.random() > 0.9:

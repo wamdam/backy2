@@ -795,8 +795,8 @@ class Backy():
                         # the backup data store before we write it to the database. Otherwise we can't continue
                         # reliably.
                         def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
-                            def f(_block_uid):
-                                _written_blocks_queue.put((local_block_id, local_version_uid, _block_uid, local_data_checksum, local_block_size))
+                            def f(_block_uid, enc_envkey, enc_version):
+                                _written_blocks_queue.put((local_block_id, local_version_uid, _block_uid, local_data_checksum, local_block_size, enc_envkey, enc_version))
                             return f
                         block_uid = self.data_backend.save(data, callback=callback(block_id, version_uid, data_checksum, block_size))  # this will re-raise an exception from a worker thread
                     except Exception as e:
@@ -837,11 +837,11 @@ class Backy():
             # Set the blocks from the _written_blocks_queue
             while True:
                 try:
-                    q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size = _written_blocks_queue.get(block=False)
+                    q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version = _written_blocks_queue.get(block=False)
                 except queue.Empty:
                     break
                 else:
-                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, _commit=True, _upsert=False)
+                    self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey, enc_version, _commit=True, _upsert=False)
 
             # log and process output
             if time.time() - t_last_run >= 1:

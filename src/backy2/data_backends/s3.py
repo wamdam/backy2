@@ -29,8 +29,8 @@ class DataBackend(_DataBackend):
 
     last_exception = None
 
-    def __init__(self, config, encryption_password):
-        self.encryption_password = encryption_password
+    def __init__(self, config, encryption_key):
+        super().__init__(config, encryption_key)
         aws_access_key_id = config.get('aws_access_key_id')
         if aws_access_key_id is None:
             aws_access_key_id_file = config.get('aws_access_key_id_file')
@@ -147,7 +147,7 @@ class DataBackend(_DataBackend):
                 break
             if client is None:
                 client = self._get_client()
-            uid, data, callback = entry
+            uid, enc_envkey, enc_version, data, callback = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
@@ -164,7 +164,7 @@ class DataBackend(_DataBackend):
                 self.last_exception = e
             else:
                 if callback:
-                    callback(uid)
+                    callback(uid, enc_envkey, enc_version)
                 self._write_queue.task_done()
 
 

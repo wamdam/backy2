@@ -92,7 +92,7 @@ def backy_from_config(Config):
     lock_dir = config_DEFAULTS.get('lock_dir', None)
     process_name = config_DEFAULTS.get('process_name', 'backy2')
     dedup = config_DEFAULTS.getboolean('deduplication', True)
-    encryption_password = config_DEFAULTS.get('encryption_password', None)  # if None then version=0 will be used (no encryption)
+    encryption_key = config_DEFAULTS.get('encryption_key', None)  # if None then version=0 will be used (no encryption)
 
     # configure meta backend
     config_MetaBackend = Config(section='MetaBackend')
@@ -110,7 +110,7 @@ def backy_from_config(Config):
     except ImportError:
         raise NotImplementedError('DataBackend type {} unsupported.'.format(config_DataBackend.get('type')))
     else:
-        data_backend = DataBackendLib.DataBackend(config_DataBackend, encryption_password)
+        data_backend = DataBackendLib.DataBackend(config_DataBackend, encryption_key)
 
     from backy2.backy import Backy
     backy = partial(Backy,

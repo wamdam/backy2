@@ -3,6 +3,7 @@ from Crypto.Hash import SHA512
 from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Random import get_random_bytes
 from functools import partial
+from backy2.aes_keywrap import aes_wrap_key, aes_unwrap_key
 import binascii
 import json
 import zstandard
@@ -10,25 +11,19 @@ import zstandard
 
 def get_crypt(version=1):  # Default will always be the latest version.
     """
-    Example calls:
-    >>> cc = get_crypt()(password='test'))
-    >>> config = cc.get_configuration()
-    >>> cc2 = get_crypt(version=1).from_configuration(password='test', configuration=config)
-
     Complete usage:
     >>> from backy2.crypt import get_crypt
     Backup:
-    >>> cc = get_crypt()(password='from config')
-    >>> blob = cc.encrypt(b'my block data')
-    >>> # store blob
-    >>> # store cc.get_configuration()
+    >>> cc = get_crypt()(key=b'\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad')
+    >>> blob, envelope_key = cc.encrypt(b'my block data')
+    >>> # store blob to disk (blob consists of data, nonce and digest. data is encrypted, nonce and digest are not secret)
+    >>> # store envelope_key to blob's metadata (envelope_key is not secret)
     >>> # store cc.VERSION
 
     Restore:
     >>> # load version, config from database
-    >>> cc = get_crypt(version=1).from_configuration(password='from config', configuration=config)
-    >>> # load blob
-    >>> data = cc.decrypt(blob)
+    >>> cc2 = get_crypt(cc.VERSION)(key=b'\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad')
+    >>> data = cc.decrypt(blob, envelope_key)
     """
     if version == 0:
         return NoCrypt
@@ -37,6 +32,8 @@ def get_crypt(version=1):  # Default will always be the latest version.
 
 
 class CryptBase:
+    VERSION = 0
+
     def __init__(self, password):
         pass
 
@@ -50,9 +47,9 @@ class CryptBase:
         return cls(password)
 
     def encrypt(self, data):
-        return data
+        return data, b''
 
-    def decrypt(self, blob):
+    def decrypt(self, blob, envelope_key=b''):
         return blob
 
 
@@ -72,37 +69,11 @@ class CryptV1(CryptBase):
     """
     VERSION = 1
 
-    def __init__(self, password, salt=None, compression_level=1, iterations=241158):
-        if salt is None:
-            salt = get_random_bytes(16)
-            self.salt = salt  # SAVE THIS!
-        self.key = PBKDF2(password=password, salt=salt, dkLen=32, count=iterations, hmac_hash_module=SHA512)
+    def __init__(self, key, compression_level=1):
+        self.key = key
         self.compression_level = compression_level
-        self.iterations = iterations
         self.cctx = zstandard.ZstdCompressor(level=compression_level)  # zstandard.MAX_COMPRESSION_LEVEL
         self.dctx = zstandard.ZstdDecompressor()
-
-
-    def get_configuration(self):
-        """ Returns a configuration bytestring to be used later with get_crypt
-        """
-        return json.dumps({'version': 1,
-                'salt': binascii.hexlify(self.salt).decode('ascii'),
-                'compression_level': self.compression_level,
-                'iterations': self.iterations,
-                })
-
-
-    @classmethod
-    def from_configuration(cls, password, configuration):
-        _c = json.loads(configuration)
-        cc = cls(
-                password=password,
-                salt=binascii.unhexlify(_c['salt'].encode('ascii')),
-                compression_level=_c['compression_level'],
-                iterations=_c['iterations'],
-                )
-        return cc
 
 
     def _compress(self, data):
@@ -125,19 +96,40 @@ class CryptV1(CryptBase):
         return blob[0:16], blob[16:32], blob[32:]
 
 
+    def _wrap_key(self, key):
+        return aes_wrap_key(self.key, key)
+
+
+    def _unwrap_key(self, wrapped_key):
+        return aes_unwrap_key(self.key, wrapped_key)
+
+
     def encrypt(self, data):
         # compress data, then encrypt it
         data = self._compress(data)
-        encryptor = AES.new(self.key, AES.MODE_GCM)
+
+        # encrypt data with a new key
+        data_key = get_random_bytes(32)
+        encryptor = AES.new(data_key, AES.MODE_GCM)
         nonce = encryptor.nonce
         encrypted_data, digest = encryptor.encrypt_and_digest(data)
-        return self._pack(encrypted_data, nonce, digest)
+
+        envelope_key = self._wrap_key(data_key)
+
+        # We return one blob with encrypted_data, nonce and digest
+        # and the envelope_key which is the key the data was stored
+        # with wrapped by the key from the config.
+
+        return self._pack(encrypted_data, nonce, digest), envelope_key
 
 
-    def decrypt(self, blob):
+    def decrypt(self, blob, envelope_key):
         # decrypt data, then uncompress it
         digest, nonce, encrypted_data = self._unpack(blob)
-        decryptor = AES.new(self.key, AES.MODE_GCM, nonce=nonce)
+
+        data_key = self._unwrap_key(envelope_key)
+
+        decryptor = AES.new(data_key, AES.MODE_GCM, nonce=nonce)
         data = decryptor.decrypt_and_verify(encrypted_data, digest)
         return self._decompress(data)
 

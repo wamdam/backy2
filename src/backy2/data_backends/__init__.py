@@ -3,6 +3,7 @@
 
 import shortuuid
 import hashlib
+from backy2.crypt import get_crypt
 
 STATUS_NOTHING = 0
 STATUS_READING = 1
@@ -14,8 +15,9 @@ class DataBackend():
     """ Holds BLOBs, never overwrites
     """
 
-    def __init__(self, config, encryption_password):
-        pass
+    def __init__(self, config, encryption_key):
+        self.encryption_key = encryption_key
+        self.cc_latest = get_crypt()(key=encryption_key)
 
 
     def _uid(self):
@@ -33,7 +35,13 @@ class DataBackend():
         if self.last_exception:
             raise self.last_exception
         uid = self._uid()
-        self._write_queue.put((uid, data, callback))
+
+        # TODO: This is currently in the main thread. Maybe we want this to be
+        # in the worker threads (i.e. _writer method).
+        blob, enc_envkey = self.cc_latest.encrypt(data)
+        enc_version = self.cc_latest.VERSION
+
+        self._write_queue.put((uid, enc_envkey, enc_version, blob, callback))
         if _sync:
             self._write_queue.join()
         return uid
