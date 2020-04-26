@@ -147,7 +147,7 @@ class DataBackend(_DataBackend):
                 break
             if client is None:
                 client = self._get_client()
-            uid, enc_envkey, enc_version, data, callback = entry
+            uid, enc_envkey, enc_version, enc_nonce, data, callback = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
@@ -164,7 +164,7 @@ class DataBackend(_DataBackend):
                 self.last_exception = e
             else:
                 if callback:
-                    callback(uid, enc_envkey, enc_version)
+                    callback(uid, enc_envkey, enc_version, enc_nonce)
                 self._write_queue.task_done()
 
 
@@ -181,7 +181,7 @@ class DataBackend(_DataBackend):
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
-                data = self.read_raw(block.uid, bucket)
+                data = self.read_raw(block, bucket)
                 self.reader_thread_status[id_] = STATUS_NOTHING
                 #except FileNotFoundError:
             except Exception as e:
@@ -193,12 +193,12 @@ class DataBackend(_DataBackend):
                 logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
-    def read_raw(self, block_uid, _bucket=None):
+    def read_raw(self, block, _bucket=None):
         if not _bucket:
             _bucket = self.bucket
 
         while True:
-            obj = _bucket.Object(block_uid)
+            obj = _bucket.Object(block.uid)
             try:
                 data_dict = obj.get()
                 data = data_dict['Body'].read()

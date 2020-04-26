@@ -92,6 +92,7 @@ class Block(Base):
     valid = Column(Integer, nullable=False)
     enc_version = Column(Integer, nullable=False, default=0)
     enc_envkey = Column(String(80), nullable=True)
+    enc_nonce = Column(String(32), nullable=True)  # This is doubled here (it's also in blob[:16] for fast rekeying.
     # hashsum of master key?
 
 
@@ -423,7 +424,7 @@ class MetaBackend(_MetaBackend):
             ))
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, _commit=True, _upsert=True):
+    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, enc_nonce=None, _commit=True, _upsert=True):
         """ Upsert a block (or insert only when _upsert is False - this is only
         a performance improvement)
         Upsert is only used in nbdserver
@@ -439,8 +440,9 @@ class MetaBackend(_MetaBackend):
             block.size = size
             block.valid = valid
             block.date = datetime.datetime.now()
-            block.enc_envkey = enc_envkey
+            block.enc_envkey = hexlify(enc_envkey).decode('ascii')
             block.enc_version = enc_version
+            block.enc_nonce = hexlify(enc_nonce).decode('ascii')
         else:
             block = Block(
                 id=id,
@@ -452,6 +454,7 @@ class MetaBackend(_MetaBackend):
                 valid=valid,
                 enc_envkey=binascii.hexlify(enc_envkey).decode('ascii'),
                 enc_version=enc_version,
+                enc_nonce=binascii.hexlify(enc_nonce).decode('ascii'),
                 )
             self.session.add(block)
         self._flush_block_counter += 1
@@ -462,6 +465,19 @@ class MetaBackend(_MetaBackend):
             logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
         if _commit:
             self.session.commit()
+        return block
+
+
+    def set_block_enc_envkey(self, block, enc_envkey):
+        block.enc_envkey = binascii.hexlify(enc_envkey).decode('ascii')
+        self.session.add(block)
+        self._flush_block_counter += 1
+
+        if self._flush_block_counter % self.FLUSH_EVERY_N_BLOCKS == 0:
+            t1 = time.time()
+            self.session.flush()  # saves some ram
+            t2 = time.time()
+            logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
         return block
 
 
@@ -490,6 +506,10 @@ class MetaBackend(_MetaBackend):
 
     def get_blocks_by_version(self, version_uid):
         return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id)
+
+
+    def get_blocks(self):
+        return self.session.query(Block).order_by(Block.id)
 
 
     def get_block_ids_by_version(self, version_uid):

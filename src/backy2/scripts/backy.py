@@ -346,6 +346,11 @@ class Commands():
         get_fuse(backy, mount)
 
 
+    def rekey(self, oldkey):
+        backy = self.backy()
+        backy.rekey(oldkey)
+
+
     def import_(self, filename='-'):
         backy = self.backy()
         try:
@@ -662,6 +667,13 @@ def main():
         help="Fuse mount backy backups")
     p.add_argument('mount', help='Mountpoint')
     p.set_defaults(func='fuse')
+
+    # Re-Keying
+    p = subparsers.add_parser(
+        'rekey',
+        help="Re-Key all blocks in backy2 with a new key in the config. This will NOT encrypt unencrypted blocks or recrypt existing blocks.")
+    p.add_argument('oldkey', help='The old key as it was found in the config')
+    p.set_defaults(func='rekey')
 
     # ADD TAG
     p = subparsers.add_parser(

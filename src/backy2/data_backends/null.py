@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
+from backy2.crypt import get_crypt
 from backy2.data_backends import DataBackend as _DataBackend
 from backy2.data_backends import (STATUS_NOTHING, STATUS_READING, STATUS_WRITING, STATUS_THROTTLING, STATUS_QUEUE)
 from backy2.logging import logger
 from backy2.utils import TokenBucket
 from backy2.utils import generate_block
+import binascii
 import os
 import queue
 import random
@@ -69,7 +71,7 @@ class DataBackend(_DataBackend):
             if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            uid, enc_envkey, enc_version, data, callback = entry
+            uid, enc_envkey, enc_version, enc_nonce, data, callback = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
@@ -86,7 +88,7 @@ class DataBackend(_DataBackend):
                 t2 = time.time()
                 # assert r == len(data)
                 if callback:
-                    callback(uid, enc_envkey, enc_version)
+                    callback(uid, enc_envkey, enc_version, enc_nonce)
                 self._write_queue.task_done()
                 #logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
                 #if random.random() > 0.9:
@@ -103,7 +105,7 @@ class DataBackend(_DataBackend):
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
-                data = self.read_raw(block.id, block.size)
+                data = self.read_raw(block)
                 self.reader_thread_status[id_] = STATUS_THROTTLING
             except Exception as e:
                 self.last_exception = e
@@ -117,8 +119,41 @@ class DataBackend(_DataBackend):
                 logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
-    def read_raw(self, block_id, block_size):
-        return generate_block(block_id, block_size)
+    def read_raw(self, block):
+        # We have to fake encrypted blocks here or the restore won't work.
+        # This is bad as performance is not really comparable but this is our
+        # only chance to restore from null://.
+        raw_data = generate_block(block.id, block.size)
+        data, enc_envkey = self.cc_latest.encrypt(
+            raw_data,
+            self.cc_latest.unwrap_key(binascii.unhexlify(block.enc_envkey)),
+            raw_data[:16],  # use the first 16 bytes as nonce
+            )
+        #data = generate_block(block_id, block_size)
+        return data
+
+
+    # Overwriting save here as we need weak encryption for the null data backend.
+    def save(self, data, _sync=False, callback=None):
+        """ Saves data, returns unique ID """
+        if self.last_exception:
+            raise self.last_exception
+        uid = self._uid()
+
+        # Important: It's important to call this from the main thread because
+        # zstandard IS NOT THREAD SAFE as stated at https://pypi.org/project/zstandard/:
+        # """ Unless specified otherwise, assume that no two methods of
+        # ZstdCompressor instances can be called from multiple Python threads
+        # simultaneously. In other words, assume instances are not thread safe
+        # unless stated otherwise."""
+        #blob, enc_envkey = self.cc_latest.encrypt(data)
+        blob, enc_envkey = self.cc_latest.encrypt(data, None, data[:16])  # use the first 16 bytes as nonce
+        enc_version = self.cc_latest.VERSION
+
+        self._write_queue.put((uid, enc_envkey, enc_version, blob, callback))
+        if _sync:
+            self._write_queue.join()
+        return uid
 
 
     def rm(self, uid):

@@ -78,7 +78,7 @@ class DataBackend(_DataBackend):
             if entry is None or self.last_exception:
                 logger.debug("Writer {} finishing.".format(id_))
                 break
-            uid, enc_envkey, enc_version, data, callback = entry
+            uid, enc_envkey, enc_version, enc_nonce, data, callback = entry
 
             path = os.path.join(self.path, self._path(uid))
             filename = self._filename(uid)
@@ -104,7 +104,7 @@ class DataBackend(_DataBackend):
             else:
                 t2 = time.time()
                 if callback:
-                    callback(uid, enc_envkey, enc_version)
+                    callback(uid, enc_envkey, enc_version, enc_nonce)
                 self._write_queue.task_done()
                 #logger.debug('Writer {} wrote data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, uid, t2-t1, self._write_queue.qsize()))
 
@@ -119,7 +119,7 @@ class DataBackend(_DataBackend):
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
-                data = self.read_raw(block.uid)
+                data = self.read_raw(block)
                 self.reader_thread_status[id_] = STATUS_NOTHING
                 #except FileNotFoundError:
             except Exception as e:
@@ -173,8 +173,8 @@ class DataBackend(_DataBackend):
         return _no_del
 
 
-    def read_raw(self, uid):
-        filename = self._filename(uid)
+    def read_raw(self, block):
+        filename = self._filename(block.uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
         data = open(filename, 'rb').read()

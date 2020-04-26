@@ -4,6 +4,7 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Random import get_random_bytes
 from functools import partial
 from backy2.aes_keywrap import aes_wrap_key, aes_unwrap_key
+from threading import Lock
 import binascii
 import json
 import zstandard
@@ -24,6 +25,12 @@ def get_crypt(version=1):  # Default will always be the latest version.
     >>> # load version, config from database
     >>> cc2 = get_crypt(cc.VERSION)(key=b'\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad')
     >>> data = cc.decrypt(blob, envelope_key)
+
+    Re-Key:
+    >>> old_key = b'\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad'
+    >>> new_key = b'\xde\xad\xbe\xef\xde\xad\xbe\xef\xde\xad\xbe\xef\xde\xad\xbe\xef\xde\xad\xbe\xef\xde\xad\xbe\xef\xde\xad\xbe\xef\xde\xad\xbe\xef'
+    >>> cc3 = get_crypt(cc.VERSION)(key=new_key)  # New key!
+    >>> cc3.wrap_key(cc3.unwrap_key(envelope_key, old_key))
     """
     if version == 0:
         return NoCrypt
@@ -57,6 +64,10 @@ class NoCrypt(CryptBase):
     pass
 
 
+# module wide lock because zstandard CANNOT be used from
+# multiple threads simultaniously.
+crypt_v1_zstandard_lock = Lock()
+
 class CryptV1(CryptBase):
     """ Initialize with a password and encrypt data. This lib also compresses
     data before it encrypts it.
@@ -69,7 +80,7 @@ class CryptV1(CryptBase):
     """
     VERSION = 1
 
-    def __init__(self, key, compression_level=1):
+    def __init__(self, key, compression_level=8):
         if len(key) != 32:
             raise ValueError('You must provide a 32-byte long encryption-key in your configuration.')
         self.key = key
@@ -79,11 +90,13 @@ class CryptV1(CryptBase):
 
 
     def _compress(self, data):
-        return self.cctx.compress(data)
+        with crypt_v1_zstandard_lock:
+            return self.cctx.compress(data)
 
 
     def _decompress(self, compressed):
-        return self.dctx.decompress(compressed)
+        with crypt_v1_zstandard_lock:
+            return self.dctx.decompress(compressed)
 
 
     def _pack(self, data, nonce, digest):
@@ -98,38 +111,44 @@ class CryptV1(CryptBase):
         return blob[0:16], blob[16:32], blob[32:]
 
 
-    def _wrap_key(self, key):
+    def wrap_key(self, key):
         return aes_wrap_key(self.key, key)
 
 
-    def _unwrap_key(self, wrapped_key):
-        return aes_unwrap_key(self.key, wrapped_key)
+    def unwrap_key(self, wrapped_key, master_key=None):
+        if not master_key:
+            master_key = self.key
+        return aes_unwrap_key(master_key, wrapped_key)
 
 
-    def encrypt(self, data):
+    def encrypt(self, data, data_key=None, nonce=None):
         # compress data, then encrypt it
         data = self._compress(data)
 
         # encrypt data with a new key
-        data_key = get_random_bytes(32)
-        encryptor = AES.new(data_key, AES.MODE_GCM)
-        nonce = encryptor.nonce
+        if data_key is None:  # for weak encryption in null data backend.
+            data_key = get_random_bytes(32)
+        if nonce is None:  # for weak encryption in null data backend.
+            encryptor = AES.new(data_key, AES.MODE_GCM)
+            nonce = encryptor.nonce
+        else:
+            encryptor = AES.new(data_key, AES.MODE_GCM, nonce=nonce)
         encrypted_data, digest = encryptor.encrypt_and_digest(data)
 
-        envelope_key = self._wrap_key(data_key)
+        envelope_key = self.wrap_key(data_key)
 
         # We return one blob with encrypted_data, nonce and digest
         # and the envelope_key which is the key the data was stored
         # with wrapped by the key from the config.
 
-        return self._pack(encrypted_data, nonce, digest), envelope_key
+        return self._pack(encrypted_data, nonce, digest), envelope_key, nonce
 
 
     def decrypt(self, blob, envelope_key):
         # decrypt data, then uncompress it
         digest, nonce, encrypted_data = self._unpack(blob)
 
-        data_key = self._unwrap_key(envelope_key)
+        data_key = self.unwrap_key(envelope_key)
 
         decryptor = AES.new(data_key, AES.MODE_GCM, nonce=nonce)
         data = decryptor.decrypt_and_verify(encrypted_data, digest)

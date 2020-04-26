@@ -28,15 +28,24 @@ class Locking:
         if not self.lock_dir:
             return True  # i.e. no locking
         lpath = os.path.join(self.lock_dir, name)
-        fd = None
+        #fd = None
+        #try:
+        #    fd = os.open(lpath, os.O_CREAT)
+        #    fcntl.flock(fd, fcntl.LOCK_NB | fcntl.LOCK_EX)
+        #    self._locks[name] = fd
+        #    return True
+        #except (OSError, IOError):
+        #    if fd: os.close(fd)
+        #    return False
+
         try:
-            fd = os.open(lpath, os.O_CREAT)
-            fcntl.flock(fd, fcntl.LOCK_NB | fcntl.LOCK_EX)
-            self._locks[name] = fd
-            return True
+            f = open(lpath, 'w')
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (OSError, IOError):
-            if fd: os.close(fd)
             return False
+        else:
+            self._locks[name] = f
+            return True
 
 
     def _unlock(self, name):
@@ -44,7 +53,11 @@ class Locking:
             return True  # i.e. no locking
         if name not in self._locks:
             return True  # nothing to unlock
-        os.close(self._locks[name])
+        lpath = os.path.join(self.lock_dir, name)
+        #os.close(self._locks[name])
+        self._locks[name].close()
+        os.remove(lpath)
+        del(self._locks[name])
         return True
 
 

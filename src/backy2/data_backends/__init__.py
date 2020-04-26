@@ -44,12 +44,16 @@ class DataBackend():
             raise self.last_exception
         uid = self._uid()
 
-        # TODO: This is currently in the main thread. Maybe we want this to be
-        # in the worker threads (i.e. _writer method).
-        blob, enc_envkey = self.cc_latest.encrypt(data)
+        # Important: It's important to call this from the main thread because
+        # zstandard IS NOT THREAD SAFE as stated at https://pypi.org/project/zstandard/:
+        # """ Unless specified otherwise, assume that no two methods of
+        # ZstdCompressor instances can be called from multiple Python threads
+        # simultaneously. In other words, assume instances are not thread safe
+        # unless stated otherwise."""
+        blob, enc_envkey, enc_nonce = self.cc_latest.encrypt(data)
         enc_version = self.cc_latest.VERSION
 
-        self._write_queue.put((uid, enc_envkey, enc_version, blob, callback))
+        self._write_queue.put((uid, enc_envkey, enc_version, enc_nonce, blob, callback))
         if _sync:
             self._write_queue.join()
         return uid
@@ -86,8 +90,12 @@ class DataBackend():
             raise self.last_exception
         block, blob = self._read_data_queue.get(timeout=timeout)
 
-        # TODO: This is currently in the main thread. Maybe we want this to be
-        # in the worker threads (i.e. _reader method).
+        # Important: It's important to call this from the main thread because
+        # zstandard IS NOT THREAD SAFE as stated at https://pypi.org/project/zstandard/:
+        # """ Unless specified otherwise, assume that no two methods of
+        # ZstdCompressor instances can be called from multiple Python threads
+        # simultaneously. In other words, assume instances are not thread safe
+        # unless stated otherwise."""
         cc = self._cc_by_version(block.enc_version)
         data = cc.decrypt(blob, envelope_key=binascii.unhexlify(block.enc_envkey))
 
@@ -97,9 +105,8 @@ class DataBackend():
         return block, offset, length, data
 
 
-    def read_raw(self, uid, offset=0, length=None):
+    def read_raw(self, block):
         """ Read a block in sync. Returns block's data.
-        Used only by nbd server.
         """
         raise NotImplementedError()
 

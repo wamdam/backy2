@@ -1,6 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 from backy2 import notify
+from backy2.crypt import get_crypt
 from backy2.logging import logger
 from backy2.locking import Locking
 from backy2.locking import find_other_procs
@@ -9,6 +10,7 @@ from backy2.utils import status
 from backy2.utils import MinSequential
 from dateutil.relativedelta import relativedelta
 from urllib import parse
+import binascii
 import datetime
 import importlib
 import math
@@ -373,6 +375,7 @@ class Backy():
             except Exception as e:
                 # TODO (restore): write information for continue
                 logger.error("Exception during reading from the data backend: {}".format(str(e)))
+                #raise  # Enable for debugging
                 sys.exit(6)
             assert len(data) == block.size
             stats['blocks_read'] += 1
@@ -788,22 +791,23 @@ class Backy():
                 if data == b'\0' * block_size:
                     block_uid = None
                     data_checksum = None
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0))
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0, None))
                 elif existing_block and existing_block.size == block_size:
                     block_uid = existing_block.uid
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0))
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0, None))
                 else:
                     try:
                         # This is the whole reason for _written_blocks_queue. We must first write the block to
                         # the backup data store before we write it to the database. Otherwise we can't continue
                         # reliably.
                         def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
-                            def f(_block_uid, enc_envkey, enc_version):
-                                _written_blocks_queue.put((local_block_id, local_version_uid, _block_uid, local_data_checksum, local_block_size, enc_envkey, enc_version))
+                            def f(_block_uid, enc_envkey, enc_version, enc_nonce):
+                                _written_blocks_queue.put((local_block_id, local_version_uid, _block_uid, local_data_checksum, local_block_size, enc_envkey, enc_version, enc_nonce))
                             return f
                         block_uid = self.data_backend.save(data, callback=callback(block_id, version_uid, data_checksum, block_size))  # this will re-raise an exception from a worker thread
                     except Exception as e:
-                        break  # close anything as always.
+                        raise
+                        #break  # close anything as always.
                     stats['blocks_written'] += 1
                     stats['bytes_written'] += block_size
 
@@ -829,7 +833,7 @@ class Backy():
                     block_uid = metadata['block_uid']
                     data_checksum = metadata['checksum']
                     block_size = metadata['block_size']
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0))
+                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0, None))
                     if metadata['block_uid'] is None:
                         stats['blocks_sparse'] += 1
                         stats['bytes_sparse'] += block_size
@@ -840,7 +844,7 @@ class Backy():
             # Set the blocks from the _written_blocks_queue
             while True:
                 try:
-                    q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version = _written_blocks_queue.get(block=False)
+                    q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version, q_enc_nonce = _written_blocks_queue.get(block=False)
                 except queue.Empty:
                     break
                 else:
@@ -852,6 +856,7 @@ class Backy():
                     valid=1,
                     enc_envkey=q_enc_envkey,
                     enc_version=q_enc_version,
+                    enc_nonce=q_enc_nonce,
                     _commit=True,
                     _upsert=False)
 
@@ -887,11 +892,11 @@ class Backy():
         # Set the rest of the blocks from the _written_blocks_queue
         while True:
             try:
-                q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version = _written_blocks_queue.get(block=False)
+                q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version, q_enc_nonce = _written_blocks_queue.get(block=False)
             except queue.Empty:
                 break
             else:
-                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, _commit=True, _upsert=False)
+                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, enc_nonce=q_enc_nonce, _commit=True, _upsert=False)
 
         tags = []
         if tag is not None:
@@ -937,6 +942,18 @@ class Backy():
             sys.exit(6)  # i.e. kill all the remaining workers
 
         return version_uid
+
+
+    def rekey(self, oldkey):
+        cc = self.data_backend.cc_latest
+        for block in self.meta_backend.get_blocks():
+            if block.enc_version == cc.VERSION:
+                print("Re-Keying block {}".format(block.uid))
+                newkey = cc.wrap_key(cc.unwrap_key(binascii.unhexlify(block.enc_envkey), binascii.unhexlify(oldkey)))
+                self.meta_backend.set_block_enc_envkey(block, newkey)
+            else:
+                print("Ignoring block {} (wrong encryption version {})".format(block.uid, block.enc_version))
+        self.meta_backend.session.commit()  # ONLY at the very end. One transaction for them all so that interruptions don't matter.
 
 
     def cleanup_fast(self, dt=3600):

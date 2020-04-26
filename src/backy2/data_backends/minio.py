@@ -109,7 +109,7 @@ class DataBackend(_DataBackend):
                 break
             if client is None:
                 client = self._get_client()
-            uid, enc_envkey, enc_version, data, callback = entry
+            uid, enc_envkey, enc_version, enc_nonce, data, callback = entry
 
             self.writer_thread_status[id_] = STATUS_THROTTLING
             time.sleep(self.write_throttling.consume(len(data)))
@@ -126,7 +126,7 @@ class DataBackend(_DataBackend):
                 self.last_exception = e
             else:
                 if callback:
-                    callback(uid, enc_envkey, enc_version)
+                    callback(uid, enc_envkey, enc_version, enc_nonce)
                 self._write_queue.task_done()
 
 
@@ -143,7 +143,7 @@ class DataBackend(_DataBackend):
             t1 = time.time()
             try:
                 self.reader_thread_status[id_] = STATUS_READING
-                data = self.read_raw(block.uid, client)
+                data = self.read_raw(block, client)
                 self.reader_thread_status[id_] = STATUS_NOTHING
                 #except FileNotFoundError:
             except Exception as e:
@@ -159,7 +159,7 @@ class DataBackend(_DataBackend):
         if not _client:
             _client = self._get_client()
 
-        data = _client.get_object(self.bucket_name, block_uid).read()
+        data = _client.get_object(self.bucket_name, block.uid).read()
         time.sleep(self.read_throttling.consume(len(data)))  # TODO: Need throttling in thread statistics!
         return data
 
