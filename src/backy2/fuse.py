@@ -97,7 +97,7 @@ class BackyFuse(LoggingMixIn, Operations):
 
         for version in self.backy.meta_backend.get_versions():
             version_uid_path = os.path.join('/', 'by_version_uid', version.uid)
-            tree.create(version_uid_path, tree.dir(size=version.size_bytes, date=version.date))
+            tree.create(version_uid_path, tree.file(size=version.size_bytes, date=version.date))
 
             name_path = os.path.join('/', 'by_name', version.name)
             try:
