@@ -340,6 +340,12 @@ class Commands():
         server.serve_forever()
 
 
+    def fuse(self, mount):
+        from backy2.fuse import get_fuse
+        backy = self.backy()
+        get_fuse(backy, mount)
+
+
     def import_(self, filename='-'):
         backy = self.backy()
         try:
@@ -649,6 +655,13 @@ def main():
         '-r', '--read-only', action='store_true', default=False,
         help='Read only if set, otherwise a copy on write backup is created.')
     p.set_defaults(func='nbd')
+
+    # FUSE
+    p = subparsers.add_parser(
+        'fuse',
+        help="Fuse mount backy backups")
+    p.add_argument('mount', help='Mountpoint')
+    p.set_defaults(func='fuse')
 
     # ADD TAG
     p = subparsers.add_parser(

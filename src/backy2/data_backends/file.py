@@ -177,7 +177,6 @@ class DataBackend(_DataBackend):
         filename = self._filename(uid)
         if not os.path.exists(filename):
             raise FileNotFoundError('File {} not found.'.format(filename))
-        # TODO: Decrypt, uncompress data
         data = open(filename, 'rb').read()
         time.sleep(self.read_throttling.consume(len(data)))
         return data

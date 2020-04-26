@@ -144,16 +144,24 @@ class MetaBackend(_MetaBackend):
 
     def __init__(self, config):
         _MetaBackend.__init__(self)
-        # engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
-        self.engine = sqlalchemy.create_engine(config.get('engine'))
+        self._configured_engine = config.get('engine')
+
+
+    def get_engine(self):
+        tl = threading.local()
+        if not hasattr(tl, 'db_engine'):
+            # tl.db_engine = sqlalchemy.create_engine(config.get('engine'), echo=True)
+            #tl.db_engine = sqlalchemy.create_engine(self._configured_engine, poolclass=SingletonThreadPool)
+            tl.db_engine = sqlalchemy.create_engine(self._configured_engine)
+        return tl.db_engine
 
 
     def open(self):
         try:
-            self.migrate_db(self.engine)
+            self.migrate_db(self.get_engine())
         #except sqlalchemy.exc.OperationalError:
         except Exception as e:
-            logger.error('Invalid database ({}). Please run initdb first.'.format(self.engine.url))
+            logger.error('Invalid database ({}). Please run initdb first.'.format(self.get_engine().url))
             logger.error(e)
             sys.exit(1)  # TODO: Return something (or raise)
             #raise RuntimeError('Invalid database')
@@ -165,7 +173,8 @@ class MetaBackend(_MetaBackend):
     def get_session(self):
         tl = threading.local()
         if not hasattr(tl, 'db_session'):
-            Session = sessionmaker(bind=self.engine)
+            print('Starting new session')
+            Session = sessionmaker(bind=self.get_engine())
             tl.db_session = Session()
         return tl.db_session
 
@@ -175,7 +184,7 @@ class MetaBackend(_MetaBackend):
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-        with self.engine.begin() as connection:
+        with self.get_engine().begin() as connection:
             alembic_cfg.attributes['connection'] = connection
             #command.upgrade(alembic_cfg, "head", sql=True)
             command.upgrade(alembic_cfg, "head")
@@ -185,12 +194,12 @@ class MetaBackend(_MetaBackend):
         # this will create all tables. It will NOT delete any tables or data.
         # Instead, it will raise when something can't be created.
         # TODO: explicitly check if the database is empty
-        Base.metadata.create_all(self.engine, checkfirst=False)  # checkfirst False will raise when it finds an existing table
+        Base.metadata.create_all(self.get_engine(), checkfirst=False)  # checkfirst False will raise when it finds an existing table
 
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config(os.path.join(os.path.dirname(os.path.realpath(__file__)), "sql_migrations", "alembic.ini"))
-        with self.engine.begin() as connection:
+        with self.get_engine().begin() as connection:
             alembic_cfg.attributes['connection'] = connection
             # mark the version table, "stamping" it with the most recent rev:
             command.stamp(alembic_cfg, "head")

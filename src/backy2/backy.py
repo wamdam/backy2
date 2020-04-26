@@ -557,6 +557,9 @@ class Backy():
         all_versions = self.meta_backend.get_versions()
         versions = [{'date': v.date.date(), 'tags': [t.name for t in v.tags]} for v in all_versions if v.name == version_name]
 
+        b_daily = None
+        b_weekly = None
+        b_monthly = None
         for version in versions:
             b_daily = [v for v in versions if 'b_daily' in v['tags']]
             b_weekly = [v for v in versions if 'b_weekly' in v['tags']]
