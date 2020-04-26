@@ -9,12 +9,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, query
 from sqlalchemy.sql import text
 from sqlalchemy.types import DateTime, Date
+from sqlalchemy.pool import SingletonThreadPool
 import binascii
 import csv
 import datetime
 import os
 import sqlalchemy
 import sys
+import threading
 import time
 import uuid
 
@@ -156,10 +158,16 @@ class MetaBackend(_MetaBackend):
             sys.exit(1)  # TODO: Return something (or raise)
             #raise RuntimeError('Invalid database')
 
-        Session = sessionmaker(bind=self.engine)
-        self.session = Session()
         self._flush_block_counter = 0
         return self
+
+
+    def get_session(self):
+        tl = threading.local()
+        if not hasattr(tl, 'db_session'):
+            Session = sessionmaker(bind=self.engine)
+            tl.db_session = Session()
+        return tl.db_session
 
 
     def migrate_db(self, engine):
@@ -193,7 +201,7 @@ class MetaBackend(_MetaBackend):
 
 
     def _commit(self):
-        self.session.commit()
+        self.get_session().commit()
 
 
     def set_version(self, version_name, snapshot_name, size, size_bytes, valid, protected=0):
@@ -208,8 +216,8 @@ class MetaBackend(_MetaBackend):
             valid=valid,
             protected=protected,
             )
-        self.session.add(version)
-        self.session.commit()
+        self.get_session().add(version)
+        self.get_session().commit()
         return uid
 
 
@@ -246,7 +254,7 @@ class MetaBackend(_MetaBackend):
         space_freed = 0
 
         # find null blocks
-        blocks = self.session.query(Block).filter_by(version_uid=version_uid, uid=None).all()
+        blocks = self.get_session().query(Block).filter_by(version_uid=version_uid, uid=None).all()
         for block in blocks:
             virtual_space += block.size
             null_space += block.size
@@ -271,7 +279,7 @@ class MetaBackend(_MetaBackend):
         #        where a.version_uid=:version_uid
         #    group by a.uid, a.size
         #    """)
-        result = self.session.execute(statement, params={'version_uid': version_uid})
+        result = self.get_session().execute(statement, params={'version_uid': version_uid})
         for row in result:
             # calculations are based on part of real.
             real_space += row.size * row.own_shared
@@ -326,8 +334,8 @@ class MetaBackend(_MetaBackend):
             blocks_sparse=blocks_sparse,
             duration_seconds=duration_seconds,
             )
-        self.session.add(stats)
-        self.session.commit()
+        self.get_session().add(stats)
+        self.get_session().commit()
 
 
     def get_stats(self, version_uid=None, limit=None):
@@ -335,14 +343,14 @@ class MetaBackend(_MetaBackend):
         if version_uid:
             if limit is not None and limit < 1:
                 return []
-            stats = self.session.query(Stats).filter_by(version_uid=version_uid).all()
+            stats = self.get_session().query(Stats).filter_by(version_uid=version_uid).all()
             if stats is None:
                 raise KeyError('Statistics for version {} not found.'.format(version_uid))
             return stats
         else:
             if limit == 0:
                 return []
-            _stats = self.session.query(Stats).order_by(desc(Stats.date))
+            _stats = self.get_session().query(Stats).order_by(desc(Stats.date))
             if limit:
                 _stats = _stats.limit(limit)
             return reversed(_stats.all())
@@ -351,7 +359,7 @@ class MetaBackend(_MetaBackend):
     def set_version_invalid(self, uid):
         version = self.get_version(uid)
         version.valid = 0
-        self.session.commit()
+        self.get_session().commit()
         logger.info('Marked version invalid (UID {})'.format(
             uid,
             ))
@@ -360,14 +368,14 @@ class MetaBackend(_MetaBackend):
     def set_version_valid(self, uid):
         version = self.get_version(uid)
         version.valid = 1
-        self.session.commit()
+        self.get_session().commit()
         logger.debug('Marked version valid (UID {})'.format(
             uid,
             ))
 
 
     def get_version(self, uid):
-        version = self.session.query(Version).filter_by(uid=uid).first()
+        version = self.get_session().query(Version).filter_by(uid=uid).first()
         if version is None:
             raise KeyError('Version {} not found.'.format(uid))
         return version
@@ -376,7 +384,7 @@ class MetaBackend(_MetaBackend):
     def protect_version(self, uid):
         version = self.get_version(uid)
         version.protected = 1
-        self.session.commit()
+        self.get_session().commit()
         logger.debug('Marked version protected (UID {})'.format(
             uid,
             ))
@@ -385,7 +393,7 @@ class MetaBackend(_MetaBackend):
     def unprotect_version(self, uid):
         version = self.get_version(uid)
         version.protected = 0
-        self.session.commit()
+        self.get_session().commit()
         logger.debug('Marked version unprotected (UID {})'.format(
             uid,
             ))
@@ -393,7 +401,7 @@ class MetaBackend(_MetaBackend):
 
     def get_versions(self):
         """ Return versions, must be sorted by date ascending"""
-        return self.session.query(Version).order_by(Version.name, Version.date).all()
+        return self.get_session().query(Version).order_by(Version.name, Version.date).all()
 
 
     def add_tag(self, version_uid, name):
@@ -406,18 +414,18 @@ class MetaBackend(_MetaBackend):
                 version_uid=version_uid,
                 name=name,
                 )
-            self.session.add(tag)
+            self.get_session().add(tag)
 
 
     def remove_tag(self, version_uid, name):
-        self.session.query(Tag).filter_by(version_uid=version_uid, name=name).delete()
-        self.session.commit()
+        self.get_session().query(Tag).filter_by(version_uid=version_uid, name=name).delete()
+        self.get_session().commit()
 
 
     def expire_version(self, version_uid, expire):
         version = self.get_version(version_uid)
         version.expire = expire
-        self.session.commit()
+        self.get_session().commit()
         logger.debug('Set expire for version (UID {})'.format(
             version_uid,
             ))
@@ -431,7 +439,7 @@ class MetaBackend(_MetaBackend):
         valid = 1 if valid else 0
         block = None
         if _upsert:
-            block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
+            block = self.get_session().query(Block).filter_by(id=id, version_uid=version_uid).first()
 
         if block:
             block.uid = block_uid
@@ -453,23 +461,23 @@ class MetaBackend(_MetaBackend):
                 enc_envkey=binascii.hexlify(enc_envkey),
                 enc_version=enc_version,
                 )
-            self.session.add(block)
+            self.get_session().add(block)
         self._flush_block_counter += 1
         if self._flush_block_counter % self.FLUSH_EVERY_N_BLOCKS == 0:
             t1 = time.time()
-            self.session.flush()  # saves some ram
+            self.get_session().flush()  # saves some ram
             t2 = time.time()
             logger.debug('Flushed meta backend in {:.2f}s'.format(t2-t1))
         if _commit:
-            self.session.commit()
+            self.get_session().commit()
         return block
 
 
     def set_blocks_invalid(self, uid, checksum):
-        _affected_version_uids = self.session.query(distinct(Block.version_uid)).filter_by(uid=uid, checksum=checksum).all()
+        _affected_version_uids = self.get_session().query(distinct(Block.version_uid)).filter_by(uid=uid, checksum=checksum).all()
         affected_version_uids = [v[0] for v in _affected_version_uids]
-        self.session.query(Block).filter_by(uid=uid, checksum=checksum).update({'valid': 0}, synchronize_session='fetch')
-        self.session.commit()
+        self.get_session().query(Block).filter_by(uid=uid, checksum=checksum).update({'valid': 0}, synchronize_session='fetch')
+        self.get_session().commit()
         logger.info('Marked block invalid (UID {}, Checksum {}. Affected versions: {}'.format(
             uid,
             checksum,
@@ -481,24 +489,24 @@ class MetaBackend(_MetaBackend):
 
 
     def get_block(self, uid):
-        return self.session.query(Block).filter_by(uid=uid).first()
+        return self.get_session().query(Block).filter_by(uid=uid).first()
 
 
     def get_block_by_checksum(self, checksum):
-        return self.session.query(Block).filter_by(checksum=checksum, valid=1).first()
+        return self.get_session().query(Block).filter_by(checksum=checksum, valid=1).first()
 
 
     def get_blocks_by_version(self, version_uid):
-        return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id)
+        return self.get_session().query(Block).filter_by(version_uid=version_uid).order_by(Block.id)
 
 
     def get_block_ids_by_version(self, version_uid):
-        _b = self.session.query(Block.id).filter_by(version_uid=version_uid).order_by(Block.id)
+        _b = self.get_session().query(Block.id).filter_by(version_uid=version_uid).order_by(Block.id)
         return [v[0] for v in _b.values('id')]
 
 
     def rm_version(self, version_uid):
-        affected_blocks = self.session.query(Block).filter_by(version_uid=version_uid)
+        affected_blocks = self.get_session().query(Block).filter_by(version_uid=version_uid)
         num_blocks = affected_blocks.count()
         for affected_block in affected_blocks:
             if affected_block.uid:  # uid == None means sparse
@@ -507,16 +515,16 @@ class MetaBackend(_MetaBackend):
                     size=affected_block.size,
                     delete_candidate=DELETE_CANDIDATE_MAYBE,
                 )
-                self.session.add(deleted_block)
+                self.get_session().add(deleted_block)
         affected_blocks.delete()
         # TODO: This is a sqlalchemy stupidity. cascade only works if the version
         # is deleted via session.delete() which first loads all objects into
         # memory. A session.query().filter().delete does not work with cascade.
         # Please see http://stackoverflow.com/questions/5033547/sqlalchemy-cascade-delete/12801654#12801654
         # for reference.
-        self.session.query(Tag).filter_by(version_uid=version_uid).delete()
-        self.session.query(Version).filter_by(uid=version_uid).delete()
-        self.session.commit()
+        self.get_session().query(Tag).filter_by(version_uid=version_uid).delete()
+        self.get_session().query(Version).filter_by(uid=version_uid).delete()
+        self.get_session().commit()
         return num_blocks
 
 
@@ -525,7 +533,7 @@ class MetaBackend(_MetaBackend):
         _stat_remove_from_delete_candidates = 0
         _stat_delete_candidates = 0
         while True:
-            delete_candidates = self.session.query(
+            delete_candidates = self.get_session().query(
                 DeletedBlock
             ).filter(
                 DeletedBlock.time < (inttime() - dt)
@@ -543,7 +551,7 @@ class MetaBackend(_MetaBackend):
                         _stat_delete_candidates,
                         ))
 
-                block = self.session.query(
+                block = self.get_session().query(
                     Block
                 ).filter(
                     Block.uid == candidate.uid
@@ -557,7 +565,7 @@ class MetaBackend(_MetaBackend):
 
             if _remove_from_delete_candidate_uids:
                 logger.debug("Cleanup-fast: Removing {} false positive delete candidates".format(len(_remove_from_delete_candidate_uids)))
-                self.session.query(
+                self.get_session().query(
                     DeletedBlock
                 ).filter(
                     DeletedBlock.uid.in_(_remove_from_delete_candidate_uids)
@@ -565,7 +573,7 @@ class MetaBackend(_MetaBackend):
 
             if _delete_candidates:
                 logger.debug("Cleanup-fast: Sending {} delete candidates for final deletion".format(len(_delete_candidates)))
-                self.session.query(
+                self.get_session().query(
                     DeletedBlock
                 ).filter(
                     DeletedBlock.uid.in_(_delete_candidates)
@@ -580,9 +588,9 @@ class MetaBackend(_MetaBackend):
 
     def get_all_block_uids(self, prefix=None):
         if prefix:
-            rows = self.session.query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
+            rows = self.get_session().query(distinct(Block.uid)).filter(Block.uid.like('{}%'.format(prefix))).all()
         else:
-            rows = self.session.query(distinct(Block.uid)).all()
+            rows = self.get_session().query(distinct(Block.uid)).all()
         return [b[0] for b in rows]
 
 
@@ -646,7 +654,7 @@ class MetaBackend(_MetaBackend):
             valid=version_valid,
             protected=0,
             )
-        self.session.add(version)
+        self.get_session().add(version)
         for uid, version_uid, id, date, checksum, size, valid in _csv:
             block = Block(
                 uid=uid,
@@ -657,8 +665,8 @@ class MetaBackend(_MetaBackend):
                 size=size,
                 valid=valid,
             )
-            self.session.add(block)
-        self.session.commit()
+            self.get_session().add(block)
+        self.get_session().commit()
 
 
     def import_2_2(self, _csv):
@@ -679,7 +687,7 @@ class MetaBackend(_MetaBackend):
             valid=version_valid,
             protected=version_protected,
             )
-        self.session.add(version)
+        self.get_session().add(version)
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # SQLAlchemy Bug
         # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
@@ -692,7 +700,7 @@ class MetaBackend(_MetaBackend):
         # to b, you'll see an INSERT for b before the INSERT for a.
         # """
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.session.commit()
+        self.get_session().commit()
         # and because of this bug we must also try/except here instead of
         # simply leaving this to the database's transaction handling.
         try:
@@ -706,11 +714,11 @@ class MetaBackend(_MetaBackend):
                     size=size,
                     valid=valid,
                 )
-                self.session.add(block)
+                self.get_session().add(block)
         except:  # see above
             self.rm_version(version_uid)
         finally:
-            self.session.commit()
+            self.get_session().commit()
 
 
     def import_2_10(self, _csv):
@@ -732,7 +740,7 @@ class MetaBackend(_MetaBackend):
             protected=version_protected,
             expire=datetime.datetime.strptime(version_expire, '%Y-%m-%d').date() if version_expire else None,
             )
-        self.session.add(version)
+        self.get_session().add(version)
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # SQLAlchemy Bug
         # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
@@ -745,7 +753,7 @@ class MetaBackend(_MetaBackend):
         # to b, you'll see an INSERT for b before the INSERT for a.
         # """
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.session.commit()
+        self.get_session().commit()
         # and because of this bug we must also try/except here instead of
         # simply leaving this to the database's transaction handling.
         try:
@@ -759,15 +767,15 @@ class MetaBackend(_MetaBackend):
                     size=size,
                     valid=valid,
                 )
-                self.session.add(block)
+                self.get_session().add(block)
         except:  # see above
             self.rm_version(version_uid)
         finally:
-            self.session.commit()
+            self.get_session().commit()
 
 
     def close(self):
-        self.session.commit()
-        self.session.close()
+        self.get_session().commit()
+        self.get_session().close()
 
 
