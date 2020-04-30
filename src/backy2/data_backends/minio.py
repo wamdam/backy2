@@ -155,10 +155,9 @@ class DataBackend(_DataBackend):
                 logger.debug('Reader {} read data async. uid {} in {:.2f}s (Queue size is {})'.format(id_, block.uid, t2-t1, self._read_queue.qsize()))
 
 
-    def read_raw(self, block_uid, _client=None):
+    def read_raw(self, block, _client=None):
         if not _client:
             _client = self._get_client()
-
         data = _client.get_object(self.bucket_name, block.uid).read()
         time.sleep(self.read_throttling.consume(len(data)))  # TODO: Need throttling in thread statistics!
         return data
