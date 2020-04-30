@@ -96,6 +96,17 @@ be possible. backy2 does not store any redundant data neither can it restore
 data from stored checksums.
 
 
+Choice of DBMS
+--------------
+
+For backy2 use we only recommend postgresql.
+You may use sqlite in narrow scenarios, but be warned that not all database
+migrations between backy2 versions are possible with sqlite as it's lacking
+some alter table support which alembic/sqlalchemy relies on.
+
+MySQL might be possible too, but it's not tested in our deployment pipeline.
+
+
 Monitoring
 ----------
 
