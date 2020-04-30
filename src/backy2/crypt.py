@@ -41,7 +41,7 @@ def get_crypt(version=1):  # Default will always be the latest version.
 class CryptBase:
     VERSION = 0
 
-    def __init__(self, password):
+    def __init__(self, key):
         pass
 
     def get_configuration(self):

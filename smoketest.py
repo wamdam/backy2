@@ -98,6 +98,7 @@ with TestPath() as testpath:
         lock_dir: /tmp
         process_name: backy2
         encryption_key: decafbaddecafbaddecafbaddecafbaddecafbaddecafbaddecafbaddecafbad
+        deduplication: 0
 
         [MetaBackend]
         type: backy2.meta_backends.sql

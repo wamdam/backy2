@@ -179,7 +179,7 @@ class Backy():
             except Exception as e:
                 # log e
                 logger.error("Exception during reading from the data backend: {}".format(str(e)))
-                # raise  # use if you want to debug.
+                raise  # use if you want to debug.
                 # exit with error
                 sys.exit(6)
             if data is None:
@@ -699,6 +699,9 @@ class Backy():
                 block_uid = None
                 checksum = None
                 block_size = self.block_size
+                enc_envkey = ''
+                enc_nonce = None
+                enc_version = 0
                 valid = 1
             else:  # Old block found, maybe base on that one
                 assert old_block.id == block_id
@@ -706,6 +709,9 @@ class Backy():
                 checksum = old_block.checksum
                 block_size = old_block.size
                 valid = old_block.valid
+                enc_envkey = old_block.enc_envkey
+                enc_nonce = old_block.enc_nonce
+                enc_version = old_block.enc_version
                 _have_old_block = True
             # the last block can differ in size, so let's check
             _offset = block_id * self.block_size
@@ -715,6 +721,9 @@ class Backy():
                 block_size = new_block_size
                 block_uid = None
                 checksum = None
+                enc_envkey = ''
+                enc_nonce = None
+                enc_version = 0
                 valid = 1
                 _have_old_block = False
 
@@ -725,7 +734,7 @@ class Backy():
                 io.read(block_id, read=True)
             elif block_id in check_block_ids and _have_old_block and checksum:
                 logger.debug('Block {}: Reading / checking'.format(block_id))
-                io.read(block_id, read=True, metadata={'check': True, 'checksum': checksum, 'block_size': block_size})
+                io.read(block_id, read=True, metadata={'check': True, 'checksum': checksum, 'block_size': block_size, 'enc_envkey': enc_envkey, 'enc_nonce': 'enc_nonce', 'enc_version': enc_version})
             elif not valid:
                 logger.debug('Block {}: Reading because not valid'.format(block_id))
                 io.read(block_id, read=True)
@@ -733,13 +742,13 @@ class Backy():
             elif block_id in sparse_blocks:
                 logger.debug('Block {}: Sparse'.format(block_id))
                 # Sparse blocks have uid and checksum None.
-                io.read(block_id, read=False, metadata={'block_uid': None, 'checksum': None, 'block_size': block_size})
+                io.read(block_id, read=False, metadata={'block_uid': None, 'checksum': None, 'block_size': block_size, 'enc_envkey': '', 'enc_version': 0, 'enc_nonce': None})
             elif block_id in existing_block_ids:
                 logger.debug('Block {}: Exists in continued version'.format(block_id))
                 io.read(block_id, read=False, metadata={'skip': True})
             else:
                 logger.debug('Block {}: Fresh empty or existing'.format(block_id))
-                io.read(block_id, read=False, metadata={'block_uid': block_uid, 'checksum': checksum, 'block_size': block_size})
+                io.read(block_id, read=False, metadata={'block_uid': block_uid, 'checksum': checksum, 'block_size': block_size, 'enc_envkey': enc_envkey, 'enc_nonce': enc_nonce, 'enc_version': enc_version})
 
             # log and process output
             if time.time() - t_last_run >= 1:
@@ -794,20 +803,33 @@ class Backy():
                     _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0, None))
                 elif existing_block and existing_block.size == block_size:
                     block_uid = existing_block.uid
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0, None))
+                    _written_blocks_queue.put((block_id,
+                        version_uid,
+                        block_uid,
+                        data_checksum,
+                        block_size,
+                        existing_block.enc_envkey.encode('ascii'),
+                        existing_block.enc_version,
+                        existing_block.enc_nonce.encode('ascii')))
                 else:
-                    try:
-                        # This is the whole reason for _written_blocks_queue. We must first write the block to
-                        # the backup data store before we write it to the database. Otherwise we can't continue
-                        # reliably.
-                        def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
-                            def f(_block_uid, enc_envkey, enc_version, enc_nonce):
-                                _written_blocks_queue.put((local_block_id, local_version_uid, _block_uid, local_data_checksum, local_block_size, enc_envkey, enc_version, enc_nonce))
-                            return f
-                        block_uid = self.data_backend.save(data, callback=callback(block_id, version_uid, data_checksum, block_size))  # this will re-raise an exception from a worker thread
-                    except Exception as e:
-                        raise
-                        #break  # close anything as always.
+                    # This is the whole reason for _written_blocks_queue. We must first write the block to
+                    # the backup data store before we write it to the database. Otherwise we can't support
+                    # backup continuation reliably.
+                    def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
+                        def f(_block_uid, enc_envkey, enc_version, enc_nonce):
+                            _written_blocks_queue.put((
+                                local_block_id,
+                                local_version_uid,
+                                _block_uid,
+                                local_data_checksum,
+                                local_block_size,
+                                enc_envkey,
+                                enc_version,
+                                enc_nonce
+                                ))
+                        return f
+                    block_uid = self.data_backend.save(data, callback=callback(block_id, version_uid, data_checksum, block_size))  # this will re-raise an exception from a worker thread
+
                     stats['blocks_written'] += 1
                     stats['bytes_written'] += block_size
 
@@ -833,7 +855,23 @@ class Backy():
                     block_uid = metadata['block_uid']
                     data_checksum = metadata['checksum']
                     block_size = metadata['block_size']
-                    _written_blocks_queue.put((block_id, version_uid, block_uid, data_checksum, block_size, None, 0, None))
+                    enc_envkey = metadata['enc_envkey']
+                    if enc_envkey:
+                        enc_envkey = binascii.unhexlify(enc_envkey)
+                    enc_version = metadata['enc_version']
+                    enc_nonce = metadata['enc_nonce']
+                    if enc_nonce:
+                        enc_nonce = binascii.unhexlify(enc_nonce)
+                    _written_blocks_queue.put((
+                        block_id,
+                        version_uid,
+                        block_uid,
+                        data_checksum,
+                        block_size,
+                        enc_envkey,
+                        enc_version,
+                        enc_nonce
+                        ))
                     if metadata['block_uid'] is None:
                         stats['blocks_sparse'] += 1
                         stats['bytes_sparse'] += block_size
@@ -849,16 +887,16 @@ class Backy():
                     break
                 else:
                     self.meta_backend.set_block(q_block_id,
-                    q_version_uid,
-                    q_block_uid,
-                    q_data_checksum,
-                    q_block_size,
-                    valid=1,
-                    enc_envkey=q_enc_envkey,
-                    enc_version=q_enc_version,
-                    enc_nonce=q_enc_nonce,
-                    _commit=True,
-                    )
+                        q_version_uid,
+                        q_block_uid,
+                        q_data_checksum,
+                        q_block_size,
+                        valid=1,
+                        enc_envkey=q_enc_envkey,
+                        enc_version=q_enc_version,
+                        enc_nonce=q_enc_nonce,
+                        _commit=True,
+                        )
 
             # log and process output
             if time.time() - t_last_run >= 1:
@@ -896,7 +934,16 @@ class Backy():
             except queue.Empty:
                 break
             else:
-                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, enc_nonce=q_enc_nonce, _commit=True)
+                self.meta_backend.set_block(q_block_id,
+                    q_version_uid,
+                    q_block_uid,
+                    q_data_checksum,
+                    q_block_size,
+                    valid=1,
+                    enc_envkey=q_enc_envkey,
+                    enc_version=q_enc_version,
+                    enc_nonce=q_enc_nonce,
+                    _commit=True)
 
         tags = []
         if tag is not None:

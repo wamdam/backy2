@@ -427,30 +427,23 @@ class MetaBackend(_MetaBackend):
         """ insert a block
         """
         valid = 1 if valid else 0
-        block = None
-        if block:
-            block.uid = block_uid
-            block.checksum = checksum
-            block.size = size
-            block.valid = valid
-            block.date = datetime.datetime.now()
-            block.enc_envkey = hexlify(enc_envkey).decode('ascii')
-            block.enc_version = enc_version
-            block.enc_nonce = hexlify(enc_nonce).decode('ascii')
-        else:
-            block = Block(
-                id=id,
-                version_uid=version_uid,
-                date=datetime.datetime.utcnow(),  # as func.now creates timezone stamps...
-                uid=block_uid,
-                checksum=checksum,
-                size=size,
-                valid=valid,
-                enc_envkey=binascii.hexlify(enc_envkey).decode('ascii'),
-                enc_version=enc_version,
-                enc_nonce=binascii.hexlify(enc_nonce).decode('ascii'),
-                )
-            self.session.add(block)
+        if enc_envkey:
+            enc_envkey = binascii.hexlify(enc_envkey).decode('ascii')
+        if enc_nonce:
+            enc_nonce = binascii.hexlify(enc_nonce).decode('ascii')
+        block = Block(
+            id=id,
+            version_uid=version_uid,
+            date=datetime.datetime.utcnow(),  # as func.now creates timezone stamps...
+            uid=block_uid,
+            checksum=checksum,
+            size=size,
+            valid=valid,
+            enc_envkey=enc_envkey,
+            enc_version=enc_version,
+            enc_nonce=enc_nonce,
+            )
+        self.session.add(block)
         self._flush_block_counter += 1
         if self._flush_block_counter % self.FLUSH_EVERY_N_BLOCKS == 0:
             t1 = time.time()

@@ -97,7 +97,11 @@ class DataBackend():
         # simultaneously. In other words, assume instances are not thread safe
         # unless stated otherwise."""
         cc = self._cc_by_version(block.enc_version)
-        data = cc.decrypt(blob, envelope_key=binascii.unhexlify(block.enc_envkey))
+        if block.enc_envkey:
+            envelope_key = binascii.unhexlify(block.enc_envkey)
+        else:
+            envelope_key = b''
+        data = cc.decrypt(blob, envelope_key)
 
         offset = 0
         length = len(data)
@@ -109,7 +113,11 @@ class DataBackend():
         """ Do a read_raw and decrypt it
         """
         cc = self._cc_by_version(block.enc_version)
-        data = cc.decrypt(self.read_raw(block), envelope_key=binascii.unhexlify(block.enc_envkey))
+        if block.enc_envkey:
+            envelope_key = binascii.unhexlify(block.enc_envkey)
+        else:
+            envelope_key = None
+        data = cc.decrypt(self.read_raw(block), envelope_key=envelope_key)
         return data
 
 
