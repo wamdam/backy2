@@ -808,9 +808,12 @@ class Backy():
                         block_uid,
                         data_checksum,
                         block_size,
-                        existing_block.enc_envkey.encode('ascii'),
+                        #existing_block.enc_envkey.encode('ascii'),
+                        binascii.unhexlify(existing_block.enc_envkey),
                         existing_block.enc_version,
-                        existing_block.enc_nonce.encode('ascii')))
+                        #existing_block.enc_nonce.encode('ascii')))
+                        binascii.unhexlify(existing_block.enc_nonce),
+                        ))
                 else:
                     # This is the whole reason for _written_blocks_queue. We must first write the block to
                     # the backup data store before we write it to the database. Otherwise we can't support

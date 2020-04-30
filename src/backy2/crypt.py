@@ -16,7 +16,7 @@ def get_crypt(version=1):  # Default will always be the latest version.
     >>> from backy2.crypt import get_crypt
     Backup:
     >>> cc = get_crypt()(key=b'\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad\xde\xca\xfb\xad')
-    >>> blob, envelope_key = cc.encrypt(b'my block data')
+    >>> blob, envelope_key, nonce = cc.encrypt(b'my block data')
     >>> # store blob to disk (blob consists of data, nonce and digest. data is encrypted, nonce and digest are not secret)
     >>> # store envelope_key to blob's metadata (envelope_key is not secret)
     >>> # store cc.VERSION
@@ -54,7 +54,7 @@ class CryptBase:
         return cls(password)
 
     def encrypt(self, data):
-        return data, b''
+        return data, b'', None
 
     def decrypt(self, blob, envelope_key=b''):
         return blob
@@ -80,7 +80,7 @@ class CryptV1(CryptBase):
     """
     VERSION = 1
 
-    def __init__(self, key, compression_level=8):
+    def __init__(self, key, compression_level=1):
         if len(key) != 32:
             raise ValueError('You must provide a 32-byte long encryption-key in your configuration.')
         self.key = key
@@ -152,5 +152,6 @@ class CryptV1(CryptBase):
 
         decryptor = AES.new(data_key, AES.MODE_GCM, nonce=nonce)
         data = decryptor.decrypt_and_verify(encrypted_data, digest)
-        return self._decompress(data)
+        data = self._decompress(data)
+        return data
 

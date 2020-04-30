@@ -147,10 +147,10 @@ class DataBackend(_DataBackend):
         # simultaneously. In other words, assume instances are not thread safe
         # unless stated otherwise."""
         #blob, enc_envkey = self.cc_latest.encrypt(data)
-        blob, enc_envkey = self.cc_latest.encrypt(data, None, data[:16])  # use the first 16 bytes as nonce
+        blob, enc_envkey, enc_nonce = self.cc_latest.encrypt(data, None, data[:16])  # use the first 16 bytes as nonce
         enc_version = self.cc_latest.VERSION
 
-        self._write_queue.put((uid, enc_envkey, enc_version, blob, callback))
+        self._write_queue.put((uid, enc_envkey, enc_version, enc_nonce, blob, callback))
         if _sync:
             self._write_queue.join()
         return uid
