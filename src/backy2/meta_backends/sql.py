@@ -229,7 +229,6 @@ class MetaBackend(_MetaBackend):
                     block.size,
                     block.valid,
                     _commit=False,
-                    _upsert=False,
                     )
         self._commit()
         logger.info('Done copying version...')
@@ -424,16 +423,11 @@ class MetaBackend(_MetaBackend):
             ))
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, enc_nonce=None, _commit=True, _upsert=True):
-        """ Upsert a block (or insert only when _upsert is False - this is only
-        a performance improvement)
-        Upsert is only used in nbdserver
+    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, enc_nonce=None, _commit=True):
+        """ insert a block
         """
         valid = 1 if valid else 0
         block = None
-        if _upsert:
-            block = self.session.query(Block).filter_by(id=id, version_uid=version_uid).first()
-
         if block:
             block.uid = block_uid
             block.checksum = checksum

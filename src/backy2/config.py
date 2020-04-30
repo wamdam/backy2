@@ -25,9 +25,6 @@ path: /tmp
 simultaneous_writes: 1
 simultaneous_reads: 1
 
-[NBD]
-cachedir: /tmp
-
 [io_file]
 simultaneous_reads: 1
 

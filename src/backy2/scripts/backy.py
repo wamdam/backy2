@@ -318,28 +318,6 @@ class Commands():
         backy.close()
 
 
-    def nbd(self, version_uid, bind_address, bind_port, read_only):
-        from backy2.enterprise.nbdserver import Server as NbdServer
-        from backy2.enterprise.nbd import BackyStore
-        backy = self.backy()
-        config_NBD = self.Config(section='NBD')
-        config_DEFAULTS = self.Config(section='DEFAULTS')
-        hash_function = getattr(hashlib, config_DEFAULTS.get('hash_function', 'sha512'))
-        store = BackyStore(
-                backy, cachedir=config_NBD.get('cachedir'),
-                hash_function=hash_function,
-                )
-        addr = (bind_address, bind_port)
-        server = NbdServer(addr, store, read_only)
-        logger.info("Starting to serve nbd on %s:%s" % (addr[0], addr[1]))
-        logger.info("You may now start")
-        logger.info("  nbd-client -l %s -p %s" % (addr[0], addr[1]))
-        logger.info("and then get the backup via")
-        logger.info("  modprobe nbd")
-        logger.info("  nbd-client -N <version> %s -p %s /dev/nbd0" % (addr[0], addr[1]))
-        server.serve_forever()
-
-
     def fuse(self, mount):
         from backy2.fuse import get_fuse
         backy = self.backy()
@@ -646,20 +624,6 @@ def main():
     p.add_argument('-f', '--fields', default="Real,Null,Dedup Own,Dedup Others,Individual,Est. Space,Est. Space freed",
             help="Show these fields (comma separated). Available: Real,Null,Dedup Own,Dedup Others,Individual,Est. Space,Est. Space freed)")
     p.set_defaults(func='du')
-
-    # NBD
-    p = subparsers.add_parser(
-        'nbd',
-        help="Start an nbd server")
-    p.add_argument('version_uid', nargs='?', default=None, help='Start an nbd server for this version')
-    p.add_argument('-a', '--bind-address', default='127.0.0.1',
-            help="Bind to this ip address (default: 127.0.0.1)")
-    p.add_argument('-p', '--bind-port', default=10809,
-            help="Bind to this port (default: 10809)")
-    p.add_argument(
-        '-r', '--read-only', action='store_true', default=False,
-        help='Read only if set, otherwise a copy on write backup is created.')
-    p.set_defaults(func='nbd')
 
     # FUSE
     p = subparsers.add_parser(

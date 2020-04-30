@@ -858,7 +858,7 @@ class Backy():
                     enc_version=q_enc_version,
                     enc_nonce=q_enc_nonce,
                     _commit=True,
-                    _upsert=False)
+                    )
 
             # log and process output
             if time.time() - t_last_run >= 1:
@@ -896,7 +896,7 @@ class Backy():
             except queue.Empty:
                 break
             else:
-                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, enc_nonce=q_enc_nonce, _commit=True, _upsert=False)
+                self.meta_backend.set_block(q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, valid=1, enc_envkey=q_enc_envkey, enc_version=q_enc_version, enc_nonce=q_enc_nonce, _commit=True)
 
         tags = []
         if tag is not None:
