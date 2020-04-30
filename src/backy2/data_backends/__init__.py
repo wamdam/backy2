@@ -105,6 +105,14 @@ class DataBackend():
         return block, offset, length, data
 
 
+    def read_sync(self, block):
+        """ Do a read_raw and decrypt it
+        """
+        cc = self._cc_by_version(block.enc_version)
+        data = cc.decrypt(self.read_raw(block), envelope_key=binascii.unhexlify(block.enc_envkey))
+        return data
+
+
     def read_raw(self, block):
         """ Read a block in sync. Returns block's data.
         """

@@ -2,14 +2,39 @@
 import logging
 
 from collections import defaultdict
+from functools import lru_cache
 from errno import ENOENT
 ENOATTR = 93
 from stat import S_IFDIR, S_IFLNK, S_IFREG
 import time
+import re
+from threading import Lock
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 import os
+
+r_by_version_uid = r'\/by_version_uid\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/data'
+
+
+def block_list(offset, length, blocksize=4*1024*1024):
+    # calculates a list to read data from based on a given blocksize
+    # Returns a list of (block_id, offset, length)
+    block_number = offset // blocksize
+    block_offset = offset % blocksize
+
+    read_list = []
+    while True:
+        read_length = min(length, blocksize-block_offset)
+        read_list.append((block_number, block_offset, read_length))
+        block_offset = 0
+        length -= read_length
+        block_number += 1
+        assert length >= 0
+        if length == 0:
+            break
+
+    return read_list
 
 
 class Tree:
@@ -88,6 +113,9 @@ class BackyFuse(LoggingMixIn, Operations):
 
         self.fd = 0
         self.tree = self._tree()
+        self.fd_versions = {}  # version data per filehandle kept in RAM
+        self.fd_blocks = {}  # block data per filehandle kept in RAM
+        self._lock = Lock()
 
 
     def _tree(self):
@@ -97,7 +125,30 @@ class BackyFuse(LoggingMixIn, Operations):
 
         for version in self.backy.meta_backend.get_versions():
             version_uid_path = os.path.join('/', 'by_version_uid', version.uid)
-            tree.create(version_uid_path, tree.file(size=version.size_bytes, date=version.date))
+            tree.mkdir(version_uid_path)
+
+            # add files to the version_uid_path:
+            _data_path = os.path.join(version_uid_path, 'data')
+            tree.create(_data_path, tree.file(size=version.size_bytes, date=version.date))
+            _name_path = os.path.join(version_uid_path, 'name')
+            tree.create(_name_path, tree.file(size=len(version.name), date=version.date), data=version.name)
+            _expire_path = os.path.join(version_uid_path, 'expire')
+            _expire_data = version.expire.isoformat() if version.expire else ''
+            tree.create(_expire_path, tree.file(size=len(_expire_data), date=version.date), data=_expire_data)
+            _snapshot_name_path = os.path.join(version_uid_path, 'snapshot_name')
+            tree.create(_snapshot_name_path, tree.file(size=len(version.snapshot_name), date=version.date), data=version.snapshot_name)
+            if version.valid:
+                _valid_path = os.path.join(version_uid_path, 'valid')
+                tree.create(_valid_path, tree.file(size=5, date=version.date), data='valid')
+            else:
+                _invalid_path = os.path.join(version_uid_path, 'invalid')
+                tree.create(_invalid_path, tree.file(size=7, date=version.date), data='invalid')
+            if version.protected:
+                _protected_path = os.path.join(version_uid_path, 'protected')
+                tree.create(_protected_path, tree.file(size=9, date=version.date), data='protected')
+            _tags_path = os.path.join(version_uid_path, 'tags')
+            _tags_data = ",".join([t.name for t in version.tags])
+            tree.create(_tags_path, tree.file(size=len(_tags_data), date=version.date), data=_tags_data)
 
             name_path = os.path.join('/', 'by_name', version.name)
             try:
@@ -111,6 +162,12 @@ class BackyFuse(LoggingMixIn, Operations):
         return tree
 
 
+    @lru_cache(maxsize=128)  # 128*4MB = 512MB RAM / block buffer
+    def _read(self, fh, block_id):
+        block = self.fd_blocks[fh].filter_by(id=block_id).one()
+        return self.backy.data_backend.read_sync(block)
+
+
     def getattr(self, path, fh=None):
         tree = self._tree()
         try:
@@ -121,11 +178,40 @@ class BackyFuse(LoggingMixIn, Operations):
 
     def open(self, path, flags):
         self.fd += 1
+        #print("Opened", path, self.fd)
+        match = re.match(r_by_version_uid, path)
+        if match:
+            uid = match.group(1)
+            self.fd_versions[self.fd] = self.backy.meta_backend.get_version(uid)
+            self.fd_blocks[self.fd] = self.backy.meta_backend.get_blocks_by_version(uid)
         return self.fd
 
 
+    def release(self, path, fh):
+        #print("Released", path, fh)
+        if fh in self.fd_versions:
+            del(self.fd_versions[fh])
+
+
     def read(self, path, size, offset, fh):
-        return self.data[path][offset:offset + size]
+        if fh in self.fd_versions:
+            _block_list = block_list(offset, size, self.backy.block_size)
+            _data = b''
+            for block_id, offset, length in _block_list:
+                with self._lock:  # Or lru_cache will be useless until the given block has arrived
+                    _data += self._read(fh, block_id)[offset:offset+length]
+            #assert len(_data) == size  # 'cat' reads more bytes. Seems to be normal.
+            return _data
+        else:
+            try:
+                p = self._tree().get_path(path)
+            except FileNotFoundError:
+                raise FuseOSError(ENOENT)
+            if p['data'] is not None:
+                return p['data'].encode('utf-8')
+
+        # if that's not a version and there's no data, finally throw an error.
+        raise FuseOSError(ENOENT)
 
 
     def readdir(self, path, fh):
