@@ -995,15 +995,52 @@ class Backy():
 
 
     def rekey(self, oldkey):
+        # Lock and don't let any other backy2 process run.
+        if not self.locking.lock('backy'):
+            self.locking.unlock('backy')
+            raise LockError('Other backy instances are running.')
+        # make sure, no other backy is running
+        if len(find_other_procs(self.process_name)) > 1:
+            raise LockError('Other backy instances are running.')
+
         cc = self.data_backend.cc_latest
-        for block in self.meta_backend.get_blocks():
+        _n_rekeyed = 0
+        _n_sparse = 0
+        _n_wrongversion = 0
+        i = 0
+        blocks = self.meta_backend.get_blocks()
+        num_blocks = blocks.count()
+        t1 = time.time()
+        for block in blocks:
             if block.enc_version == cc.VERSION:
-                print("Re-Keying block {}".format(block.uid))
+                #print("Re-Keying block {}".format(block.uid))
                 newkey = cc.wrap_key(cc.unwrap_key(binascii.unhexlify(block.enc_envkey), binascii.unhexlify(oldkey)))
                 self.meta_backend.set_block_enc_envkey(block, newkey)
+                _n_rekeyed += 1
+            elif not block.uid:
+                _n_sparse += 1
             else:
-                print("Ignoring block {} (wrong encryption version {})".format(block.uid, block.enc_version))
+                _n_wrongversion += 1
+                #print("Ignoring block {} (wrong encryption version {})".format(block.uid, block.enc_version))
+            i += 1
+            if i % 1000 == 0:
+                t2 = time.time()
+                logger.info('Rekeying in progress: {} rekeyed, {} sparse/ignored, {} unable to rekey (wrong encryption version). {} to go ({:.0f} blocks/s, ETA {:.0f}s)'.format(
+                    _n_rekeyed,
+                    _n_sparse,
+                    _n_wrongversion,
+                    num_blocks - i,
+                    i / (t2-t1),
+                    (t2-t1) / i/num_blocks,
+                    ))
         self.meta_backend.session.commit()  # ONLY at the very end. One transaction for them all so that interruptions don't matter.
+
+        logger.info('Rekeying successful: {} rekeyed, {} sparse/ignored, {} unable to rekey (wrong encryption version).)'.format(
+            _n_rekeyed,
+            _n_sparse,
+            _n_wrongversion,
+            ))
+        self.locking.unlock('backy')
 
 
     def cleanup_fast(self, dt=3600):
