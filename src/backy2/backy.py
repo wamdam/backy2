@@ -996,7 +996,8 @@ class Backy():
 
     def fuse(self, mount):
         from backy2.fuse import get_fuse
-        get_fuse(self, mount)
+        cachedir = self.config(section='DEFAULTS').get('cachedir', '/tmp')
+        get_fuse(self, mount, cachedir)
 
 
     def rekey(self, oldkey):
