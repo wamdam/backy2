@@ -5,7 +5,7 @@ from collections import defaultdict
 from errno import ENOENT; ENOATTR = 93
 from functools import lru_cache
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
-from stat import S_IFDIR, S_IFLNK, S_IFREG
+from stat import S_IFDIR, S_IFLNK, S_IFREG, S_IFBLK
 from threading import Lock
 import io
 import os
@@ -65,6 +65,17 @@ class Tree:
             st_mode=(S_IFREG | 0o600),
             st_nlink=1,
             st_size=size,
+            st_ctime=self._time(date),
+            st_mtime=self._time(date),
+            st_atime=self._time(date))
+
+
+    def blk(self, size=0, date=None):
+        # TODO: This creates "permission denied" when trying to access it - even as root
+        return dict(
+            st_mode=(S_IFBLK | 0o660),
+            st_nlink=2,
+            st_size=0,
             st_ctime=self._time(date),
             st_mtime=self._time(date),
             st_atime=self._time(date))
