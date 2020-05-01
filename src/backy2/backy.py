@@ -994,6 +994,11 @@ class Backy():
         return version_uid
 
 
+    def fuse(self, mount):
+        from backy2.fuse import get_fuse
+        get_fuse(self, mount)
+
+
     def rekey(self, oldkey):
         # Lock and don't let any other backy2 process run.
         if not self.locking.lock('backy'):

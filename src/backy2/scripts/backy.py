@@ -319,9 +319,8 @@ class Commands():
 
 
     def fuse(self, mount):
-        from backy2.fuse import get_fuse
         backy = self.backy()
-        get_fuse(backy, mount)
+        backy.fuse(mount)
 
 
     def rekey(self, oldkey):
