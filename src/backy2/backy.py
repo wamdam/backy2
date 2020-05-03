@@ -1071,16 +1071,16 @@ class Backy():
             if block.uid and block.enc_version != encryption_version:
                 # first lookup if we already have this block in the required encryption version:
                 _b = self.meta_backend.get_block_by_checksum(block.checksum, encryption_version)
-                if _b.enc_version == encryption_version:
+                if _b.enc_version == encryption_version and _b.size == block.size:
                     # use the existing block
                     _written_blocks_queue.put((
-                        _b.id,
+                        block.id,
                         new_version_uid,
                         _b.uid,
-                        _b.checksum,
+                        block.checksum,
                         _b.size,
                         binascii.unhexlify(_b.enc_envkey) if _b.enc_envkey else None,
-                        _b.enc_version,
+                        encryption_version,
                         binascii.unhexlify(_b.enc_nonce) if _b.enc_nonce else None,
                         ))
                 else:

@@ -93,11 +93,11 @@ class CryptV1(CryptBase):
     def _compress(self, data):
         with crypt_v1_compress_lock:
             compressed = lz4.frame.compress(data, compression_level=self.compression_level)
-            self.stat_uncompressed += len(data)
-            self.stat_compressed += len(compressed)
-            if self._i % 100 == 0:
-                print("Compression ratio: {}".format(self.stat_compressed / self.stat_uncompressed))
-            self._i += 1
+            #self.stat_uncompressed += len(data)
+            #self.stat_compressed += len(compressed)
+            #if self._i % 100 == 0:
+                #print("Compression ratio: {}".format(self.stat_compressed / self.stat_uncompressed))
+            #self._i += 1
             return compressed
 
 
