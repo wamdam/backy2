@@ -1,3 +1,19 @@
+backy2 (2.12.1) unstable; urgency=low
+
+  * Removed NBD Server
+  * Added fuse mount with metadata information files
+  * Write support for fuse data (mount support directly from backup)
+  * Encryption
+  * Compression
+  * Encryption-version migration
+  * Re-keying
+  * Performance >350MB/s on recent CPUs with compression and encryption
+  * Recommendation NOT to use sqlite anymore
+  * Documentation update to reflect changes
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Sun, 03 May 2020 17:18:21 +0200
+
+
 backy2 (2.11.11) unstable; urgency=low
 
   * Better tag handling on backup, esp. on continue.
