@@ -98,6 +98,7 @@ with TestPath() as testpath:
         lock_dir: /tmp
         process_name: backy2
         encryption_key: decafbaddecafbaddecafbaddecafbaddecafbaddecafbaddecafbaddecafbad
+        encryption_version: 1
         deduplication: 0
 
         [MetaBackend]
