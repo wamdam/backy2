@@ -16,9 +16,12 @@ class DataBackend():
     """ Holds BLOBs, never overwrites
     """
 
-    def __init__(self, config, encryption_key):
+    def __init__(self, config, encryption_key, encryption_version=None):
         self.encryption_key = encryption_key
-        self.cc_latest = get_crypt()(key=encryption_key)
+        if encryption_version == None:
+            self.cc_latest = get_crypt()(key=encryption_key)
+        else:
+            self.cc_latest = get_crypt(version=encryption_version)(key=encryption_key)
         self.cc = {}
 
 

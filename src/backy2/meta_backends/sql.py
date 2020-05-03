@@ -19,7 +19,7 @@ import time
 import uuid
 
 
-METADATA_VERSION = '2.10'
+METADATA_VERSION = '2.12'
 
 DELETE_CANDIDATE_MAYBE = 0
 DELETE_CANDIDATE_SURE = 1
@@ -618,6 +618,9 @@ class MetaBackend(_MetaBackend):
                 block.checksum,
                 block.size,
                 block.valid,
+                block.enc_version,
+                block.enc_envkey,
+                block.enc_nonce,
                 ])
         return _csv
 
@@ -631,6 +634,8 @@ class MetaBackend(_MetaBackend):
             self.import_2_2(_csv)
         elif signature[0] == 'backy2 Version 2.10 metadata dump':
             self.import_2_10(_csv)
+        elif signature[0] == 'backy2 Version 2.12 metadata dump':
+            self.import_2_12(_csv)
         else:
             raise ValueError('Wrong import format.')
 
@@ -765,6 +770,62 @@ class MetaBackend(_MetaBackend):
                     checksum=checksum,
                     size=size,
                     valid=valid,
+                )
+                self.session.add(block)
+        except:  # see above
+            self.rm_version(version_uid)
+        finally:
+            self.session.commit()
+
+
+    def import_2_12(self, _csv):
+        version_uid, version_date, version_name, version_snapshot_name, version_size, version_size_bytes, version_valid, version_protected, version_expire = next(_csv)
+        try:
+            self.get_version(version_uid)
+        except KeyError:
+            pass  # does not exist
+        else:
+            raise KeyError('Version {} already exists and cannot be imported.'.format(version_uid))
+        version = Version(
+            uid=version_uid,
+            date=datetime.datetime.strptime(version_date, '%Y-%m-%d %H:%M:%S'),
+            name=version_name,
+            snapshot_name=version_snapshot_name,
+            size=version_size,
+            size_bytes=version_size_bytes,
+            valid=version_valid,
+            protected=version_protected,
+            expire=datetime.datetime.strptime(version_expire, '%Y-%m-%d').date() if version_expire else None,
+            )
+        self.session.add(version)
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # SQLAlchemy Bug
+        # https://stackoverflow.com/questions/10154343/is-sqlalchemy-saves-order-in-adding-objects-to-session
+        #
+        # """
+        # Within the same class, the order is indeed determined by the order
+        # that add was called. However, you may see different orderings in the
+        # INSERTs between different classes. If you add object a of type A and
+        # later add object b of type B, but a turns out to have a foreign key
+        # to b, you'll see an INSERT for b before the INSERT for a.
+        # """
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        self.session.commit()
+        # and because of this bug we must also try/except here instead of
+        # simply leaving this to the database's transaction handling.
+        try:
+            for uid, version_uid, id, date, checksum, size, valid, enc_version, enc_envkey, enc_nonce in _csv:
+                block = Block(
+                    uid=uid,
+                    version_uid=version_uid,
+                    id=id,
+                    date=datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S'),
+                    checksum=checksum,
+                    size=size,
+                    valid=valid,
+                    enc_version=enc_version,
+                    enc_envkey=enc_envkey,
+                    enc_nonce=enc_nonce if enc_nonce != '\\x' else None,  # csv None is \x
                 )
                 self.session.add(block)
         except:  # see above

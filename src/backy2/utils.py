@@ -94,6 +94,7 @@ def backy_from_config(Config):
     process_name = config_DEFAULTS.get('process_name', 'backy2')
     dedup = config_DEFAULTS.getboolean('deduplication', True)
     encryption_key = config_DEFAULTS.get('encryption_key', None)  # if None then version=0 will be used (no encryption)
+    encryption_version = config_DEFAULTS.getint('encryption_version', None)  # if None then use the latest version automatically
 
     if encryption_key:
         encryption_key = binascii.unhexlify(encryption_key)
@@ -114,7 +115,7 @@ def backy_from_config(Config):
     except ImportError:
         raise NotImplementedError('DataBackend type {} unsupported.'.format(config_DataBackend.get('type')))
     else:
-        data_backend = DataBackendLib.DataBackend(config_DataBackend, encryption_key)
+        data_backend = DataBackendLib.DataBackend(config_DataBackend, encryption_key, encryption_version)
 
     from backy2.backy import Backy
     backy = partial(Backy,

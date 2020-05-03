@@ -54,7 +54,7 @@ class CryptBase:
         return cls(password)
 
     def encrypt(self, data):
-        return data, b'', None
+        return data, None, None  # blob, envkey, nonce
 
     def decrypt(self, blob, envelope_key=b''):
         return blob

@@ -116,6 +116,7 @@ class Tree:
         self.create(path, self.dir(), True)
 
 
+
 class TemporaryBlockStore:
     def __init__(self, cachedir):
         self._lock = Lock()
@@ -150,7 +151,6 @@ class TemporaryBlockStore:
         with self._lock:
             self.tempfile.seek(tempfile_block_offset)
             return self.tempfile.read(tempfile_block_length)
-
 
 
 
@@ -319,6 +319,7 @@ class BackyFuse(LoggingMixIn, Operations):
         assert data_io.tell() == len(data)
         #print("written", path, len(data), offset, fh)
         return len(data)
+
 
 
 def get_fuse(backy, mount, cachedir='/tmp'):

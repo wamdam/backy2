@@ -809,10 +809,10 @@ class Backy():
                         data_checksum,
                         block_size,
                         #existing_block.enc_envkey.encode('ascii'),
-                        binascii.unhexlify(existing_block.enc_envkey),
+                        binascii.unhexlify(existing_block.enc_envkey) if existing_block.enc_envkey else None,
                         existing_block.enc_version,
                         #existing_block.enc_nonce.encode('ascii')))
-                        binascii.unhexlify(existing_block.enc_nonce),
+                        binascii.unhexlify(existing_block.enc_nonce) if existing_block.enc_nonce else None,
                         ))
                 else:
                     # This is the whole reason for _written_blocks_queue. We must first write the block to

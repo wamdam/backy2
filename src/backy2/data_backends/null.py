@@ -26,8 +26,8 @@ class DataBackend(_DataBackend):
 
     last_exception = None
 
-    def __init__(self, config, encryption_key):
-        super().__init__(config, encryption_key)
+    def __init__(self, config, encryption_key, encryption_version=None):
+        super().__init__(config, encryption_key, encryption_version)
         self.default_block_size = int([value for key, value in config.items('DEFAULTS') if key=='block_size'][0])
 
         simultaneous_writes = config.getint('simultaneous_writes', 1)

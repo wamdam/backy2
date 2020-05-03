@@ -33,8 +33,8 @@ class DataBackend(_DataBackend):
     last_exception = None
 
 
-    def __init__(self, config, encryption_key):
-        super().__init__(config, encryption_key)
+    def __init__(self, config, encryption_key, encryption_version=None):
+        super().__init__(config, encryption_key, encryption_version)
         self.path = config.get('path')
         simultaneous_writes = config.getint('simultaneous_writes')
         simultaneous_reads = config.getint('simultaneous_reads', 1)
