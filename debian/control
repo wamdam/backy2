@@ -9,7 +9,7 @@ XS-Python-Version: >= 3.4
 
 Package: backy2
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-prettytable, python3-sqlalchemy, python3-psutil, python3-shortuuid, python3-setproctitle, python3-dateutil, python3-alembic, libfuse2, python3-fusepy, python3-lz4
+Depends: ${misc:Depends}, ${python3:Depends}, python3-prettytable, python3-sqlalchemy, python3-psutil, python3-shortuuid, python3-setproctitle, python3-dateutil, python3-alembic, libfuse2, python3-fusepy, python3-lz4, python3-pycryptodome
 Recommends: python3-psycopg2, python3-boto3, python3-rbd, python3-rados
 Description: A block / disk based backup and restore solution
  .
