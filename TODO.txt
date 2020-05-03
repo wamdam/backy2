@@ -14,3 +14,41 @@ Idea:
 * Provide a block device for mirror writes which *only* tracks changed
   blocks for diff backups
 
+Document
+ * TODO: Rewrite du to respect compression?
+
+ * DONE: Document cachedir in backy.cfg and document how fuse writes work
+ * DONE: Document fuse, encryption, rekey, migration steps
+ * DONE: Add postgresql, boto, minios, libfuse2 to debian control as recommends
+ * DONE: New export version
+ * DONE: Migration to next encryption version
+ * DONE: Document change in /etc/fuse.conf (user_allow_other)
+ * DONE: Remove nbd from docs
+
+ * Removed NBD
+ * Added fuse
+ * COW for fuse
+ * encryption
+ * compression
+ * encryption also on fuse
+ * more file info on fuse
+ * still >350MB/s with compression and encryption
+ * rekey
+ * slowly reducing sqlite support
+
+ - Sponsored by webair
+ * continuation of backups
+ * continuation of restores
+ * minio s3 lib
+ * throughput measuring
+ * WAY higher performance (~50MB/s -> 550MB/s)
+ * null io and null data_backend
+ * boto switched to boto3
+ * using librados and librbd from ceph in the hope of better performance
+ * WAY less RAM (~200TB image = 16GB of RAM required with ~60 simultanious_*)
+ * deduplication is configurable
+
+ - Done on top
+ * ETA
+ * better process statistics (ps)
+ * better logging

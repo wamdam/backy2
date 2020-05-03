@@ -52,119 +52,89 @@ Usually you can use ``-s`` if your restore target is
     random data was in there before the restore will remain.
 
 
-Live-mount via NBD
-------------------
+Live-mount with FUSE
+--------------------
 
-backy2 has its own NBD server. So you can mount any existing backup of a
-filesystem directly.
+FUSE is a filesystem in userspace. ``backy2`` can create a mountpoint for its
+backups. Example::
 
-.. command-output:: backy2 nbd --help
+    $ backy2 fuse /mnt
 
-Example::
+All existing backups are then available in /mnt::
 
-    backy2 nbd -r 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-        INFO: $ /home/dk/develop/backy2/env/bin/backy2 nbd -r 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-        INFO: Starting to serve nbd on 127.0.0.1:10809
-        INFO: You may now start
-        INFO:   nbd-client -l 127.0.0.1 -p 10809
-        INFO: and then get the backup via
-        INFO:   modprobe nbd
-        INFO:   nbd-client -N <version> 127.0.0.1 -p 10809 /dev/nbd0
+   $ tree /mnt
+   mnt
+   ├── by_name
+   │   └── sometest1
+   │       ├── 0c44841a-8d47-11ea-8b2d-3dc6919c2aca -> ../../by_version_uid/0c44841a-8d47-11ea-8b2d-3dc6919c2aca
+   │       ├── 60ae794e-8d46-11ea-8b2d-3dc6919c2aca -> ../../by_version_uid/60ae794e-8d46-11ea-8b2d-3dc6919c2aca
+   │       └── 9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca -> ../../by_version_uid/9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca
+   └── by_version_uid
+       ├── 0c44841a-8d47-11ea-8b2d-3dc6919c2aca
+       │   ├── data
+       │   ├── expire
+       │   ├── name
+       │   ├── snapshot_name
+       │   ├── tags
+       │   └── valid
+       ├── 60ae794e-8d46-11ea-8b2d-3dc6919c2aca
+       │   ├── data
+       │   ├── expire
+       │   ├── name
+       │   ├── snapshot_name
+       │   ├── tags
+       │   └── valid
+       └── 9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca
+           ├── data
+           ├── expire
+           ├── name
+           ├── snapshot_name
+           ├── tags
+           └── valid
 
-You can then create a new nbd device with the given commands (as root)::
+   $ ls -l /mnt/by_version_uid/0c44841a-8d47-11ea-8b2d-3dc6919c2aca/data
+   -rw------- 1 root root 293529518 Mai  3 14:04 /mnt/by_version_uid/0c44841a-8d47-11ea-8b2d-3dc6919c2aca/data
 
-    # modprobe nbd
-    # nbd-client -N 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 127.0.0.1 -p 10809 /dev/nbd0
-    Negotiation: ..size = 10MB
-    bs=1024, sz=10485760 bytes
+Here's what the directories/files contain:
 
-    # partprobe might throw a few WARNINGs because we're read-only
-    partprobe /dev/nbd0
-    mount -o ro,norecovery /dev/nbd0p1 /mnt
+**by_name**: Unique names for the backups
+**by_name/<name>**: Symlinks to the version directories
+**by_version_uid**: All existing version_uids. The direcories' date is the version's date
+**by_version_uid/<uid>/data**: The binary data
+**by_version_uid/<uid>/expire**: The expiration date (example: 2020-04-20T01:02:03)
+**by_version_uid/<uid>/name**: The backup's name
+**by_version_uid/<uid>/snapshot_name**: The snapshot name
+**by_version_uid/<uid>/tags**: Comma separated list of given tags for the version
+**by_version_uid/<uid>/valid**: Only exists (and contains 'valid') when the version is valid
+**by_version_uid/<uid>/invalid**: Only exists (and contains 'invalid') when the version is invalid
+**by_version_uid/<uid>/protected**: Only exists (and contains 'protected') when the version is protected
 
-The norecovery is required as backy2 blocks all writes with the ``-r`` option.
-When you're done::
+If the data contains partitions, you may make them accessible by creating a loop device and
+then ``partprobe``'ing the partitions::
 
-    umount /mnt
-    nbd-client -d /dev/nbd0
+   # losetup /dev/loop100 /mnt/by_version_uid/0c44841a-8d47-11ea-8b2d-3dc6919c2aca/data
+   # partprobe /dev/loop100
+   # mount /dev/loop100p1 /mnt2
 
-In the other console, backy2 will tell you that nbd has disconnected::
+.. NOTE::
+   All data files are made writeable by backy2. Writes will be buffered
+   into a temporary file (the file will be created in the configured ``cachedir``
+   in ``backy2.cfg``). Please make sure the file has enough place to grow
+   for your changes.
+   No writes will ever change the version. Writes only exist while ``backy2 fuse``
+   is running.
 
-    INFO: [127.0.0.1:38316] disconnecting
+If the data contains a filesystem, you may directly mount it::
 
-You can then either reconnect or press ``ctrl+c`` to end the backy2 nbd server.
+   # mount /mnt/by_version_uid/0c44841a-8d47-11ea-8b2d-3dc6919c2aca/data /mnt2
 
-You may also mount the volume from another server. backy2 by default binds the
-NBD server to 127.0.0.1 (i.e. localhost). For this server to be reachable from
-the outside, bind to 0.0.0.0::
+To finish the fuse mount, press ``ctrl+c`` on the ``backy2 fuse`` command.
+backy2 will then cleanup the temporary file and the mountpoint will be
+removed.
 
-    backy2 nbd -a 0.0.0.0 -r 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-
-You can also chose an appropriate port with the ``-p`` option.
-
-
-Mount read-wite
-~~~~~~~~~~~~~~~
-
-In addition to providing read-only access, backy2 also allows *read-write* access
-in a safe way. This means, the backup **will not be modified**.
-The signature is mostly the same::
-
-    backy2 nbd 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-        INFO: $ /home/dk/develop/backy2/env/bin/backy2 nbd 90fbbeb6-1fbe-11e7-9f25-a44e314f9270
-        INFO: Starting to serve nbd on 127.0.0.1:10809
-        INFO: You may now start
-        INFO:   nbd-client -l 127.0.0.1 -p 10809
-        INFO: and then get the backup via
-        INFO:   modprobe nbd
-        INFO:   nbd-client -N <version> 127.0.0.1 -p 10809 /dev/nbd0
-        INFO: nbd is read/write.
-
-Of course you can then mount the volume read/write and fix all potential
-filesystem errors or database files or you can modify data in any way you want::
-
-    # modprobe nbd
-    # nbd-client -N 90fbbeb6-1fbe-11e7-9f25-a44e314f9270 127.0.0.1 -p 10809 /dev/nbd0
-    Negotiation: ..size = 10MB
-    bs=1024, sz=10485760 bytes
-
-    # partprobe /dev/nbd0
-    # mount /dev/nbd0p1 /mnt
-    # echo 'test' > /mnt/tmp/test  # example!
-
-When you then disconnect from the nbd-client via::
-
-    umount /mnt
-    nbd-client -d /dev/nbd0
-
-backy2 will do all the homework to create the copy-on-write backup::
-
-    INFO: [127.0.0.1:46526] disconnecting
-    INFO: Fixating version 430d4f4e-2f1d-11e7-b961-a44e314f9270 with 1 blocks (PLEASE WAIT)
-    INFO: Fixation done. Deleting temporary data (PLEASE WAIT)
-    INFO: Finished.
-
-You can then safely press ``ctrl+c`` in backy2 in order to end the nbd server.
-
-.. CAUTION:: If you ``ctrl+c`` before the last "INFO: Finished." is reported,
-    your copy-on-write clone will not be written completely and thus be invalid.
-    However, the original backup version **will in any case be valid**.
-
-Writing to backy2 NBD will create a copy-on-write backup (example)::
-
-    $ backy2 ls
-    +---------------------+---------------+---------------+…
-    |         date        | name          | snapshot_name |…
-    +---------------------+---------------+---------------+…
-    | 2017-05-02 09:53:58 | testbackup    | copy on write |…
-    +---------------------+---------------+---------------+…
-        INFO: Backy complete.
-
-The name will be the same as the original backup, the snapshot name will be
-``copy on write``.
-
-.. NOTE:: You may safely delete the original version and the copy-on-write
-    independently of each other.
+.. TIP::
+   If you want to fusemount as user, you must enable ``user_allow_other`` in
+   /etc/fuse.conf.
 
 
 Restore continuation
@@ -215,6 +185,7 @@ same parameters as before when restoring::
 .. HINT:: If you don't see why ``-c 42`` has been used in the above command,
    you will need to scroll to the right as output is cut in this documentation.
    Then you'll see ``Last ID: 42``.
+
 
 Edge-Cases
 ----------

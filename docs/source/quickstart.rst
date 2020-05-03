@@ -83,6 +83,24 @@ disk with very slow seeks) or higher (raid source or target, S3 target, ...).
 These settings have great impact on the backup and restore performance. Higher
 values need a bit more RAM.
 
+
+Encryption key
+--------------
+
+Important: Set a unique encryption key. backy2 will not work without one.
+Also make sure it's a good key. Generate it via::
+
+    $ openssl rand -hex 32
+
+Set it to the config in the ``[DEFAULTS]`` Section::
+
+    encryption_key: decafbaddecafbaddecafbzddecafbaddecafbaddecafbaddecafbaddecafba
+
+.. NOTE::
+   The above key is intentionally invalid so that nobody copy&pastes this. The resulting
+   key must be 64 hex characters long (which are effectively 32 bytes for the resulting
+   AES key).
+
 .. _backup:
 
 backup

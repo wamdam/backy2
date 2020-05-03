@@ -29,6 +29,7 @@ Overview
    scrub
    restore
    cleanup
+   encryption
    administration
    datalayout
    develop

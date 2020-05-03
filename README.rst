@@ -1,7 +1,8 @@
 What is backy2?
 ###############
 
-backy2 is a deduplicating block based backup software.
+backy2 is a deduplicating block based backup software which encrypts and
+compresses by default.
 
 The primary usecases for backy are:
 
@@ -17,10 +18,23 @@ Main features
     backy2 deduplicates while reading from the block device and only writes
     blocks once if they have the same checksum (sha512).
 
+**Compressed backups**
+   backy2 compresses all data blocks with respect to performance with the
+   zstandard library.
+
+**Encrypted backps**
+   All data blocks are encrypted by default. Encryption is managed in integer
+   versions, migration and re-keying procedures exist.
+
 **Fast backups**
     With the help of ceph's ``rbd diff``, backy2 will only read the changed
     blocks since the last backup. We have virtual machines with 600GB backed
     up in about 30 seconds with <70MB/s bandwidth.
+
+**Continuable backups and restores**
+    If the data backend storage is unreliable (as in storage, network, …)
+    and backups or restores can't finish, backy2 can continue them when the
+    outage has ended.
 
 **Small required bandwidth to the backup target**
     As only changed blocks are written to the backup target, a small (i.e.
@@ -80,41 +94,39 @@ Main features
     backy2 typically runs in <1GB of RAM with these volume sizes. RAM usage
     depends mostly on simultaneous reads/writes which are configured through
     ``backy.cfg``.
+    We have seen ~16GB of RAM usage with large configured queues for 200TB
+    images and a backup performance of Ø350MB/s to an external s3 storage.
 
 **backups can be directly mounted**
-    backy2 brings it's own nbd (network block device) server. So a simple linux
-    command makes backups directly mountable - even on another machine::
+    backy2 brings it's own fuse service. So a simple linux command makes
+    backups directly mountable - even on another machine::
 
-        root@backy2:~# backy2 nbd --help
-        usage: backy2 nbd [-h] [-a BIND_ADDRESS] [-p BIND_PORT] [-r] [version_uid]
+        root@backy2:~# backy2 fuse /mnt
 
-        positional arguments:
-          version_uid           Start an nbd server for this version
+   And on another terminal::
 
-        optional arguments:
-          -h, --help            show this help message and exit
-          -a BIND_ADDRESS, --bind-address BIND_ADDRESS
-                                Bind to this ip address (default: 127.0.0.1)
-          -p BIND_PORT, --bind-port BIND_PORT
-                                Bind to this port (default: 10809)
-          -r, --read-only       Read only if set, otherwise a copy on write backup is
-                                created.
+        root@backy2:~# ls -la /mnt/by_version
+        drwx------ 0 root root 0 Mai  3 16:14 0c44841a-8d47-11ea-8b2d-3dc6919c2aca
+        drwx------ 0 root root 0 Mai  3 16:14 60ae794e-8d46-11ea-8b2d-3dc6919c2aca
+        drwx------ 0 root root 0 Mai  3 16:14 9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca
 
-        root@backy2:~# backy2 nbd 446781e2-2046-11e7-8594-00163e8c0370
-            INFO: $ /usr/bin/backy2 nbd 446781e2-2046-11e7-8594-00163e8c0370
-            INFO: Starting to serve nbd on 127.0.0.1:10809
-            INFO: You may now start
-            INFO:   nbd-client -l 127.0.0.1 -p 10809
-            INFO: and then get the backup via
-            INFO:   modprobe nbd
-            INFO:   nbd-client -N <version> 127.0.0.1 -p 10809 /dev/nbd0
+        root@backy2:~# ls -la /mnt/by_version_uid/9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca
+        -rw------- 1 root root 280M Mai  3 14:01 data
+        -rw------- 1 root root    0 Mai  3 14:01 expire
+        -rw------- 1 root root    9 Mai  3 14:01 name
+        -rw------- 1 root root    0 Mai  3 14:01 snapshot_name
+        -rw------- 1 root root   51 Mai  3 14:01 tags
+        -rw------- 1 root root    5 Mai  3 14:01 valid
 
-        root@backy2:~# partprobe /dev/nbd0
-        root@backy2:~# mount /dev/nbd0p1 /mnt
+        root@backy2:~# cat /mnt/by_version_uid/9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca/name
+        sometest1
 
-    These mounts are read/write (unless you specify ``-r``) and writing to them
-    creates a copy-on-write backup version (*i.e. the original version is not
-    modified*).
+        root@backy2:~# mount /mnt/by_version_uid/9d8cfe80-8d46-11ea-8b2d-3dc6919c2aca/data /mnt
+
+    You get the idea. The data file (and resulting partitions, mounts) read/write!
+    Writing to them will write to a temporary local file. The original backup version
+    is *not* modified!
+    This means, you may even boot a VM from this file from a remote backup.
 
 **Automatic tagging of backup versions**
     You can tag backups with your own tags depending on your usecase. However,

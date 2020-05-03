@@ -112,8 +112,8 @@ class Tree:
             pos['children'][name]['children'] = {}
 
 
-    def mkdir(self, path):
-        self.create(path, self.dir(), True)
+    def mkdir(self, path, date=None):
+        self.create(path, self.dir(date=date), True)
 
 
 
@@ -174,7 +174,7 @@ class BackyFuse(LoggingMixIn, Operations):
 
         for version in self.backy.meta_backend.get_versions():
             version_uid_path = os.path.join('/', 'by_version_uid', version.uid)
-            tree.mkdir(version_uid_path)
+            tree.mkdir(version_uid_path, date=version.date)
 
             # add files to the version_uid_path:
             _data_path = os.path.join(version_uid_path, 'data')
@@ -206,7 +206,7 @@ class BackyFuse(LoggingMixIn, Operations):
                 pass
             version_uid_path2 = os.path.join('/', 'by_name', version.name, version.uid)
             symlink_target = os.path.join('..', '..', 'by_version_uid', version.uid)
-            tree.create(version_uid_path2, tree.symlink(), data=symlink_target)
+            tree.create(version_uid_path2, tree.symlink(date=version.date), data=symlink_target)
 
         return tree
 
