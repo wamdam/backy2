@@ -44,9 +44,10 @@ Topic :: System :: Archiving :: Backup
         'python-dateutil>=2.6.0',
         'alembic>=0.7.5',
         'pycryptodome>=3.6.1,<4',
-        'zstandard>=0.9.0',
-        #'boto>=2.38.0',
-        #'psycopg2>=2.6.1',
+        'fusepy>2.0.4',  # ubuntu 18.04
+        'lz4>=0.10.1',  # ubuntu 18.04
+        #'boto3',
+        #'psycopg2',
         #'pex==1.1.0',
         ],
     # tests_require=[

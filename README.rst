@@ -20,7 +20,7 @@ Main features
 
 **Compressed backups**
    backy2 compresses all data blocks with respect to performance with the
-   zstandard library.
+   lz4 library.
 
 **Encrypted backps**
    All data blocks are encrypted by default. Encryption is managed in integer

@@ -48,11 +48,7 @@ class DataBackend():
         uid = self._uid()
 
         # Important: It's important to call this from the main thread because
-        # zstandard IS NOT THREAD SAFE as stated at https://pypi.org/project/zstandard/:
-        # """ Unless specified otherwise, assume that no two methods of
-        # ZstdCompressor instances can be called from multiple Python threads
-        # simultaneously. In other words, assume instances are not thread safe
-        # unless stated otherwise."""
+        # lz4 IS NOT THREAD SAFE.
         blob, enc_envkey, enc_nonce = self.cc_latest.encrypt(data)
         enc_version = self.cc_latest.VERSION
 
@@ -94,11 +90,7 @@ class DataBackend():
         block, blob = self._read_data_queue.get(timeout=timeout)
 
         # Important: It's important to call this from the main thread because
-        # zstandard IS NOT THREAD SAFE as stated at https://pypi.org/project/zstandard/:
-        # """ Unless specified otherwise, assume that no two methods of
-        # ZstdCompressor instances can be called from multiple Python threads
-        # simultaneously. In other words, assume instances are not thread safe
-        # unless stated otherwise."""
+        # lz4 IS NOT THREAD SAFE.
         cc = self._cc_by_version(block.enc_version)
         if block.enc_envkey:
             envelope_key = binascii.unhexlify(block.enc_envkey)

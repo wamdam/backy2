@@ -88,7 +88,7 @@ versions created backups with no encryption, which has been redefined as
 encryption version 0.
 
 Version 1 uses AES GCM with 256bit keys + a nonce per block. Before it
-encrypts a block, data is compressed with zstandard compression level 1.
+encrypts a block, data is compressed with lz4 compression level 1.
 
 If we learn that there's a problem with this encryption, we will be able
 to implement a next version with corrected encryption or compression.

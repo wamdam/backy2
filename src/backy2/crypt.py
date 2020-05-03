@@ -7,7 +7,7 @@ from backy2.aes_keywrap import aes_wrap_key, aes_unwrap_key
 from threading import Lock
 import binascii
 import json
-import zstandard
+import lz4.frame
 
 
 def get_crypt(version=1):  # Default will always be the latest version.
@@ -64,9 +64,9 @@ class NoCrypt(CryptBase):
     pass
 
 
-# module wide lock because zstandard CANNOT be used from
+# module wide lock because lz4 CANNOT be used from
 # multiple threads simultaniously.
-crypt_v1_zstandard_lock = Lock()
+crypt_v1_compress_lock = Lock()
 
 class CryptV1(CryptBase):
     """ Initialize with a password and encrypt data. This lib also compresses
@@ -85,18 +85,25 @@ class CryptV1(CryptBase):
             raise ValueError('You must provide a 32-byte long encryption-key in your configuration.')
         self.key = key
         self.compression_level = compression_level
-        self.cctx = zstandard.ZstdCompressor(level=compression_level)  # zstandard.MAX_COMPRESSION_LEVEL
-        self.dctx = zstandard.ZstdDecompressor()
+        self.stat_compressed = 0
+        self.stat_uncompressed = 0
+        self._i = 0
 
 
     def _compress(self, data):
-        with crypt_v1_zstandard_lock:
-            return self.cctx.compress(data)
+        with crypt_v1_compress_lock:
+            compressed = lz4.frame.compress(data, compression_level=self.compression_level)
+            self.stat_uncompressed += len(data)
+            self.stat_compressed += len(compressed)
+            if self._i % 100 == 0:
+                print("Compression ratio: {}".format(self.stat_compressed / self.stat_uncompressed))
+            self._i += 1
+            return compressed
 
 
     def _decompress(self, compressed):
-        with crypt_v1_zstandard_lock:
-            return self.dctx.decompress(compressed)
+        with crypt_v1_compress_lock:
+            return lz4.frame.decompress(compressed)
 
 
     def _pack(self, data, nonce, digest):
