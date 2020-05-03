@@ -231,7 +231,8 @@ class DataBackend(_DataBackend):
             obj.load()
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
-                raise FileNotFoundError('Key {} not found.'.format(uid)) from None
+                #raise FileNotFoundError('Key {} not found.'.format(uid)) from None
+                logger.error('Unable to remove block: key {} not found.'.format(uid))
             else:
                 raise
         else:
