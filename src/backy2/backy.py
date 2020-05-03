@@ -60,6 +60,7 @@ class Backy():
         self.locking = Locking(lock_dir)
         self.process_name = process_name
         self.dedup = dedup
+        self.preferred_encryption_version = data_backend.cc_latest.VERSION
 
         notify(process_name)  # i.e. set process name without notification
 
@@ -795,7 +796,7 @@ class Backy():
 
                 existing_block = None
                 if self.dedup:
-                    existing_block = self.meta_backend.get_block_by_checksum(data_checksum)
+                    existing_block = self.meta_backend.get_block_by_checksum(data_checksum, self.preferred_encryption_version)
 
                 if data == b'\0' * block_size:
                     block_uid = None
@@ -1047,6 +1048,126 @@ class Backy():
             _n_wrongversion,
             ))
         self.locking.unlock('backy')
+
+
+    def migrate_encryption(self, version_uid, encryption_version=None):
+        """ Iterate over all versions, then over all existing blocks for the version
+        with an older encryption version than self.preferred_encryption_version.
+        Create a new version based on the old one, with new uid.
+        For each block, read it, decrypt it, store it and write it to the meta_backend.
+        Make version valid.
+        This is intentionally slow so that most likely no backups will be influenced.
+        """
+        if encryption_version is None:
+            encryption_version = self.preferred_encryption_version
+
+        _written_blocks_queue = queue.Queue()  # contains ONLY blocks that have been written to the data backend.
+        version = self.meta_backend.get_version(version_uid)
+        new_version_uid = self.meta_backend.set_version(version.name, version.snapshot_name, version.size, version.size_bytes, 0)  # initially marked invalid
+        blocks = self.meta_backend.get_blocks_by_version(version.uid)
+        num_blocks = blocks.count()
+
+        for i, block in enumerate(blocks):
+            if block.uid and block.enc_version != encryption_version:
+                # first lookup if we already have this block in the required encryption version:
+                _b = self.meta_backend.get_block_by_checksum(block.checksum, encryption_version)
+                if _b.enc_version == encryption_version:
+                    # use the existing block
+                    _written_blocks_queue.put((
+                        _b.id,
+                        new_version_uid,
+                        _b.uid,
+                        _b.checksum,
+                        _b.size,
+                        binascii.unhexlify(_b.enc_envkey) if _b.enc_envkey else None,
+                        _b.enc_version,
+                        binascii.unhexlify(_b.enc_nonce) if _b.enc_nonce else None,
+                        ))
+                else:
+                    # data block
+                    data = self.data_backend.read_sync(block)
+                    def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
+                        def f(_block_uid, enc_envkey, enc_version, enc_nonce):
+                            _written_blocks_queue.put((
+                                local_block_id,
+                                local_version_uid,
+                                _block_uid,
+                                local_data_checksum,
+                                local_block_size,
+                                enc_envkey,
+                                enc_version,
+                                enc_nonce
+                                ))
+                        return f
+                    self.data_backend.save(data, callback=callback(block.id, new_version_uid, block.checksum, block.size))  # this will re-raise an exception from a worker thread
+            else:
+                # write old block to new version uid (sparse block or already encrypted to the correct encryption version)
+                _written_blocks_queue.put((
+                    block.id,
+                    new_version_uid,
+                    block.uid,
+                    block.checksum,
+                    block.size,
+                    binascii.unhexlify(block.enc_envkey) if block.enc_envkey else None,
+                    block.enc_version,
+                    binascii.unhexlify(block.enc_nonce) if block.enc_nonce else None,
+                    ))
+
+            # Set the blocks from the _written_blocks_queue
+            while True:
+                try:
+                    q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version, q_enc_nonce = _written_blocks_queue.get(block=False)
+                except queue.Empty:
+                    break
+                else:
+                    self.meta_backend.set_block(q_block_id,
+                        q_version_uid,
+                        q_block_uid,
+                        q_data_checksum,
+                        q_block_size,
+                        valid=1,
+                        enc_envkey=q_enc_envkey,
+                        enc_version=q_enc_version,
+                        enc_nonce=q_enc_nonce,
+                        _commit=True,
+                        )
+
+            if i%100 == 0:
+                logger.info('Migration to encryption version {} for version {} to new version {}, {}/{} blocks done.'.format(
+                    encryption_version,
+                    version_uid,
+                    new_version_uid,
+                    i,
+                    num_blocks,
+                    ))
+
+        # wait for all writers
+        self.data_backend.close()  # wait for all writers
+        # Set the remaining blocks from the _written_blocks_queue
+        while True:
+            try:
+                q_block_id, q_version_uid, q_block_uid, q_data_checksum, q_block_size, q_enc_envkey, q_enc_version, q_enc_nonce = _written_blocks_queue.get(block=False)
+            except queue.Empty:
+                break
+            else:
+                self.meta_backend.set_block(q_block_id,
+                    q_version_uid,
+                    q_block_uid,
+                    q_data_checksum,
+                    q_block_size,
+                    valid=1,
+                    enc_envkey=q_enc_envkey,
+                    enc_version=q_enc_version,
+                    enc_nonce=q_enc_nonce,
+                    _commit=True,
+                    )
+        # migrate tags
+        for tag in version.tags:
+            self.meta_backend.add_tag(new_version_uid, tag.name)
+        self.meta_backend.add_tag(new_version_uid, 'migrated-encryption-to-{}'.format(encryption_version))
+        self.meta_backend.set_version_valid(new_version_uid)
+
+        logger.info('Migrated version {} to encryption version {}. New version: {}.'.format(version.uid, encryption_version, new_version_uid))
 
 
     def cleanup_fast(self, dt=3600):

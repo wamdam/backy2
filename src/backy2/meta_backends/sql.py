@@ -80,7 +80,7 @@ class Tag(Base):
                             self.version_uid, self.name)
 
 
-DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid', 'enc_envkey', 'enc_version'])
+DereferencedBlock = namedtuple('Block', ['uid', 'version_uid', 'id', 'date', 'checksum', 'size', 'valid', 'enc_envkey', 'enc_version', 'enc_nonce'])
 class Block(Base):
     __tablename__ = 'blocks'
     uid = Column(String(32), nullable=True, index=True)
@@ -108,8 +108,9 @@ class Block(Base):
             checksum=self.checksum,
             size=self.size,
             valid=self.valid,
-            enc_envkey=self.enc_envkey,
             enc_version=self.enc_version,
+            enc_envkey=self.enc_envkey,
+            enc_nonce=self.enc_nonce,
         )
 
 
@@ -487,8 +488,18 @@ class MetaBackend(_MetaBackend):
         return self.session.query(Block).filter_by(uid=uid).first()
 
 
-    def get_block_by_checksum(self, checksum):
-        return self.session.query(Block).filter_by(checksum=checksum, valid=1).first()
+    def get_block_by_checksum(self, checksum, preferred_encryption_version):
+        # there's this sql: order by field=value, field in order to get the specific value on top.
+        # Too bad, sqlalchemy does not support this (yes, I tried sqlalchemy.func.field). So we have
+        # to do this in python. Not too bad as there shouldn't be too many encryption versioned
+        # blocks of the same checksum.
+        # Here we prefer the block with preferred_encryption_version and next the highest encryption
+        # version number available, then decending.
+        results = sorted(self.session.query(Block).filter_by(checksum=checksum, valid=1).all(), key=lambda b: 100000 if b.enc_version==preferred_encryption_version else b.enc_version, reverse=True)
+        if not results:
+            return None
+        else:
+            return results[0]
 
 
     def get_blocks_by_version(self, version_uid):

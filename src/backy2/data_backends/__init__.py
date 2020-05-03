@@ -42,7 +42,7 @@ class DataBackend():
 
 
     def save(self, data, _sync=False, callback=None):
-        """ Saves data, returns unique ID """
+        """ Saves data, returns unique ID and encryption info """
         if self.last_exception:
             raise self.last_exception
         uid = self._uid()

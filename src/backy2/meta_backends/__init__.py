@@ -86,7 +86,7 @@ class MetaBackend():
         raise NotImplementedError()
 
 
-    def get_block_by_checksum(self, checksum):
+    def get_block_by_checksum(self, checksum, preferred_encryption_version):
         """ Get a block by its checksum. This is useful for deduplication """
         raise NotImplementedError()
 

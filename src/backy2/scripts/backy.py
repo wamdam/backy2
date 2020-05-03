@@ -328,6 +328,11 @@ class Commands():
         backy.rekey(oldkey)
 
 
+    def migrate_encryption(self, version_uid):
+        backy = self.backy()
+        backy.migrate_encryption(version_uid)
+
+
     def import_(self, filename='-'):
         backy = self.backy()
         try:
@@ -637,6 +642,13 @@ def main():
         help="Re-Key all blocks in backy2 with a new key in the config. This will NOT encrypt unencrypted blocks or recrypt existing blocks.")
     p.add_argument('oldkey', help='The old key as it was found in the config')
     p.set_defaults(func='rekey')
+
+    # Migrate encryption
+    p = subparsers.add_parser(
+        'migrate-encryption',
+        help="Create a new version with blocks migrated/encrypted to the latest encryption version.")
+    p.add_argument('version_uid', help='The version uid to migrate')
+    p.set_defaults(func='migrate_encryption')
 
     # ADD TAG
     p = subparsers.add_parser(
