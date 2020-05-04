@@ -20,6 +20,12 @@ import threading
 import time
 
 
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
 class DataBackend(_DataBackend):
     """ A DataBackend which stores in S3 compatible storages. The files are
     stored in a configurable bucket. """
@@ -243,9 +249,28 @@ class DataBackend(_DataBackend):
         """ Deletes many uids from the data backend and returns a list
         of uids that couldn't be deleted.
         """
-        for uid in uids:
-            self.rm(uid)
-        # TODO: maybe use delete_objects
+        # "The request contains a list of up to 1000 keys that you want to delete."
+        no_deletes = []
+        for chunk in chunks(uids, 1000):
+            objects = [{'Key': uid} for uid in chunk]
+            response = self.bucket.delete_objects(
+                Delete={
+                    'Objects': objects,
+                    #'Quiet': True|False
+                },
+                RequestPayer='requester',
+            )
+            # {'Deleted': [{'Key': 'a04ab9bcc0BK6vATCi95Bwb4Djriiy5B'},
+
+            deleted_objects = [d['Key'] for d in response['Deleted']]
+            no_deletes.extend(set(chunk) - set(deleted_objects))
+        return no_deletes
+
+
+
+
+        #for uid in uids:
+        #    self.rm(uid)
 
 
     def get_all_blob_uids(self, prefix=None):
