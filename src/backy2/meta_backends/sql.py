@@ -538,6 +538,14 @@ class MetaBackend(_MetaBackend):
         return num_blocks
 
 
+    def get_num_delete_candidates(self, dt=3600):
+        logger.info("Deleting false positives...")
+        self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
+        logger.info("Deleting false positives: done. Now deleting blocks.")
+        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
+        return delete_candidates_query.count()
+
+
     def get_delete_candidates(self, dt=3600):
         _stat_i = 0
         _stat_remove_from_delete_candidates = 0

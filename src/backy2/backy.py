@@ -1176,15 +1176,20 @@ class Backy():
             raise LockError('Another backy cleanup is running.')
 
         deleted = 0
+        num = self.meta_backend.get_num_delete_candidates(dt)
+        logger.info('{} delete candidate blocks found.'.format(num))
+        t0 = time.time()
         for uid_list in self.meta_backend.get_delete_candidates(dt):
+            t1 = time.time()
             #logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
             no_del_uids = []
             no_del_uids = self.data_backend.rm_many(uid_list)
             if no_del_uids:
-                logger.info('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
+                logger.debug('Cleanup-fast: Unable to delete these UIDs from data backend: {}'.format(uid_list))
             self.meta_backend.del_delete_candidates(uid_list)
             deleted += len(uid_list)
-            logger.info('Deleted {} blocks.'.format(deleted))
+            t2 = time.time()
+            logger.info('Deleted {} blocks in {}s ({}/s). Blocks left: {} ETA {}s'.format(deleted, t2-t1, len(uid_list)/(t2-t1), num-deleted, (t2-t0)/deleted/num))
         logger.info('Deleted {} blocks.'.format(deleted))
         self.locking.unlock('backy-cleanup-fast')
 
