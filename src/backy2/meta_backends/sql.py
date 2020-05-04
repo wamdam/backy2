@@ -566,6 +566,7 @@ class MetaBackend(_MetaBackend):
 
     def del_delete_candidates(self, uids):
         self.session.query(DeletedBlock).filter(DeletedBlock.uid.in_(uids)).delete(synchronize_session='fetch')
+        self.session.commit()
 
 
     def get_all_block_uids(self, prefix=None):
