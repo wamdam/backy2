@@ -213,12 +213,14 @@ def status(msg, rq_len_pct, wq_len_pct, progress_pct, write_tp, eta_s, other="")
 
 
 class MinSequential():
-    OPTIMIZE_PROBABILITY = 0.1  # 1 means every put
+    OPTIMIZE_PROBABILITY = 0.001  # 1 means every put
 
     def __init__(self, absolute_minimum=0):
         self._entries = []
         self.lock = Lock()
         self.absolute_minimum = absolute_minimum
+        self._skip = list()
+        self._skip_sorted = False
 
 
     def put(self, entry):
@@ -226,6 +228,14 @@ class MinSequential():
             self._entries.append(entry)
             if random.random() < self.OPTIMIZE_PROBABILITY:
                 self._optimize()
+
+
+    def skip(self, entry):
+        """ This entry is automatically in.
+        Do not append here after get() has been called (for optimization reasons)
+        """
+        self._skip_sorted = False
+        self._skip.append(entry)
 
 
     def _optimize(self):
@@ -236,7 +246,22 @@ class MinSequential():
         if len(self._entries) < 2:
             return
 
+        if not self._skip_sorted:
+            self._skip.sort()
+            self._skip_sorted = True
+
+        _biggest = max(self._entries)
+        _num_del = 0
+        for _skip in self._skip:
+            if _skip < _biggest:
+                self._entries.append(_skip)
+                _num_del += 1
+            else:
+                break
+        del(self._skip[:_num_del])
+
         self._entries.sort()
+
         new_entries = []
         if self._entries[0] != self.absolute_minimum:
             # we must start at this value.
