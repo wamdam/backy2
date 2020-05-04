@@ -303,6 +303,7 @@ class Backy():
         t1 = time.time()
         t_last_run = 0
         num_blocks = blocks.count()
+        min_sequential_block_id = MinSequential(continue_from)  # for finding the minimum block-ID until which we have restored ALL blocks
         for i, block in enumerate(blocks.yield_per(1000)):
             if block.id < continue_from:
                 continue
@@ -320,12 +321,14 @@ class Backy():
                     block.id,
                     block.size,
                     ))
+                min_sequential_block_id.skip(block.id)
             else:
                 stats['blocks_sparse'] += 1
                 stats['bytes_sparse'] += block.size
                 logger.debug('Ignored sparse block {}.'.format(
                     block.id,
                     ))
+                min_sequential_block_id.skip(block.id)
 
             if time.time() - t_last_run >= 1:
                 t_last_run = time.time()
@@ -362,7 +365,6 @@ class Backy():
         _log_jobs_counter = 0
         t1 = time.time()
         t_last_run = 0
-        min_sequential_block_id = MinSequential(continue_from)  # for finding the minimum block-ID until which we have restored ALL blocks
         for i in range(read_jobs):
             _log_jobs_counter -= 1
             try:
