@@ -252,6 +252,7 @@ class DataBackend(_DataBackend):
         # "The request contains a list of up to 1000 keys that you want to delete."
         no_deletes = []
         for chunk in chunks(uids, 1000):
+            logger.debug("About to delete {} objects from the backend.".format(len(chunk)))
             objects = [{'Key': uid} for uid in chunk]
             response = self.bucket.delete_objects(
                 Delete={
@@ -263,7 +264,9 @@ class DataBackend(_DataBackend):
             # {'Deleted': [{'Key': 'a04ab9bcc0BK6vATCi95Bwb4Djriiy5B'},
 
             deleted_objects = [d['Key'] for d in response['Deleted']]
-            no_deletes.extend(set(chunk) - set(deleted_objects))
+            not_found_objects = set(chunk) - set(deleted_objects)
+            no_deletes.extend(not_found_objects)
+            logger.debug("Deleted {} keys, {} were not found.".format(len(deleted_objects), len(not_found_objects)
         return no_deletes
 
 
