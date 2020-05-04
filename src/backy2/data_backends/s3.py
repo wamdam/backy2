@@ -266,14 +266,8 @@ class DataBackend(_DataBackend):
             deleted_objects = [d['Key'] for d in response['Deleted']]
             not_found_objects = set(chunk) - set(deleted_objects)
             no_deletes.extend(not_found_objects)
-            logger.debug("Deleted {} keys, {} were not found.".format(len(deleted_objects), len(not_found_objects)
+            logger.debug("Deleted {} keys, {} were not found.".format(len(deleted_objects), len(not_found_objects)))
         return no_deletes
-
-
-
-
-        #for uid in uids:
-        #    self.rm(uid)
 
 
     def get_all_blob_uids(self, prefix=None):
