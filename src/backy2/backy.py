@@ -1190,7 +1190,7 @@ class Backy():
             deleted += len(uid_list)
             t2 = time.time()
             logger.info('Deleted {:d} blocks in {:.0f}s ({:.0f}/s). Blocks left: {} ETA {:.0f}s'.format(
-                deleted,
+                len(uid_list),
                 t2-t1,
                 len(uid_list)/(t2-t1),
                 num-deleted,
