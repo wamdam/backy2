@@ -7,7 +7,6 @@ from backy2.aes_keywrap import aes_wrap_key, aes_unwrap_key
 from threading import Lock
 import binascii
 import json
-import zstandard
 
 
 def get_crypt(version=1):  # Default will always be the latest version.
@@ -81,6 +80,7 @@ class CryptV1(CryptBase):
     VERSION = 1
 
     def __init__(self, key, compression_level=1):
+        import zstandard  # import here because else we can't build a debian package as zstandard is not available on ubuntu 18.04.
         if len(key) != 32:
             raise ValueError('You must provide a 32-byte long encryption-key in your configuration.')
         self.key = key
