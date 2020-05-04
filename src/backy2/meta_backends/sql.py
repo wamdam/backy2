@@ -542,6 +542,7 @@ class MetaBackend(_MetaBackend):
         logger.info("Deleting false positives...")
         self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
         logger.info("Deleting false positives: done. Now deleting blocks.")
+        self.session.commit()
         delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
         return delete_candidates_query.count()
 
@@ -554,6 +555,7 @@ class MetaBackend(_MetaBackend):
         logger.info("Deleting false positives...")
         self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
         logger.info("Deleting false positives: done. Now deleting blocks.")
+        self.session.commit()
 
         delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
 
