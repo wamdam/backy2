@@ -1,3 +1,10 @@
+backy2 (2.11.12) unstable; urgency=low
+
+  * Better last id calculation on restore with sparse blocks
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 04 May 2020 17:25:21 +0200
+
+
 backy2 (2.11.11) unstable; urgency=low
 
   * Better tag handling on backup, esp. on continue.
