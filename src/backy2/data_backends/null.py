@@ -141,7 +141,11 @@ class DataBackend(_DataBackend):
         uid = self._uid()
 
         # Important: It's important to call this from the main thread because
-        # lz4 IS NOT THREAD SAFE.
+        # zstandard IS NOT THREAD SAFE as stated at https://pypi.org/project/zstandard/:
+        # """ Unless specified otherwise, assume that no two methods of
+        # ZstdCompressor instances can be called from multiple Python threads
+        # simultaneously. In other words, assume instances are not thread safe
+        # unless stated otherwise."""
         #blob, enc_envkey = self.cc_latest.encrypt(data)
         blob, enc_envkey, enc_nonce = self.cc_latest.encrypt(data, None, data[:16])  # use the first 16 bytes as nonce
         enc_version = self.cc_latest.VERSION
