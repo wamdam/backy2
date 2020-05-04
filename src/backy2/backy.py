@@ -1066,6 +1066,7 @@ class Backy():
         _written_blocks_queue = queue.Queue()  # contains ONLY blocks that have been written to the data backend.
         version = self.meta_backend.get_version(version_uid)
         new_version_uid = self.meta_backend.set_version(version.name, version.snapshot_name, version.size, version.size_bytes, 0)  # initially marked invalid
+        self.meta_backend.expire_version(new_version_uid, version.expire)
         blocks = self.meta_backend.get_blocks_by_version(version.uid)
         num_blocks = blocks.count()
 
