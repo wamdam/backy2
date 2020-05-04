@@ -523,7 +523,7 @@ class MetaBackend(_MetaBackend):
                 deleted_block = DeletedBlock(
                     uid=affected_block.uid,
                     size=affected_block.size,
-                    delete_candidate=DELETE_CANDIDATE_MAYBE,
+                    delete_candidate=DELETE_CANDIDATE_MAYBE,  # TODO: obsolete
                 )
                 self.session.add(deleted_block)
         affected_blocks.delete()
@@ -540,10 +540,10 @@ class MetaBackend(_MetaBackend):
 
     def get_num_delete_candidates(self, dt=3600):
         logger.info("Deleting false positives...")
-        self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
+        self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
         logger.info("Deleting false positives: done. Now deleting blocks.")
         self.session.commit()
-        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
+        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery())).filter(DeletedBlock.time < (inttime() - dt))
         return delete_candidates_query.count()
 
 
@@ -553,11 +553,11 @@ class MetaBackend(_MetaBackend):
         _stat_delete_candidates = 0
         # Delete false positives:
         logger.info("Deleting false positives...")
-        self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
+        self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session='fetch')
         logger.info("Deleting false positives: done. Now deleting blocks.")
         self.session.commit()
 
-        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
+        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).filter(Block.uid.isnot(None)).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
 
         while True:
             delete_candidates = [b[0] for b in delete_candidates_query.limit(1000).all()]
