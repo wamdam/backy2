@@ -1189,7 +1189,13 @@ class Backy():
             self.meta_backend.del_delete_candidates(uid_list)
             deleted += len(uid_list)
             t2 = time.time()
-            logger.info('Deleted {} blocks in {}s ({}/s). Blocks left: {} ETA {}s'.format(deleted, t2-t1, len(uid_list)/(t2-t1), num-deleted, (t2-t0)/deleted/num))
+            logger.info('Deleted {:.0f} blocks in {:.0f}s ({:.0f}/s). Blocks left: {} ETA {}s'.format(
+                deleted,
+                t2-t1,
+                len(uid_list)/(t2-t1),
+                num-deleted,
+                (t2-t0) / deleted * num,
+                ))
         logger.info('Deleted {} blocks.'.format(deleted))
         self.locking.unlock('backy-cleanup-fast')
 
