@@ -175,7 +175,7 @@ class DataBackend(_DataBackend):
         of uids that couldn't be deleted.
         """
         try:
-            for del_err in minioClient.remove_objects(self.bucket_name, uids):
+            for del_err in self.client.remove_objects(self.bucket_name, uids):
                 logger.error("S3 Object Deletion Error: {}".format(del_err))
         except ResponseError as err:
             raise
