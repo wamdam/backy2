@@ -23,6 +23,7 @@ env: setup.py
 	$(PYTHON) setup.py develop
 	$(PIP) install -r requirements_tests.txt
 	$(PIP) install -r requirements_docs.txt
+	$(PIP) install -r requirements_dev.txt
 
 .PHONY : info
 info:
