@@ -1,8 +1,3 @@
-Files: nbdserver.py
-Copyright:
-    2013-2015 Juan J. Martinez
-License: Expat http://directory.fsf.org/wiki/License:Expat
-
 Files: rados.py rbd.py
 Copyright:
     2011: Hannu Valtonen
@@ -14,18 +9,15 @@ License: BSD
 Packages: python-dateutil
 License: Simplified BSD
 
-Packages: sqlalchemy boto alembic
+Packages: sqlalchemy alembic
 License: MIT License
-
-Packages: pex
-License: Apache2
 
 Packages: psycopg2
 License: LGPLv3
 
 Files: *
 Copyright:
-    2015-2017: Daniel Kraft
+    2015-2020: Daniel Kraft
 License: LGPLv3
 
 

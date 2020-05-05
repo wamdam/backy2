@@ -88,41 +88,12 @@ Follow these steps to create a new .deb release:
 
 The new .deb file will be stored in ``../backy2_<version>_all.deb``.
 
-Creating a .pex package
------------------------
-
-A .pex file is a zip file containing an entry point and all python libraries
-including all compiled shared libraries required to run the software.
-
-Python directly supports zip files, so it's able to directly run a .pex file.
-You need to have a very similar build environment for your .pex file as it is
-on your server in order to make this work.
-
-But if you have this, the ``build/backy2.pex`` file will be a single file
-deployment for your servers.
-
-This is how you create it::
-
-    make build/backy2.pex
-
-In order to run this, simply call ::
-
-    deactivate  # deactivate the virtualenv
-    ./build/backy2.pex --help
-
 Building the docs
 -----------------
 
 To build the docs, run::
 
-    . env/bin/activate
-    cd docs
-    make html
-
-
-The active virtualenv is needed because backy2 docs make heavy use of the
-``.. command-output::`` plugin which is used to render backy2's output into the
-docs.
+    make docs
 
 The built html docs are then in ``build/html/index.html``.
 
@@ -145,9 +116,7 @@ Hints
   They are automatically generated with the script ``alembic``.
   This script only shortcuts the ``-c`` option. The call is then
   ``./alembic revision --autogenerate -m "Added snapshot_name to versions"``.
-- The NBD server is in the directory ``src/backy2/enterprise``.
 
-I don't need to tell you about pull requests, do I?
 
 Have fun ;)
 

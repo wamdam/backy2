@@ -23,3 +23,9 @@ privately:
 
 Daniel Kraft <daniel.kraft@d9t.de>
 
+
+Commercial support
+------------------
+
+D9T GmbH will provide commercial support for backy2. Pleasse go to
+https://d9t.de/ or write an email to info@d9t.de.

@@ -31,10 +31,41 @@
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.githubpages', 'sphinxcontrib.programoutput']
+extensions = ['sphinx.ext.githubpages', 'sphinxcontrib.programoutput', 'sphinx_multiversion']
+
+
+
+
+# sphinx_multiversion configuration
+# Whitelist pattern for tags (set to None to ignore all tags)
+smv_tag_whitelist = r'^2\..*$'
+
+# Whitelist pattern for branches (set to None to ignore all branches)
+#smv_branch_whitelist = r'^.*$'
+smv_branch_whitelist = r'^master$'
+
+# Whitelist pattern for remotes (set to None to use local branches only)
+smv_remote_whitelist = None
+
+# Pattern for released versions
+smv_released_pattern = r'^tags/.*$'
+
+# Format for versioned output directories inside the build directory
+smv_outputdir_format = '{ref.name}'
+
+# Determines whether remote or local git branches/tags are preferred if their output dirs conflict
+smv_prefer_remote_refs = False
+
+
+
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
+
+html_sidebars = {
+        "**": ["versioning.html",]
+}
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -47,7 +78,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'backy2'
-copyright = '2017, Daniel Kraft'
+copyright = '2020, Daniel Kraft'
 author = 'Daniel Kraft'
 
 # The version info for the project you're documenting, acts as replacement for
