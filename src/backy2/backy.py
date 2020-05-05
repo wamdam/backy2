@@ -1197,7 +1197,7 @@ class Backy():
                 t2-t1,
                 len(uid_list)/(t2-t1),
                 num-deleted,
-                (t2-t0) / deleted * num,
+                (t2-t0) / deleted * num - (t2-t0),
                 ))
         logger.info('Deleted {} blocks.'.format(deleted))
         self.locking.unlock('backy-cleanup-fast')
