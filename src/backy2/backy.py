@@ -8,6 +8,7 @@ from backy2.locking import find_other_procs
 from backy2.utils import grouper
 from backy2.utils import status
 from backy2.utils import MinSequential
+from backy2.utils import chunks
 from dateutil.relativedelta import relativedelta
 from urllib import parse
 import binascii
@@ -1182,9 +1183,10 @@ class Backy():
         self.meta_backend.cleanup_delete_candidates(dt)
         t0 = time.time()
         delete_candidates = self.meta_backend.get_delete_candidates(dt)
-        num = self.meta_backend.get_num_delete_candidates(dt)
+        num = len(delete_candidates)
         logger.info('{} delete candidate blocks found.'.format(num))
-        for uid_list in delete_candidates:
+
+        for uid_list in chunks(delete_candidates, 1000):
             logger.info('Deleting {:d} blocks'.format(len(uid_list)))
             t1 = time.time()
             #logger.debug('Cleanup-fast: Deleting UIDs from data backend: {}'.format(uid_list))
