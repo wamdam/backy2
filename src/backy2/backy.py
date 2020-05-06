@@ -1179,6 +1179,7 @@ class Backy():
             raise LockError('Another backy cleanup is running.')
 
         deleted = 0
+        self.meta_backend.cleanup_delete_candidates(dt)
         t0 = time.time()
         delete_candidates = self.meta_backend.get_delete_candidates(dt)
         num = self.meta_backend.get_num_delete_candidates(dt)

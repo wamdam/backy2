@@ -543,18 +543,20 @@ class MetaBackend(_MetaBackend):
         return delete_candidates_query.count()
 
 
-    def get_delete_candidates(self, dt=3600):
-        _stat_i = 0
-        _stat_remove_from_delete_candidates = 0
-        _stat_delete_candidates = 0
+    def cleanup_delete_candidates(self, dt=3600):
         # Delete false positives:
         logger.info("Deleting false positives...")
         self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session=False)
         logger.info("Deleting false positives: done. Now deleting blocks.")
         self.session.commit()
 
-        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).filter(Block.uid.isnot(None)).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
 
+    def get_delete_candidates(self, dt=3600):
+        _stat_i = 0
+        _stat_remove_from_delete_candidates = 0
+        _stat_delete_candidates = 0
+
+        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).filter(Block.uid.isnot(None)).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
         while True:
             delete_candidates = [b[0] for b in delete_candidates_query.limit(1000).all()]
             if not delete_candidates:
