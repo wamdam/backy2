@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 from backy2.logging import logger
+from backy2.utils import chunks
 from backy2.meta_backends import MetaBackend as _MetaBackend
 from collections import namedtuple
 from sqlalchemy import Column, String, Integer, BigInteger, ForeignKey
@@ -557,10 +558,8 @@ class MetaBackend(_MetaBackend):
         _stat_delete_candidates = 0
 
         delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).join(Block, Block.uid == DeletedBlock.uid, isouter=True).filter(Block.uid == None).filter(DeletedBlock.time < (inttime() - dt))
-        while True:
-            delete_candidates = [b[0] for b in delete_candidates_query.limit(1000).all()]
-            if not delete_candidates:
-                break
+        for chunk in chunks(delete_candidates_query.all(), 1000):
+            delete_candidates = [b[0] for b in chunk]
             yield delete_candidates
 
 
