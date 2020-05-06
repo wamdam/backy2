@@ -1196,7 +1196,7 @@ class Backy():
             self.meta_backend.del_delete_candidates(uid_list)
             deleted += len(uid_list)
             t3 = time.time()
-            logger.info('Deleted {:d} blocks in {:.0f}s ({:.0f}/s). Blocks left: {} ETA {:.0f}s. DB delete took {:d}s'.format(
+            logger.info('Deleted {:d} blocks in {:.0f}s ({:.0f}/s). Blocks left: {} ETA {:.0f}s. DB delete took {:.0f}s'.format(
                 len(uid_list),
                 t3-t1,
                 len(uid_list)/(t3-t1),

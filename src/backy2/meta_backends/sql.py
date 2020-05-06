@@ -539,7 +539,7 @@ class MetaBackend(_MetaBackend):
 
 
     def get_num_delete_candidates(self, dt=3600):
-        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery())).filter(DeletedBlock.time < (inttime() - dt))
+        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).join(Block, Block.uid == DeletedBlock.uid, isouter=True).filter(Block.uid == None).filter(DeletedBlock.time < (inttime() - dt))
         return delete_candidates_query.count()
 
 
@@ -556,7 +556,7 @@ class MetaBackend(_MetaBackend):
         _stat_remove_from_delete_candidates = 0
         _stat_delete_candidates = 0
 
-        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).filter(~DeletedBlock.uid.in_(self.session.query(Block.uid).filter(Block.uid.isnot(None)).distinct(Block.uid).subquery())).filter(DeletedBlock.time < (inttime() - dt))
+        delete_candidates_query = self.session.query(distinct(DeletedBlock.uid)).join(Block, Block.uid == DeletedBlock.uid, isouter=True).filter(Block.uid == None).filter(DeletedBlock.time < (inttime() - dt))
         while True:
             delete_candidates = [b[0] for b in delete_candidates_query.limit(1000).all()]
             if not delete_candidates:
