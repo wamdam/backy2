@@ -1059,7 +1059,6 @@ class Backy():
         Create a new version based on the old one, with new uid.
         For each block, read it, decrypt it, store it and write it to the meta_backend.
         Make version valid.
-        This is intentionally slow so that most likely no backups will be influenced.
         """
         if encryption_version is None:
             encryption_version = self.preferred_encryption_version
@@ -1068,8 +1067,8 @@ class Backy():
         version = self.meta_backend.get_version(version_uid)
         new_version_uid = self.meta_backend.set_version(version.name, version.snapshot_name, version.size, version.size_bytes, 0)  # initially marked invalid
         self.meta_backend.expire_version(new_version_uid, version.expire)
-        blocks = self.meta_backend.get_blocks_by_version(version.uid)
-        num_blocks = blocks.count()
+        blocks = self.meta_backend.get_blocks_by_version_deref(version.uid)
+        num_blocks = self.meta_backend.get_blocks_by_version(version.uid).count()
 
         for i, block in enumerate(blocks):
             if block.uid and block.enc_version != encryption_version:

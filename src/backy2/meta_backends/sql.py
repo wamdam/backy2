@@ -506,6 +506,24 @@ class MetaBackend(_MetaBackend):
         return self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id)
 
 
+    def get_blocks_by_version_deref(self, version_uid):
+        """ use blocks but don't hold them in the session, because
+        that makes the commit on the session slow"""
+        for block in self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all():
+            yield DereferencedBlock(
+                uid=block.uid,
+                version_uid=block.version_uid,
+                id=block.id,
+                date=block.date,
+                checksum=block.checksum,
+                size=block.size,
+                valid=block.valid,
+                enc_version=block.enc_version,
+                enc_envkey=block.enc_envkey,
+                enc_nonce=block.enc_nonce,
+            )
+
+
     def get_blocks(self):
         return self.session.query(Block).order_by(Block.id)
 
@@ -581,7 +599,7 @@ class MetaBackend(_MetaBackend):
             version.protected,
             version.expire.strftime('%Y-%m-%d') if version.expire else '',
             ])
-        for block in blocks:
+        for block in blocks.yield_per(1000):
             _csv.writerow([
                 block.uid,
                 block.version_uid,
