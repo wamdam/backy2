@@ -148,12 +148,6 @@ class MetaBackend(_MetaBackend):
         self.engine = sqlalchemy.create_engine(config.get('engine'))
 
 
-    def makesession(self):
-        Session = sessionmaker(bind=self.engine)
-        session = Session()
-        return session
-
-
     def open(self):
         try:
             self.migrate_db(self.engine)
@@ -164,8 +158,8 @@ class MetaBackend(_MetaBackend):
             sys.exit(1)  # TODO: Return something (or raise)
             #raise RuntimeError('Invalid database')
 
-        self.session = self.makesession()
-        self.session2 = self.makesession()  # this is for fast commits when the 1st session is large
+        Session = sessionmaker(bind=self.engine)
+        self.session = Session()
         self._flush_block_counter = 0
         return self
 
@@ -430,14 +424,9 @@ class MetaBackend(_MetaBackend):
             ))
 
 
-    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, enc_nonce=None, _commit=True, _session=None):
+    def set_block(self, id, version_uid, block_uid, checksum, size, valid, enc_envkey=b'', enc_version=0, enc_nonce=None, _commit=True):
         """ insert a block
-        For faster insertion when your session is large, use:
-            _session=meta_backend.session2
-        But be aware that the sessions are not synced!
         """
-        if _session is None:
-            _session = self.session
         valid = 1 if valid else 0
         if enc_envkey:
             enc_envkey = binascii.hexlify(enc_envkey).decode('ascii')
