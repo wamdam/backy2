@@ -3,4 +3,3 @@ minio
 boto3
 pycryptodome>=3.6.1,<4
 zstandard>=0.9.0
-fusepy

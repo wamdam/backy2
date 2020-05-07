@@ -43,6 +43,7 @@ Topic :: System :: Archiving :: Backup
         'setproctitle>=1.1.8',
         'python-dateutil>=2.6.0',
         'alembic>=0.7.5',
+        'fusepy',
         #'pycryptodome>=3.6.1,<4',
         #'zstandard>=0.9.0',
         #'boto>=2.38.0',
