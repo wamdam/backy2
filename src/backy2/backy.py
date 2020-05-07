@@ -1134,6 +1134,7 @@ class Backy():
                         enc_version=q_enc_version,
                         enc_nonce=q_enc_nonce,
                         _commit=True,
+                        _session=self.meta_backend.session2,
                         )
 
             if i%100 == 0:
@@ -1164,6 +1165,7 @@ class Backy():
                     enc_version=q_enc_version,
                     enc_nonce=q_enc_nonce,
                     _commit=True,
+                    _session=self.meta_backend.session2,
                     )
         # migrate tags
         for tag in version.tags:
