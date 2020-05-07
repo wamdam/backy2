@@ -509,10 +509,16 @@ class MetaBackend(_MetaBackend):
     def get_blocks_by_version_deref(self, version_uid):
         """ use blocks but don't hold them in the session, because
         that makes the commit on the session slow"""
-        for block in self.session.query(Block).filter_by(version_uid=version_uid).order_by(Block.id).all():
+        statement = text("""
+            select uid, id, date, checksum, size, valid, enc_version, enc_envkey, enc_nonce
+            from blocks
+                where version_uid=:version_uid
+            """)
+        result = self.session.execute(statement, params={'version_uid': version_uid})
+        for block in result:
             yield DereferencedBlock(
                 uid=block.uid,
-                version_uid=block.version_uid,
+                version_uid=version_uid,
                 id=block.id,
                 date=block.date,
                 checksum=block.checksum,
