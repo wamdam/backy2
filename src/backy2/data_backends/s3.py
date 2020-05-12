@@ -210,7 +210,7 @@ class DataBackend(_DataBackend):
                 data = data_dict['Body'].read()
             except ClientError as e:
                 if e.response['Error']['Code'] == 'NoSuchKey' or e.response['Error']['Code'] == '404':
-                    raise FileNotFoundError('Key {} not found.'.format(key)) from None
+                    raise FileNotFoundError('Key {} not found.'.format(block.uid)) from None
                 else:
                     raise
             except socket.timeout:
