@@ -1088,21 +1088,26 @@ class Backy():
                         ))
                 else:
                     # data block
-                    data = self.data_backend.read_sync(block)
-                    def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
-                        def f(_block_uid, enc_envkey, enc_version, enc_nonce):
-                            _written_blocks_queue.put((
-                                local_block_id,
-                                local_version_uid,
-                                _block_uid,
-                                local_data_checksum,
-                                local_block_size,
-                                enc_envkey,
-                                enc_version,
-                                enc_nonce
-                                ))
-                        return f
-                    self.data_backend.save(data, callback=callback(block.id, new_version_uid, block.checksum, block.size))  # this will re-raise an exception from a worker thread
+                    try:
+                        data = self.data_backend.read_sync(block)
+                    except FileNotFoundError:
+                        logger.error('Key not found: {}. Marking block as invalid.'.format(block.uid))
+                        self.meta_backend.set_blocks_invalid(block.uid, block.checksum)
+                    else:
+                        def callback(local_block_id, local_version_uid, local_data_checksum, local_block_size):
+                            def f(_block_uid, enc_envkey, enc_version, enc_nonce):
+                                _written_blocks_queue.put((
+                                    local_block_id,
+                                    local_version_uid,
+                                    _block_uid,
+                                    local_data_checksum,
+                                    local_block_size,
+                                    enc_envkey,
+                                    enc_version,
+                                    enc_nonce
+                                    ))
+                            return f
+                        self.data_backend.save(data, callback=callback(block.id, new_version_uid, block.checksum, block.size))  # this will re-raise an exception from a worker thread
             else:
                 # write old block to new version uid (sparse block or already encrypted to the correct encryption version)
                 _written_blocks_queue.put((
