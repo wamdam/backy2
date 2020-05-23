@@ -93,6 +93,7 @@ encrypts a block, data is compressed with zstandard compression level 1.
 If we learn that there's a problem with this encryption, we will be able
 to implement a next version with corrected encryption or compression.
 
+.. _migrate-encryption:
 
 Migrating to the next encryption version
 ----------------------------------------

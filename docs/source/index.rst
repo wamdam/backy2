@@ -32,6 +32,7 @@ Overview
    encryption
    administration
    datalayout
+   upgrade
    develop
    support
    license
