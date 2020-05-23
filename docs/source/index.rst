@@ -24,6 +24,7 @@ Overview
    :maxdepth: 2
 
    quickstart
+   install
    configuration
    backup
    scrub
