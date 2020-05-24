@@ -6,6 +6,9 @@ Install
 Ubuntu Server 18.04, 20.04
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. image:: _static/backy2-part1-installation.png
+   :target: https://www.youtube.com/watch?v=eUZeid7U4rM
+
 backy2
 ------
 
@@ -46,6 +49,10 @@ very old s3 versions::
 
 postgresql
 ----------
+
+.. image:: _static/backy2-part2-postgresql.png
+   :target: https://www.youtube.com/watch?v=EiifNmavFzU
+
 
 As postgresql is the recommended dbms for backy2, let's install
 and configure it::
