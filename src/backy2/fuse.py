@@ -4,7 +4,11 @@ import logging
 from collections import defaultdict
 from errno import ENOENT; ENOATTR = 93
 from functools import lru_cache
-from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
+try:
+    from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
+except ModuleNotFoundError:
+    # For some reason it seems that in debian, the module is exported as fusepy.
+    from fusepy import FUSE, FuseOSError, Operations, LoggingMixIn
 from stat import S_IFDIR, S_IFLNK, S_IFREG, S_IFBLK
 from threading import Lock
 import io
