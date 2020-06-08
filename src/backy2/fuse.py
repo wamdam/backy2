@@ -255,6 +255,8 @@ class BackyFuse(LoggingMixIn, Operations):
             _block_list = block_list(offset, size, self.backy.block_size)
             _data = b''
             for block_id, offset, length in _block_list:
+                if block_id >= self.fd_versions[fh].size:
+                    continue  # reading beyond end of file. cp does this. Return b'' for such blocks.
                 if tbs.has_block(block_id):
                     _data += tbs.read_block(block_id)[offset:offset+length]
                 else:
