@@ -7,6 +7,13 @@ Restore
 
 .. command-output:: backy2 restore --help
 
+Overview
+--------
+
+.. image:: _static/backy2-part5-restore.jpg
+   :target: https://www.youtube.com/watch?v=rh2YS_QW_r0
+
+
 There are two possible restore options:
 
 Full restore
