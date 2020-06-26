@@ -1,3 +1,10 @@
+backy2 (2.12.5) unstable; urgency=low
+
+  * Feature: Added --debug output
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 26 Jun 2020 11:20:21 +0200
+
+
 backy2 (2.12.4) unstable; urgency=low
 
   * Fix: Allow reads in fuse beyond end of file for cp.
