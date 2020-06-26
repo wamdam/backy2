@@ -472,6 +472,8 @@ def main():
     parser.add_argument(
         '-v', '--verbose', action='store_true', help='verbose output')
     parser.add_argument(
+        '-d', '--debug', action='store_true', help='debug output')
+    parser.add_argument(
         '-m', '--machine-output', action='store_true', default=False)
     parser.add_argument(
         '-s', '--skip-header', action='store_true', default=False)
@@ -714,6 +716,11 @@ def main():
     else:
         console_level = logging.INFO
 
+    if args.debug:
+        debug = True
+    else:
+        debug = False
+
     if args.configfile is not None and args.configfile != '':
         try:
             cfg = open(args.configfile, 'r', encoding='utf-8').read()
@@ -727,9 +734,9 @@ def main():
 
     # logging ERROR only when machine output is selected
     if args.machine_output:
-        init_logging(config.get('logfile'), logging.ERROR)
+        init_logging(config.get('logfile'), logging.ERROR, debug)
     else:
-        init_logging(config.get('logfile'), console_level)
+        init_logging(config.get('logfile'), console_level, debug)
 
     commands = Commands(args.machine_output, args.skip_header, args.human_readable, Config)
     func = getattr(commands, args.func)
@@ -739,6 +746,7 @@ def main():
     del func_args['configfile']
     del func_args['func']
     del func_args['verbose']
+    del func_args['debug']
     del func_args['version']
     del func_args['machine_output']
     del func_args['skip_header']
