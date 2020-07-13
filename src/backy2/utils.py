@@ -93,8 +93,11 @@ def backy_from_config(Config):
     lock_dir = config_DEFAULTS.get('lock_dir', None)
     process_name = config_DEFAULTS.get('process_name', 'backy2')
     dedup = config_DEFAULTS.getboolean('deduplication', True)
-    encryption_key = config_DEFAULTS.get('encryption_key', None)  # if None then version=0 will be used (no encryption)
     encryption_version = config_DEFAULTS.getint('encryption_version', None)  # if None then use the latest version automatically
+    if encryption_version == 0:
+        encryption_key = ''
+    else:
+        encryption_key = config_DEFAULTS.get('encryption_key', None)  # if None then version=0 will be used (no encryption)
 
     if encryption_key:
         encryption_key = binascii.unhexlify(encryption_key)
