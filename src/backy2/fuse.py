@@ -218,7 +218,7 @@ class BackyFuse(LoggingMixIn, Operations):
     @lru_cache(maxsize=128)  # 128*4MB = 512MB RAM / block buffer
     def _read(self, fh, block_id):
         block = self.fd_blocks[fh].filter_by(id=block_id).one()
-        if block.uid is None:  # sparse block
+        if block.uid is None or block.uid == '':  # sparse block ('' because of old defective inputs, in a perfect world this is always None)
             return b'\x00' * self.backy.block_size
         return self.backy.data_backend.read_sync(block)
 

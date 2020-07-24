@@ -656,6 +656,8 @@ class MetaBackend(_MetaBackend):
             )
         self.session.add(version)
         for uid, version_uid, id, date, checksum, size, valid in _csv:
+            if uid == '':
+                uid = None
             block = Block(
                 uid=uid,
                 version_uid=version_uid,
@@ -705,6 +707,8 @@ class MetaBackend(_MetaBackend):
         # simply leaving this to the database's transaction handling.
         try:
             for uid, version_uid, id, date, checksum, size, valid in _csv:
+                if uid == '':
+                    uid = None
                 block = Block(
                     uid=uid,
                     version_uid=version_uid,
@@ -758,6 +762,8 @@ class MetaBackend(_MetaBackend):
         # simply leaving this to the database's transaction handling.
         try:
             for uid, version_uid, id, date, checksum, size, valid in _csv:
+                if uid == '':
+                    uid = None
                 block = Block(
                     uid=uid,
                     version_uid=version_uid,
@@ -811,6 +817,8 @@ class MetaBackend(_MetaBackend):
         # simply leaving this to the database's transaction handling.
         try:
             for uid, version_uid, id, date, checksum, size, valid, enc_version, enc_envkey, enc_nonce in _csv:
+                if uid == '':
+                    uid = None
                 block = Block(
                     uid=uid,
                     version_uid=version_uid,
