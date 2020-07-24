@@ -1,3 +1,10 @@
+backy2 (2.12.7) unstable; urgency=low
+
+  * Bugfix: Import created empty-string block uids which created ValueErrors in Fusemount.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 24 Jul 2020 09:02:21 +0200
+
+
 backy2 (2.12.6) unstable; urgency=low
 
   * Bugfix: Allow config to NOT contain encryption key when enc. is 0
