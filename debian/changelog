@@ -1,3 +1,12 @@
+backy2 (2.13.1) unstable; urgency=low
+
+  * Output version_uid early in backup so you can continue more easily
+  * Set tags early during backup so you can add tag 'incomplete' and
+    remove it later in scripts.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 27 Jul 2020 14:40:21 +0200
+
+
 backy2 (2.12.7) unstable; urgency=low
 
   * Bugfix: Import created empty-string block uids which created ValueErrors in Fusemount.
@@ -9,7 +18,7 @@ backy2 (2.12.6) unstable; urgency=low
 
   * Bugfix: Allow config to NOT contain encryption key when enc. is 0
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 22 Jul 2020 08:40:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Wed, 22 Jul 2020 08:40:21 +0200
 
 
 backy2 (2.12.5) unstable; urgency=low
@@ -23,14 +32,14 @@ backy2 (2.12.4) unstable; urgency=low
 
   * Fix: Allow reads in fuse beyond end of file for cp.
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 08 Jun 2020 11:49:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 08 Jun 2020 11:49:21 +0200
 
 
 backy2 (2.12.3) unstable; urgency=low
 
   * Bash completion (partly)
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 08 Jun 2020 10:29:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 08 Jun 2020 10:29:21 +0200
 
 
 backy2 (2.12.2) unstable; urgency=low
