@@ -684,6 +684,21 @@ class Backy():
         if output_version_uid_early:
             print(version_uid)
 
+        tags = []
+        if tag is not None:
+            if isinstance(tag, list):
+                tags = tag
+            else:
+                tags.append(tag)
+        else:
+            if not continue_version:
+                tags = self._generate_auto_tags(name)
+        for tag in tags:
+            self.meta_backend.add_tag(version_uid, tag)
+
+        if expire:
+            self.meta_backend.expire_version(version_uid, expire)
+
         # Find blocks to base on
         if from_version:
             # Make sure we're based on a valid version.
@@ -954,21 +969,6 @@ class Backy():
                     enc_version=q_enc_version,
                     enc_nonce=q_enc_nonce,
                     _commit=True)
-
-        tags = []
-        if tag is not None:
-            if isinstance(tag, list):
-                tags = tag
-            else:
-                tags.append(tag)
-        else:
-            if not continue_version:
-                tags = self._generate_auto_tags(name)
-        for tag in tags:
-            self.meta_backend.add_tag(version_uid, tag)
-
-        if expire:
-            self.meta_backend.expire_version(version_uid, expire)
 
         self.meta_backend.set_stats(
             version_uid=version_uid,
