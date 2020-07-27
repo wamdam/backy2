@@ -92,7 +92,7 @@ class Commands():
             tags = [t.strip() for t in list(csv.reader(StringIO(tag)))[0]]
         else:
             tags = None
-        version_uid = backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date, continue_version)
+        version_uid = backy.backup(name, snapshot_name, source, hints, from_version, tags, expire_date, continue_version, output_version_uid_early=self.machine_output)
         if self.machine_output:
             print(version_uid)
         backy.close()

@@ -590,7 +590,7 @@ class Backy():
         return tags
 
 
-    def backup(self, name, snapshot_name, source, hints, from_version, tag=None, expire=None, continue_version=None):
+    def backup(self, name, snapshot_name, source, hints, from_version, tag=None, expire=None, continue_version=None,output_version_uid_early=False):
         """ Create a backup from source.
         If hints are given, they must be tuples of (offset, length, exists)
         where offset and length are integers and exists is a boolean. Then, only
@@ -680,6 +680,9 @@ class Backy():
             check_block_ids = ignore_blocks[:num_check_blocks//2]
             # and 50% from random locations
             check_block_ids = set(check_block_ids + random.sample(ignore_blocks, num_check_blocks//2))
+
+        if output_version_uid_early:
+            print(version_uid)
 
         # Find blocks to base on
         if from_version:
