@@ -758,9 +758,12 @@ def main():
         logger.info('Backy complete.\n')
         sys.exit(0)
     except Exception as e:
-        logger.error('Unexpected exception')
-        logger.exception(e)
-        logger.info('Backy failed.\n')
+        if args.debug:
+            logger.error('Unexpected exception')
+            logger.exception(e)
+        else:
+            logger.error(e)
+        logger.error('Backy failed.\n')
         sys.exit(100)
 
 
