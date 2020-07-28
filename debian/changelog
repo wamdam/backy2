@@ -1,3 +1,11 @@
+backy2 (2.13.2) unstable; urgency=low
+
+  * Better logging. Now we have stderr for ERRORs and above and we don't show
+    tracebacks anymore except you --debug.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 28 Jul 2020 13:25:21 +0200
+
+
 backy2 (2.13.1) unstable; urgency=low
 
   * Output version_uid early in backup so you can continue more easily
