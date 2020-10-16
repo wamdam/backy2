@@ -1,3 +1,11 @@
+backy2 (2.13.3) unstable; urgency=low
+
+  * Removed encryption migration optimized search for dedup blocks as
+    this creates slowness and high load when there are many same blocks.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 16 Oct 2020 12:29:21 +0200
+
+
 backy2 (2.13.2) unstable; urgency=low
 
   * Better logging. Now we have stderr for ERRORs and above and we don't show

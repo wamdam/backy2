@@ -488,18 +488,8 @@ class MetaBackend(_MetaBackend):
         return self.session.query(Block).filter_by(uid=uid).first()
 
 
-    def get_block_by_checksum(self, checksum, preferred_encryption_version):
-        # there's this sql: order by field=value, field in order to get the specific value on top.
-        # Too bad, sqlalchemy does not support this (yes, I tried sqlalchemy.func.field). So we have
-        # to do this in python. Not too bad as there shouldn't be too many encryption versioned
-        # blocks of the same checksum.
-        # Here we prefer the block with preferred_encryption_version and next the highest encryption
-        # version number available, then decending.
-        results = sorted(self.session.query(Block).filter_by(checksum=checksum, valid=1).all(), key=lambda b: 100000 if b.enc_version==preferred_encryption_version else b.enc_version, reverse=True)
-        if not results:
-            return None
-        else:
-            return results[0]
+    def get_block_by_checksum(self, checksum, encryption_version):
+        return self.session.query(Block).filter_by(checksum=checksum, enc_version=encryption_version, valid=1).first()
 
 
     def get_blocks_by_version(self, version_uid):
