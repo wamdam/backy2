@@ -176,6 +176,12 @@ class Backy():
                         block, offset, length, data = self.data_backend.read_get(timeout=1)
                     except queue.Empty:  # timeout occured
                         continue
+                    except FileNotFoundError as e:
+                        logger.error("Exception during reading from the data backend: {}".format(str(e.args[0])))
+                        if len(e.args) > 1:
+                            block = e.args[1]
+                        data = None
+                        break
                     else:
                         break
             except Exception as e:

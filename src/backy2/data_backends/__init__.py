@@ -81,7 +81,7 @@ class DataBackend():
             if rblock.id != block.id:
                 raise RuntimeError('Do not mix threaded reading with sync reading!')
             if data is None:
-                raise FileNotFoundError('UID {} not found.'.format(block.uid))
+                raise FileNotFoundError('UID {} not found.'.format(block.uid), block)
             return data
 
 
