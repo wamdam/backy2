@@ -515,7 +515,7 @@ class Backy():
                 _last_version = version.date
                 continue
             if version.date < _last_version + interval - sla or version.date > _last_version + interval + sla:
-                sla_breaches.append('{}: Version {} is not in SLA range. It was created at {} and shoud be between {} and {}.'.format(
+                sla_breaches.append('{}: Version {} is not in SLA range. It was created at {} and should be between {} and {}.'.format(
                     scheduler,
                     version.uid,
                     version.date.strftime('%Y-%m-%d %H:%M:%S'),
