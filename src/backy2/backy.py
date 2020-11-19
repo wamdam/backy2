@@ -553,7 +553,7 @@ class Backy():
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
             logger.debug('DUE: Last backup for {} not found, so it is due.'.format(name, ))
-            return True
+            return datetime.datetime(1970,1,1)  # due since...
 
         logger.debug('''DUE:
         Last backup for {} was at {}.
@@ -569,7 +569,7 @@ class Backy():
             ))
 
         if datetime.datetime.utcnow() > (_last_versions_for_name_and_scheduler[-1].date + interval - sla):   # no backup within interval (-sla) exists, so require one
-            return True
+            return (_last_versions_for_name_and_scheduler[-1].date + interval - sla)  # due since...
 
         return False
 

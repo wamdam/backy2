@@ -410,12 +410,22 @@ class Commands():
                     _due_schedulers.add(scheduler)
                     _due_backup_expire_date = max(_due_backup_expire_date, datetime.utcnow() + (keep + 1) * interval)
             if _due_schedulers:
-                due_backups[name] = {'schedulers': _due_schedulers, 'due_backup_expire_date': _due_backup_expire_date}
+                due_backups[name] = {
+                    'schedulers': _due_schedulers,
+                    'due_backup_expire_date': _due_backup_expire_date,
+                    'due_backup_since': _due_backup,
+                    }
 
         field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
         values = []
         for name, backup_info in due_backups.items():
-            values.append({'name': name, 'schedulers': ",".join(backup_info['schedulers']), 'expire_date': backup_info['due_backup_expire_date']})
+            values.append({
+                'name': name,
+                'schedulers': ",".join(backup_info['schedulers']),
+                'expire_date': backup_info['due_backup_expire_date'],
+                'due_since': backup_info['due_backup_since'],
+                })
+            values.sort(key=lambda v: v['due_since'])
         if self.machine_output:
             self._machine_output(field_names, values)
         else:
@@ -683,7 +693,7 @@ def main():
     p.add_argument('name', nargs='?', default=None, help='Show due backups for this version name (optional, if not given, show due backups for all names).')
     p.add_argument('-s', '--schedulers',default="daily,weekly,monthly",
             help="Use these schedulers as defined in backy.cfg (default: daily,weekly,monthly)")
-    p.add_argument('-f', '--fields', default="name,schedulers,expire_date",
+    p.add_argument('-f', '--fields', default="name,schedulers,expire_date,due_since",
             help="Show these fields (comma separated). Available: name,schedulers,expire_date")
     p.set_defaults(func='due')
 
