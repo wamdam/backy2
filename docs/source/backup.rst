@@ -408,6 +408,19 @@ see that this information can easily be scripted::
    $ backy2 -ms due test
    test|daily|2020-04-23 15:13:56
 
+The calculation of the due date is::
+
+  backup_time + sla_interval - sla_due
+
+If you want to see how backy2 calculates the due date, pass ``-v``::
+
+   $ backy2 -v due -s 10min t
+   DEBUG: [backy2.logging] DUE:
+        Last backup for t was at 2020-11-19 19:56:48.
+        With the scheduler 10min, backup interval is 10m, SLA is 4m,
+        so earliest due backup is at 2020-11-19 20:02:48.686034 and now is 2020-11-19 20:01:02.117573.
+
+
 sla
 ~~~
 
