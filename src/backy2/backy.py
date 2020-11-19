@@ -547,15 +547,30 @@ class Backy():
         """
         Returns True if a backup is due for a given scheduler
         """
-        RANGE = datetime.timedelta(seconds=30)  # be unsharp when searching and also find backups that will be due in RANGE seconds.
         if keep == 0:
             return False
         _last_versions_for_name_and_scheduler = [v for v in self.ls() if v.valid and v.name == name and scheduler in [t.name for t in v.tags]]
         # Check if now is the time to create a backup for this name and scheduler.
         if not _last_versions_for_name_and_scheduler:  # no backups exist, so require one
+            logger.debug('DUE: Last backup for {} not found, so it is due.'.format(name, ))
             return True
-        elif datetime.datetime.utcnow() > (_last_versions_for_name_and_scheduler[-1].date + interval - RANGE):   # no backup within interval exists, so require one
+
+        logger.debug('''DUE:
+        Last backup for {} was at {}.
+        With the scheduler {}, backup interval is {}, SLA is {},
+        so earliest due backup is at {} and now is {}.'''.format(
+            name,
+            _last_versions_for_name_and_scheduler[-1].date.strftime('%Y-%m-%d %H:%M:%S'),
+            scheduler,
+            ('{}s'.format(interval.seconds) if interval.seconds < 60 else '{}m'.format(interval.seconds//60) if interval.seconds < 3600 else '{}h'.format(interval.seconds//3600)),
+            ('{}s'.format(sla.seconds) if sla.seconds < 60 else '{}m'.format(sla.seconds//60) if sla.seconds < 3600 else '{}h'.format(sla.seconds//3600)),
+            (_last_versions_for_name_and_scheduler[-1].date + interval - sla),
+            datetime.datetime.utcnow(),
+            ))
+
+        if datetime.datetime.utcnow() > (_last_versions_for_name_and_scheduler[-1].date + interval - sla):   # no backup within interval (-sla) exists, so require one
             return True
+
         return False
 
 

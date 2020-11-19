@@ -1,3 +1,11 @@
+backy2 (2.13.5) unstable; urgency=low
+
+  * Change how `due` is working: Now backups are due at
+    backup_time + schedular_interval - schedular_sla
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 19 Nov 2020 21:14:21 +0100
+
+
 backy2 (2.13.4) unstable; urgency=low
 
   * Fix: FileNotFoundError should invalidate blocks and versions.
