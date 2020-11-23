@@ -400,6 +400,7 @@ class Commands():
         for name in names:
             _due_schedulers = set()
             _due_backup_expire_date = datetime.utcnow()
+            _due_backup_due_since = datetime.utcnow()
             for scheduler in schedulers:
                 interval = convert_to_timedelta(self.Config(section=scheduler).get('interval'))
                 keep = self.Config(section=scheduler).getint('keep')
@@ -409,6 +410,7 @@ class Commands():
                 if _due_backup:
                     _due_schedulers.add(scheduler)
                     _due_backup_expire_date = max(_due_backup_expire_date, datetime.utcnow() + (keep + 1) * interval)
+                    _due_backup_due_since = min(_due_backup_due_since, _due_backup)
             if _due_schedulers:
                 due_backups[name] = {
                     'schedulers': _due_schedulers,
