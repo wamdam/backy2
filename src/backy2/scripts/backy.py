@@ -415,7 +415,7 @@ class Commands():
                 due_backups[name] = {
                     'schedulers': _due_schedulers,
                     'due_backup_expire_date': _due_backup_expire_date,
-                    'due_backup_since': _due_backup,
+                    'due_backup_since': _due_backup_due_since,
                     }
 
         field_names = [f.strip() for f in list(csv.reader(StringIO(fields)))[0]]
