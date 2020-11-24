@@ -562,8 +562,8 @@ class Backy():
             name,
             _last_versions_for_name_and_scheduler[-1].date.strftime('%Y-%m-%d %H:%M:%S'),
             scheduler,
-            ('{}s'.format(interval.seconds) if interval.seconds < 60 else '{}m'.format(interval.seconds//60) if interval.seconds < 3600 else '{}h'.format(interval.seconds//3600)),
-            ('{}s'.format(sla.seconds) if sla.seconds < 60 else '{}m'.format(sla.seconds//60) if sla.seconds < 3600 else '{}h'.format(sla.seconds//3600)),
+            ('{}s'.format(interval.total_seconds()) if interval.total_seconds() < 60 else '{}m'.format(interval.total_seconds()//60) if interval.total_seconds() < 3600 else '{}h'.format(interval.total_seconds()//3600)),
+            ('{}s'.format(sla.total_seconds()) if sla.total_seconds() < 60 else '{}m'.format(sla.total_seconds()//60) if sla.total_seconds() < 3600 else '{}h'.format(sla.total_seconds()//3600)),
             (_last_versions_for_name_and_scheduler[-1].date + interval - sla),
             datetime.datetime.utcnow(),
             ))
