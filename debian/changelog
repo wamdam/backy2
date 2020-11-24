@@ -1,3 +1,10 @@
+backy2 (2.13.8) unstable; urgency=low
+
+  * Fix: calculate due time for verbose log correctly
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 24 Nov 2020 09:00:21 +0100
+
+
 backy2 (2.13.7) unstable; urgency=low
 
   * Fix due_since calculation when there are multiple schedulers
