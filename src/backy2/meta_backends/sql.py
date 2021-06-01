@@ -254,7 +254,7 @@ class MetaBackend(_MetaBackend):
 
         # find real blocks
         statement = text("""
-            select a.uid, a.size, count(a.*) own_shared,
+            select a.uid, a.size, count(a.uid) own_shared,
                 (select count(*) cnt from blocks where uid=a.uid) shared
             from blocks a
                 where a.version_uid=:version_uid
