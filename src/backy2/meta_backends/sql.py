@@ -33,7 +33,7 @@ class Stats(Base):
     date = Column("date", DateTime , default=func.now(), nullable=False)
     id = Column(Integer, primary_key=True)
     version_uid = Column(String(36), index=True)
-    version_name = Column(String, nullable=False)
+    version_name = Column(String(2048), nullable=False)
     version_size_bytes = Column(BigInteger, nullable=False)
     version_size_blocks = Column(BigInteger, nullable=False)
     bytes_read = Column(BigInteger, nullable=False)
@@ -52,8 +52,8 @@ class Version(Base):
     uid = Column(String(36), primary_key=True)
     date = Column("date", DateTime, default=func.now(), nullable=False)
     expire = Column(DateTime, nullable=True)
-    name = Column(String, nullable=False, default='')
-    snapshot_name = Column(String, nullable=False, server_default='', default='')
+    name = Column(String(2048), nullable=False, default='')
+    snapshot_name = Column(String(2048), nullable=False, server_default='', default='')
     size = Column(BigInteger, nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
     valid = Column(Integer, nullable=False)
@@ -73,7 +73,7 @@ class Version(Base):
 class Tag(Base):
     __tablename__ = 'tags'
     version_uid = Column(String(36), ForeignKey('versions.uid'), primary_key=True, nullable=False)
-    name = Column(String, nullable=False, primary_key=True)
+    name = Column(String(2048), nullable=False, primary_key=True)
 
     def __repr__(self):
        return "<Tag(version_uid='%s', name='%s')>" % (
