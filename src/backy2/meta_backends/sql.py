@@ -555,7 +555,13 @@ class MetaBackend(_MetaBackend):
     def cleanup_delete_candidates(self, dt=3600):
         # Delete false positives:
         logger.info("Deleting false positives...")
-        self.session.query(DeletedBlock.uid).filter(DeletedBlock.uid.in_(self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery())).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session=False)
+        self.session.query(
+            DeletedBlock
+        ).filter(
+            DeletedBlock.uid.in_(
+                self.session.query(Block.uid).distinct(Block.uid).filter(Block.uid.isnot(None)).subquery().select()
+            )
+        ).filter(DeletedBlock.time < (inttime() - dt)).delete(synchronize_session=False)
         logger.info("Deleting false positives: done. Now deleting blocks.")
         self.session.commit()
 
