@@ -176,7 +176,7 @@ class DataBackend(_DataBackend):
     def read_raw(self, block):
         filename = self._filename(block.uid)
         if not os.path.exists(filename):
-            raise FileNotFoundError('File {} not found.'.format(filename))
+            raise FileNotFoundError('File {} not found.'.format(filename), block)
         data = open(filename, 'rb').read()
         time.sleep(self.read_throttling.consume(len(data)))
         return data

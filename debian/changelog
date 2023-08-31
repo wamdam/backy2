@@ -1,3 +1,64 @@
+backy2 (2.13.8) unstable; urgency=low
+
+  * Fix: calculate due time for verbose log correctly
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 24 Nov 2020 09:00:21 +0100
+
+
+backy2 (2.13.7) unstable; urgency=low
+
+  * Fix due_since calculation when there are multiple schedulers
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 23 Nov 2020 18:03:21 +0100
+
+
+backy2 (2.13.6) unstable; urgency=low
+
+  * Added 'due_since' to `due`s output.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 19 Nov 2020 21:48:21 +0100
+
+
+backy2 (2.13.5) unstable; urgency=low
+
+  * Change how `due` is working: Now backups are due at
+    backup_time + schedular_interval - schedular_sla
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 19 Nov 2020 21:14:21 +0100
+
+
+backy2 (2.13.4) unstable; urgency=low
+
+  * Fix: FileNotFoundError should invalidate blocks and versions.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 26 Oct 2020 17:31:21 +0200
+
+
+backy2 (2.13.3) unstable; urgency=low
+
+  * Removed encryption migration optimized search for dedup blocks as
+    this creates slowness and high load when there are many same blocks.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 16 Oct 2020 12:29:21 +0200
+
+
+backy2 (2.13.2) unstable; urgency=low
+
+  * Better logging. Now we have stderr for ERRORs and above and we don't show
+    tracebacks anymore except you --debug.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Tue, 28 Jul 2020 13:25:21 +0200
+
+
+backy2 (2.13.1) unstable; urgency=low
+
+  * Output version_uid early in backup so you can continue more easily
+  * Set tags early during backup so you can add tag 'incomplete' and
+    remove it later in scripts.
+
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 27 Jul 2020 14:40:21 +0200
+
+
 backy2 (2.12.7) unstable; urgency=low
 
   * Bugfix: Import created empty-string block uids which created ValueErrors in Fusemount.
@@ -9,7 +70,7 @@ backy2 (2.12.6) unstable; urgency=low
 
   * Bugfix: Allow config to NOT contain encryption key when enc. is 0
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 22 Jul 2020 08:40:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Wed, 22 Jul 2020 08:40:21 +0200
 
 
 backy2 (2.12.5) unstable; urgency=low
@@ -23,14 +84,14 @@ backy2 (2.12.4) unstable; urgency=low
 
   * Fix: Allow reads in fuse beyond end of file for cp.
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 08 Jun 2020 11:49:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 08 Jun 2020 11:49:21 +0200
 
 
 backy2 (2.12.3) unstable; urgency=low
 
   * Bash completion (partly)
 
- -- Daniel Kraft <daniel.kraft@d9t.de>  Fri, 08 Jun 2020 10:29:21 +0200
+ -- Daniel Kraft <daniel.kraft@d9t.de>  Mon, 08 Jun 2020 10:29:21 +0200
 
 
 backy2 (2.12.2) unstable; urgency=low

@@ -382,31 +382,45 @@ with the information which schedulers to test for, if a new backup is due and
 which expiration date should be set for it. If you don't pass schedulers,
 backy2 will by default only use the ``daily`` scheduler::
 
-   $ backy2 due test
-       INFO: $ /root/backy2/env/bin/backy2 due test
-   +---------------+------------+---------------------+
-   | name          | schedulers |     expire_date     |
-   +---------------+------------+---------------------+
-   | test          | daily      | 2020-04-23 15:10:35 |
-   +---------------+------------+---------------------+
-       INFO: Backy complete.
+    $ backy2 due
+    +----------+------------+---------------------+---------------------+
+    | name     | schedulers |     expire_date     |      due_since      |
+    +----------+------------+---------------------+---------------------+
+    | test     | daily      | 2020-11-19 21:39:20 | 1970-01-01 00:00:00 |
+    | t        | daily      | 2020-11-19 21:39:20 | 2020-11-19 20:02:48 |
+    +----------+------------+---------------------+---------------------+
+
+The output is sorted with the oldest due_since on top.
 
 Of course you can pass schedulers too::
 
    $ backy2 due -s hourly,daily test
        INFO: $ /root/backy2/env/bin/backy2 due -s hourly,daily test
-   +------+--------------+---------------------+
-   | name | schedulers   |     expire_date     |
-   +------+--------------+---------------------+
-   | test | hourly,daily | 2020-04-23 15:16:31 |
-   +------+--------------+---------------------+
+   +------+--------------+---------------------+---------------------+
+   | name | schedulers   |     expire_date     |      due_since      |
+   +------+--------------+---------------------+---------------------+
+   | test | hourly,daily | 2020-04-23 15:16:31 | 1970-01-01 00:00:00 |
+   +------+--------------+---------------------+---------------------+
        INFO: Backy complete.
 
 If you use the machine-output (``-m``) and short (``-s``) output options, you can
 see that this information can easily be scripted::
 
    $ backy2 -ms due test
-   test|daily|2020-04-23 15:13:56
+   test|daily|2020-04-23 15:13:56|1970-01-01 00:00:00
+
+The calculation of the due date is::
+
+  backup_time + sla_interval - sla_due
+
+If you want to see how backy2 calculates the due date, pass ``-v``::
+
+   $ backy2 -v due -s 10min t
+   DEBUG: [backy2.logging] DUE:
+        Last backup for t was at 2020-11-19 19:56:48.
+        With the scheduler 10min, backup interval is 10m, SLA is 4m,
+        so earliest due backup is at 2020-11-19 20:02:48.686034 and now is 2020-11-19 20:01:02.117573.
+
 
 sla
 ~~~
